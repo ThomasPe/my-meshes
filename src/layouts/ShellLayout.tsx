@@ -1,4 +1,5 @@
 import React, { ReactNode, useState, useRef, useCallback, useEffect } from "react";
+import * as ScrollArea from "@radix-ui/react-scroll-area";
 
 interface ShellLayoutProps {
   children: ReactNode;
@@ -83,10 +84,20 @@ export default function ShellLayout({
     <div className="flex h-full" ref={containerRef}>
       {/* Sidebar (Master View) */}
       <div 
-        className="border-r border-border bg-card virtual-scrollbar hide-horizontal-scrollbar"
+        className="border-r border-border bg-card"
         style={{ width, transition: isDragging ? 'none' : 'width 0.1s ease' }}
       >
-        {sidebar}
+        <ScrollArea.Root type="hover" scrollHideDelay={400}>
+          <ScrollArea.Viewport className="h-full w-full">
+            {sidebar}
+          </ScrollArea.Viewport>
+          <ScrollArea.Scrollbar 
+            className="flex select-none touch-none p-0.5 transition-colors duration-150 ease-out hover:bg-muted/10" 
+            orientation="vertical"
+          >
+            <ScrollArea.Thumb className="relative flex-1 rounded-full bg-muted-foreground/30 before:absolute before:left-1/2 before:top-1/2 before:h-full before:min-h-[44px] before:w-full before:min-w-[44px] before:-translate-x-1/2 before:-translate-y-1/2 before:content-[''] hover:bg-muted-foreground/50" />
+          </ScrollArea.Scrollbar>
+        </ScrollArea.Root>
       </div>
       
       {/* Resize Handle */}
@@ -103,8 +114,25 @@ export default function ShellLayout({
       </div>
       
       {/* Main Content (Detail View) */}
-      <div className="flex-1 virtual-scrollbar p-4">
-        {children}
+      <div className="flex-1 p-4">
+        <ScrollArea.Root type="hover" scrollHideDelay={400}>
+          <ScrollArea.Viewport className="h-full w-full">
+            {children}
+          </ScrollArea.Viewport>
+          <ScrollArea.Scrollbar 
+            className="flex select-none touch-none p-0.5 transition-colors duration-150 ease-out hover:bg-muted/10" 
+            orientation="vertical"
+          >
+            <ScrollArea.Thumb className="relative flex-1 rounded-full bg-muted-foreground/30 before:absolute before:left-1/2 before:top-1/2 before:h-full before:min-h-[44px] before:w-full before:min-w-[44px] before:-translate-x-1/2 before:-translate-y-1/2 before:content-[''] hover:bg-muted-foreground/50" />
+          </ScrollArea.Scrollbar>
+          <ScrollArea.Scrollbar 
+            className="flex select-none touch-none p-0.5 transition-colors duration-150 ease-out hover:bg-muted/10" 
+            orientation="horizontal"
+          >
+            <ScrollArea.Thumb className="relative flex-1 rounded-full bg-muted-foreground/30 before:absolute before:left-1/2 before:top-1/2 before:h-full before:min-h-[44px] before:w-full before:min-w-[44px] before:-translate-x-1/2 before:-translate-y-1/2 before:content-[''] hover:bg-muted-foreground/50" />
+          </ScrollArea.Scrollbar>
+          <ScrollArea.Corner className="bg-muted" />
+        </ScrollArea.Root>
       </div>
     </div>
   );
