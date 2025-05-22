@@ -51,7 +51,8 @@ export default function ExplorerSidebar({
           path: selectedDir,
         };
 
-        setFolders([rootItem]);
+        // Instead of showing the root folder, show its children
+        setFolders(rootItem.items.filter(item => item.type === "folder") as FolderItem[]);
 
         // Select the root folder
         setSelectedItemId("root");
@@ -136,7 +137,8 @@ export default function ExplorerSidebar({
               path: savedRootFolder,
             };
 
-            setFolders([rootItem]);
+            // Instead of showing the root folder, show its children
+            setFolders(rootItem.items.filter(item => item.type === "folder") as FolderItem[]);
 
             // Select the root folder
             setSelectedItemId("root");
@@ -261,9 +263,10 @@ export default function ExplorerSidebar({
 
   const renderItems = (items: ExplorerItem[], level = 0) => {
     return items.map((item) => {
-      const paddingLeft = `${level * 16 + 8}px`;
-
+      // Only render folders
       if (item.type === "folder") {
+        const paddingLeft = `${level * 16 + 8}px`;
+        
         return (
           <div key={item.id}>
             <div
@@ -279,27 +282,14 @@ export default function ExplorerSidebar({
               ) : (
                 <ChevronRight size={16} />
               )}
-              <Folder size={16} className="mr-2 ml-1 text-blue-500" />
-              <span className="text-sm">{item.name}</span>
+              <span className="text-sm ml-3">{item.name}</span>
             </div>
             {item.expanded && renderItems(item.items, level + 1)}
           </div>
         );
-      } else {
-        return (
-          <div
-            key={item.id}
-            className={`hover:bg-muted/50 flex cursor-pointer items-center px-2 py-1 ${selectedItemId === item.id ? "bg-muted text-accent-foreground" : ""}`}
-            style={{ paddingLeft }}
-            onClick={() => handleItemClick(item)}
-          >
-            <div className="ml-6"></div>
-            <File size={16} className="mr-2 text-gray-500" />
-            <span className="text-sm">{item.name}</span>
-          </div>
-        );
       }
-    });
+      return null; // Skip file items
+    }).filter(Boolean); // Remove null entries
   };
 
   return (
