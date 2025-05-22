@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Moon, Sun, Computer } from "lucide-react";
-import { ToggleGroup, Heading, Text, Box, Flex } from "@radix-ui/themes";
+import * as ToggleGroup from "@radix-ui/react-toggle-group";
+import { Heading, Text, Box, Flex } from "@radix-ui/themes";
 import { getCurrentTheme, setTheme } from "@/helpers/theme_helpers";
 import { ThemeMode } from "@/types/theme-mode";
 
