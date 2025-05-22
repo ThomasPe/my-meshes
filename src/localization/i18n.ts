@@ -26,6 +26,9 @@ i18n.use(initReactI18next).init({
           size: "Size",
           modified: "Modified",
           contents: "Contents",
+          selectRootFolder: "Select Root Folder",
+          changeRootFolder: "Change Root Folder",
+          noRootFolder: "No root folder selected"
         },
         settings: {
           appearance: "Appearance",
@@ -57,6 +60,9 @@ i18n.use(initReactI18next).init({
           size: "Tamanho",
           modified: "Modificado",
           contents: "Conteúdo",
+          selectRootFolder: "Selecionar Pasta Raiz",
+          changeRootFolder: "Mudar Pasta Raiz",
+          noRootFolder: "Nenhuma pasta raiz selecionada"
         },
         settings: {
           appearance: "Aparência",

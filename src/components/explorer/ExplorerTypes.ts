@@ -6,6 +6,7 @@ export interface FileItem {
   size: string;
   modifiedDate: string;
   fileType: string;
+  path?: string; // Path to the actual file
 }
 
 export interface FolderItem {
@@ -14,6 +15,7 @@ export interface FolderItem {
   type: "folder";
   items: (FileItem | FolderItem)[];
   expanded?: boolean;
+  path?: string; // Path to the actual folder
 }
 
 export type ExplorerItem = FileItem | FolderItem;
