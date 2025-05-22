@@ -1,8 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Moon, Sun, Computer } from "lucide-react";
-import * as ToggleGroup from "@radix-ui/react-toggle-group";
-import { Heading, Text, Box, Flex } from "@radix-ui/themes";
+import { Heading, Text, Box, Flex, RadioCards } from "@radix-ui/themes";
 import { getCurrentTheme, setTheme } from "@/helpers/theme_helpers";
 import { ThemeMode } from "@/types/theme-mode";
 
@@ -37,30 +36,31 @@ export default function SettingsPage() {
           
           <Flex direction="column" gap="2">
             <Text weight="medium">{t("settings.themeMode")}</Text>
-            <ToggleGroup.Root 
-              type="single" 
+            <RadioCards.Root 
               value={currentTheme} 
               onValueChange={handleThemeChange}
+              columns={{initial: '1', sm: '3'}}
+              gap="3"
             >
-              <ToggleGroup.Item value="light" aria-label={t("settings.lightMode")}>
-                <Flex gap="2" align="center">
+              <RadioCards.Item value="light" aria-label={t("settings.lightMode")}>
+                <Flex gap="2" align="center" justify="center">
                   <Sun className="h-4 w-4" />
                   <Text>{t("settings.lightMode")}</Text>
                 </Flex>
-              </ToggleGroup.Item>
-              <ToggleGroup.Item value="dark" aria-label={t("settings.darkMode")}>
-                <Flex gap="2" align="center">
+              </RadioCards.Item>
+              <RadioCards.Item value="dark" aria-label={t("settings.darkMode")}>
+                <Flex gap="2" align="center" justify="center">
                   <Moon className="h-4 w-4" />
                   <Text>{t("settings.darkMode")}</Text>
                 </Flex>
-              </ToggleGroup.Item>
-              <ToggleGroup.Item value="system" aria-label={t("settings.systemMode")}>
-                <Flex gap="2" align="center">
+              </RadioCards.Item>
+              <RadioCards.Item value="system" aria-label={t("settings.systemMode")}>
+                <Flex gap="2" align="center" justify="center">
                   <Computer className="h-4 w-4" />
                   <Text>{t("settings.systemMode")}</Text>
                 </Flex>
-              </ToggleGroup.Item>
-            </ToggleGroup.Root>
+              </RadioCards.Item>
+            </RadioCards.Root>
           </Flex>
         </Box>
         <Box className="rounded border border-border p-4">
