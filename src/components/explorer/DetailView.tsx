@@ -28,7 +28,7 @@ export default function DetailView({ selectedItem }: DetailViewProps) {
     const folderCount = countFolders(folderItem);
     
     return (
-      <ScrollArea.Root className="h-full">
+      <ScrollArea.Root className="h-full w-full">
         <ScrollArea.Viewport className="h-full w-full">
           <div className="space-y-4">
             <h2 className="text-2xl font-bold">{folderItem.name}</h2>
@@ -75,13 +75,13 @@ export default function DetailView({ selectedItem }: DetailViewProps) {
           </div>
         </ScrollArea.Viewport>
         <ScrollArea.Scrollbar 
-          className="flex touch-none select-none bg-muted/10 p-0.5 transition-colors duration-150 hover:bg-muted/20" 
+          className="flex w-2 touch-none select-none bg-muted/10 p-0.5 transition-colors duration-150 hover:bg-muted/20" 
           orientation="vertical"
         >
           <ScrollArea.Thumb className="relative flex-1 rounded-full bg-border" />
         </ScrollArea.Scrollbar>
         <ScrollArea.Scrollbar 
-          className="flex touch-none select-none bg-muted/10 p-0.5 transition-colors duration-150 hover:bg-muted/20" 
+          className="flex h-2 touch-none select-none bg-muted/10 p-0.5 transition-colors duration-150 hover:bg-muted/20" 
           orientation="horizontal"
         >
           <ScrollArea.Thumb className="relative flex-1 rounded-full bg-border" />
@@ -93,7 +93,7 @@ export default function DetailView({ selectedItem }: DetailViewProps) {
     const fileItem = selectedItem as FileItem;
     
     return (
-      <ScrollArea.Root className="h-full">
+      <ScrollArea.Root className="h-full w-full">
         <ScrollArea.Viewport className="h-full w-full">
           <div className="space-y-4">
             <h2 className="text-2xl font-bold">{fileItem.name}</h2>
@@ -124,13 +124,13 @@ export default function DetailView({ selectedItem }: DetailViewProps) {
           </div>
         </ScrollArea.Viewport>
         <ScrollArea.Scrollbar 
-          className="flex touch-none select-none bg-muted/10 p-0.5 transition-colors duration-150 hover:bg-muted/20" 
+          className="flex w-2 touch-none select-none bg-muted/10 p-0.5 transition-colors duration-150 hover:bg-muted/20" 
           orientation="vertical"
         >
           <ScrollArea.Thumb className="relative flex-1 rounded-full bg-border" />
         </ScrollArea.Scrollbar>
         <ScrollArea.Scrollbar 
-          className="flex touch-none select-none bg-muted/10 p-0.5 transition-colors duration-150 hover:bg-muted/20" 
+          className="flex h-2 touch-none select-none bg-muted/10 p-0.5 transition-colors duration-150 hover:bg-muted/20" 
           orientation="horizontal"
         >
           <ScrollArea.Thumb className="relative flex-1 rounded-full bg-border" />

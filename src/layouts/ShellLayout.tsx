@@ -103,7 +103,7 @@ export default function ShellLayout({
       </div>
       
       {/* Main Content (Detail View) */}
-      <div className="flex-1 p-4">
+      <div className="flex-1 h-full overflow-hidden p-4">
         {children}
       </div>
     </div>
