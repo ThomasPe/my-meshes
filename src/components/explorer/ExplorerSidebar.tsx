@@ -269,7 +269,7 @@ export default function ExplorerSidebar({
           </span>
         </div>
       </div>
-      <div className="flex-grow h-full overflow-hidden">
+      <div className="flex-1 min-h-0 overflow-hidden">
         <ScrollArea.Root className="h-full" type="auto">
           <ScrollArea.Viewport className="h-full w-full">
             {folders.length > 0 ? (
@@ -288,7 +288,7 @@ export default function ExplorerSidebar({
           </ScrollArea.Scrollbar>
         </ScrollArea.Root>
       </div>
-      <div className="border-border border-t p-2">
+      <div className="border-border border-t p-2 bg-card z-10 sticky bottom-0">
         <div
           className="hover:bg-muted/50 flex cursor-pointer items-center rounded px-2 py-2"
           onClick={onSettingsClick}
