@@ -58,27 +58,6 @@ export default function ExplorerSidebar({
     }
   };
 
-  const toggleFolder = async (folderId: string, folderPath?: string) => {
-    setFolders((prevFolders) =>
-      prevFolders.map((folder) => {
-        if (folder.id === folderId) {
-          // If we're expanding a folder that doesn't have items loaded yet
-          if (!folder.expanded && folder.items.length === 0 && folderPath) {
-            // We'll load the items later in the useEffect
-            return { ...folder, expanded: !folder.expanded };
-          }
-          return { ...folder, expanded: !folder.expanded };
-        } else if (folder.type === "folder") {
-          return {
-            ...folder,
-            items: toggleFolderInItems(folder.items, folderId, folderPath),
-          };
-        }
-        return folder;
-      }),
-    );
-  };
-
   const toggleFolderInItems = (
     items: ExplorerItem[],
     folderId: string,
@@ -102,7 +81,7 @@ export default function ExplorerSidebar({
   // State to track when a folder is toggled
   const [expandedFolder, setExpandedFolder] = useState<string | null>(null);
 
-  // Modified toggleFolder to trigger the loading effect
+  // Function to toggle folder expanded state and trigger the loading effect
   const toggleFolder = async (folderId: string, folderPath?: string) => {
     // Set the expanded folder ID to trigger the effect
     setExpandedFolder(folderId);
