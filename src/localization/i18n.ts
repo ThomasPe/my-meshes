@@ -6,16 +6,64 @@ i18n.use(initReactI18next).init({
   resources: {
     en: {
       translation: {
-        appName: "electron-shadcn",
+        appName: "My Meshes",
         titleHomePage: "Home Page",
-        titleSecondPage: "Second Page",
+        titleSettingsPage: "Settings",
+        titleExplorerPage: "Explorer",
+        explorer: {
+          selectItem: "Select an item to view details",
+          folderInfo: "Folder Information",
+          fileInfo: "File Information",
+          preview: "Preview",
+          previewPlaceholder: "3D model preview would appear here",
+          contains: "Contains",
+          files: "files",
+          folders: "folders",
+          file: "file",
+          folder: "folder",
+          and: "and",
+          type: "Type",
+          size: "Size",
+          modified: "Modified",
+          contents: "Contents",
+        },
+        settings: {
+          appearance: "Appearance",
+          appearanceDescription: "Configure the application's theme and visual settings.",
+          fileSystem: "File System",
+          fileSystemDescription: "Configure file system access and default directories."
+        }
       },
     },
     "pt-BR": {
       translation: {
-        appName: "electron-shadcn",
+        appName: "My Meshes",
         titleHomePage: "Página Inicial",
-        titleSecondPage: "Segunda Página",
+        titleSettingsPage: "Configurações",
+        titleExplorerPage: "Explorador",
+        explorer: {
+          selectItem: "Selecione um item para ver detalhes",
+          folderInfo: "Informações da Pasta",
+          fileInfo: "Informações do Arquivo",
+          preview: "Prévia",
+          previewPlaceholder: "Prévia do modelo 3D apareceria aqui",
+          contains: "Contém",
+          files: "arquivos",
+          folders: "pastas",
+          file: "arquivo",
+          folder: "pasta",
+          and: "e",
+          type: "Tipo",
+          size: "Tamanho",
+          modified: "Modificado",
+          contents: "Conteúdo",
+        },
+        settings: {
+          appearance: "Aparência",
+          appearanceDescription: "Configure o tema e as configurações visuais do aplicativo.",
+          fileSystem: "Sistema de Arquivos",
+          fileSystemDescription: "Configure o acesso ao sistema de arquivos e diretórios padrão."
+        }
       },
     },
   },
