@@ -145,9 +145,10 @@ export default function ExplorerSidebar({ onSelectItem, onSettingsClick }: Explo
           <div 
             key={item.id}
             className={`flex items-center py-1 px-2 hover:bg-muted/50 cursor-pointer ${selectedItemId === item.id ? 'bg-muted text-accent-foreground' : ''}`}
-            style={{ paddingLeft: `${paddingLeft + 16}px` }}
+            style={{ paddingLeft }}
             onClick={() => handleItemClick(item)}
           >
+            <div className="ml-6"></div>
             <File size={16} className="mr-2 text-gray-500" />
             <span className="text-sm">{item.name}</span>
           </div>
@@ -159,10 +160,9 @@ export default function ExplorerSidebar({ onSelectItem, onSettingsClick }: Explo
   return (
     <div className="flex flex-col h-full">
       <div className="flex-grow overflow-auto">
-        <div className="text-sm font-semibold mb-2 px-2">Explorer</div>
         {renderItems(folders)}
       </div>
-      <div className="mt-auto border-t border-border p-2">
+      <div className="border-t border-border p-2">
         <div
           className="flex items-center py-2 px-2 rounded hover:bg-muted/50 cursor-pointer"
           onClick={onSettingsClick}
