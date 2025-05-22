@@ -6,14 +6,34 @@ interface ShellLayoutProps {
   sidebarWidth?: string;
 }
 
+// Storage key for saving sidebar width preferences
+const SIDEBAR_WIDTH_STORAGE_KEY = 'app-sidebar-width';
+
 export default function ShellLayout({
   children,
   sidebar,
   sidebarWidth = "250px"
 }: ShellLayoutProps) {
-  const [width, setWidth] = useState(sidebarWidth);
+  // Initialize width from localStorage if available, otherwise use the prop value
+  const [width, setWidth] = useState(() => {
+    try {
+      const savedWidth = localStorage.getItem(SIDEBAR_WIDTH_STORAGE_KEY);
+      return savedWidth || sidebarWidth;
+    } catch (e) {
+      return sidebarWidth;
+    }
+  });
   const [isDragging, setIsDragging] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Save width to localStorage when it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_WIDTH_STORAGE_KEY, width);
+    } catch (e) {
+      // Ignore localStorage errors
+    }
+  }, [width]);
   
   // Start resize when mouse down on the resize handle
   const startResize = useCallback((e: React.MouseEvent) => {
