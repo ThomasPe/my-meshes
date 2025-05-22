@@ -269,8 +269,8 @@ export default function ExplorerSidebar({
           </span>
         </div>
       </div>
-      <div className="flex-grow">
-        <ScrollArea.Root type="hover" scrollHideDelay={400}>
+      <div className="flex-grow h-full overflow-hidden">
+        <ScrollArea.Root className="h-full" type="auto">
           <ScrollArea.Viewport className="h-full w-full">
             {folders.length > 0 ? (
               renderItems(folders)
@@ -281,10 +281,10 @@ export default function ExplorerSidebar({
             )}
           </ScrollArea.Viewport>
           <ScrollArea.Scrollbar 
-            className="flex select-none touch-none p-0.5 transition-colors duration-150 ease-out hover:bg-muted/10" 
+            className="flex select-none touch-none p-0.5 bg-muted/5 hover:bg-muted/10 transition-colors duration-150 ease-out" 
             orientation="vertical"
           >
-            <ScrollArea.Thumb className="relative flex-1 rounded-full bg-muted-foreground/30 before:absolute before:left-1/2 before:top-1/2 before:h-full before:min-h-[44px] before:w-full before:min-w-[44px] before:-translate-x-1/2 before:-translate-y-1/2 before:content-[''] hover:bg-muted-foreground/50" />
+            <ScrollArea.Thumb className="relative flex-1 rounded-full bg-muted-foreground/30 hover:bg-muted-foreground/50 transition-colors duration-150 ease-out" />
           </ScrollArea.Scrollbar>
         </ScrollArea.Root>
       </div>
