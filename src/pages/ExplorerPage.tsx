@@ -19,6 +19,9 @@ export default function ExplorerPage() {
     setSelectedItem(null);
   };
 
+  // Create a ref to the DetailView component to access its selectedFileItem
+  const detailViewRef = React.useRef<DetailView>(null);
+
   return (
     <ShellLayout 
       sidebar={
@@ -31,7 +34,9 @@ export default function ExplorerPage() {
       {showSettings ? (
         <SettingsPage />
       ) : (
-        <DetailView selectedItem={selectedItem} />
+        <DetailView 
+          selectedItem={selectedItem} 
+        />
       )}
     </ShellLayout>
   );
