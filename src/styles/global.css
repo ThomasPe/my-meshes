@@ -221,11 +221,16 @@
   .virtual-scrollbar::-webkit-scrollbar-thumb {
     background-color: transparent;
     border-radius: 6px;
+    transition: background-color 0.2s ease;
   }
   
   /* Show scrollbar on hover */
   .virtual-scrollbar:hover::-webkit-scrollbar-thumb {
     background-color: hsl(var(--muted-foreground) / 0.3);
+  }
+  
+  .virtual-scrollbar:hover::-webkit-scrollbar-thumb:hover {
+    background-color: hsl(var(--muted-foreground) / 0.5);
   }
   
   .virtual-scrollbar:hover {
