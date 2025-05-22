@@ -31,7 +31,11 @@ i18n.use(initReactI18next).init({
           appearance: "Appearance",
           appearanceDescription: "Configure the application's theme and visual settings.",
           fileSystem: "File System",
-          fileSystemDescription: "Configure file system access and default directories."
+          fileSystemDescription: "Configure file system access and default directories.",
+          themeMode: "Theme Mode",
+          darkMode: "Dark",
+          lightMode: "Light",
+          systemMode: "System"
         }
       },
     },
@@ -62,7 +66,11 @@ i18n.use(initReactI18next).init({
           appearance: "Aparência",
           appearanceDescription: "Configure o tema e as configurações visuais do aplicativo.",
           fileSystem: "Sistema de Arquivos",
-          fileSystemDescription: "Configure o acesso ao sistema de arquivos e diretórios padrão."
+          fileSystemDescription: "Configure o acesso ao sistema de arquivos e diretórios padrão.",
+          themeMode: "Modo de Tema",
+          darkMode: "Escuro",
+          lightMode: "Claro",
+          systemMode: "Sistema"
         }
       },
     },
