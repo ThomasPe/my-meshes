@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { FolderItem, ExplorerItem } from "./ExplorerTypes";
 import { useTranslation } from "react-i18next";
+import { saveRootFolder, getRootFolder } from "@/helpers/folder_helpers";
 
 interface ExplorerSidebarProps {
   onSelectItem: (item: ExplorerItem) => void;
@@ -30,6 +31,8 @@ export default function ExplorerSidebar({
       const selectedDir = await window.filesystem.selectDirectory();
       if (selectedDir) {
         setRootFolder(selectedDir);
+        // Save the selected root folder for next app launch
+        saveRootFolder(selectedDir);
 
         // Create root folder item from the selected directory path
         const pathParts = selectedDir.split(/[/\\]/);
@@ -105,6 +108,51 @@ export default function ExplorerSidebar({
       }),
     );
   };
+
+  // Load saved root folder on component mount
+  useEffect(() => {
+    const loadSavedRootFolder = async () => {
+      try {
+        const savedRootFolder = getRootFolder();
+        if (savedRootFolder) {
+          setRootFolder(savedRootFolder);
+
+          // Check if the folder still exists and is accessible
+          try {
+            // Create root folder item from the saved directory path
+            const pathParts = savedRootFolder.split(/[/\\]/);
+            const rootName = pathParts[pathParts.length - 1] || savedRootFolder;
+
+            // Load folder contents
+            const contents = await window.filesystem.readDirectory(savedRootFolder);
+
+            const rootItem: FolderItem = {
+              id: "root",
+              name: rootName,
+              type: "folder",
+              expanded: true,
+              items: contents as ExplorerItem[],
+              path: savedRootFolder,
+            };
+
+            setFolders([rootItem]);
+
+            // Select the root folder
+            setSelectedItemId("root");
+            onSelectItem(rootItem);
+          } catch (error) {
+            console.error("Error loading saved root folder:", error);
+            // If there's an error (e.g., folder was deleted or moved), remove it from storage
+            localStorage.removeItem("rootFolder");
+          }
+        }
+      } catch (error) {
+        console.error("Error in loadSavedRootFolder:", error);
+      }
+    };
+
+    loadSavedRootFolder();
+  }, [onSelectItem]);
 
   // Load subdirectory contents when a folder is expanded
   useEffect(() => {
