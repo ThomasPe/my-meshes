@@ -18,7 +18,15 @@ interface ElectronWindow {
   close: () => Promise<void>;
 }
 
+// Filesystem types
+interface FilesystemContext {
+  selectDirectory: () => Promise<string | null>;
+  readDirectory: (dirPath: string) => Promise<any[]>;
+  readSubdirectory: (dirPath: string) => Promise<any[]>;
+}
+
 declare interface Window {
   themeMode: ThemeModeContext;
   electronWindow: ElectronWindow;
+  filesystem: FilesystemContext;
 }
