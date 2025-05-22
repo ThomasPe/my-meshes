@@ -302,7 +302,7 @@ export default function ExplorerSidebar({
               ) : (
                 <ChevronRight size={16} />
               )}
-              <span className="text-sm ml-3">{item.name}</span>
+              <span className="text-sm ml-3 whitespace-nowrap overflow-hidden text-ellipsis">{item.name}</span>
             </div>
             {item.expanded && renderItems(item.items, level + 1)}
           </div>
