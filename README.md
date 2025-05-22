@@ -1,156 +1,142 @@
-# electron-shadcn
+# 3D Model Manager
+*Initial Technical Document*
 
-Electron in all its glory. Everything you will need to develop your beautiful desktop application.
+## 1. Overview
 
-![Demo GIF](https://github.com/LuanRoger/electron-shadcn/blob/main/images/demo.gif)
+**Purpose:**  
+This application is designed to help users organize, preview, and prepare local 3D model files (e.g., STL, OBJ) for 3D printing. By leveraging Electron, the app can run on major platforms (Windows, macOS, Linux) while offering a seamless, native desktop experience.
 
-## Libs and tools
+**Goals:**
+- Provide an intuitive interface for browsing and managing 3D model files stored on a hard drive.
+- Render 3D models interactively using built-in visualization tools.
+- Support key preparation steps required before 3D printing, e.g., model integrity checks and integration/export to slicing tools.
 
-To develop a Electron app, you probably will need some UI, test, formatter, style or other kind of library or framework, so let me install and configure some of them to you.
+---
 
-### Core 🏍️
+## 2. Technical Decisions
 
-- [Electron 35](https://www.electronjs.org)
-- [Vite 6](https://vitejs.dev)
-- [SWC](https://swc.rs)
+### 2.1 Technology Stack
 
-### DX 🛠️
+| Layer              | Technology(s)                                        | Rationale                                                                                  |
+|--------------------|------------------------------------------------------|--------------------------------------------------------------------------------------------|
+| **Application Base** | Electron, Electron Forge, Typescript                                         | Cross-platform desktop application packaging and native integration                        |
+| **Frontend UI**    | React, [Fluent UI v9 React](https://react.fluentui.dev/)                    | Robust component-based architecture and dynamic UI for interactive dashboards               |
+| **3D Visualization** | Three.js (with STLLoader, OBJLoader, etc.)           | Mature library for rendering and manipulating 3D content within a web-based environment       |
+| **File System Access** | Node.js built-in `fs` module or libraries like `chokidar`  | Efficient access and monitoring of local file systems for detecting changes in real time      |
+| **Bundling & Building** | Vite                                   | Effective asset bundling with optimized builds for production                                |
+| **Testing**        | Jest (unit tests), Spectron (Electron integration tests) | Ensures components work individually and the app functions as a whole                          |
+| **Code Quality**   | ESLint, Prettier                                     | Maintain clear, consistent coding standards throughout the project                           |
 
-- [TypeScript 5.8](https://www.typescriptlang.org)
-- [Prettier](https://prettier.io)
-- [ESLint 9](https://eslint.org)
-- [Zod](https://zod.dev)
-- [React Query (TanStack)](https://react-query.tanstack.com)
+---
 
-### UI 🎨
+### 2.2 Architecture & Security
 
-- [React 19](https://reactjs.org)
-- [Tailwind 4](https://tailwindcss.com)
-- [Shadcn UI](https://ui.shadcn.com)
-- [Geist](https://vercel.com/font) as default font
-- [i18next](https://www.i18next.com)
-- [TanStack Router](https://tanstack.com/router)
-- [Lucide](https://lucide.dev)
+- **Main Process vs. Renderer Process:**  
+  - **Main Process:** Handles the lifecycle of the application, native OS interaction (e.g., file system scanning, updates), and security-focused tasks.  
+  - **Renderer Process:** Manages the user interface and 3D visualization, communicating with the main process via Electron’s IPC modules.
+  
+- **Inter-process Communication:**  
+  - Use secure IPC channels to exchange data without compromising application integrity.
 
-### Test 🧪
+- **Cross-Platform Considerations:**  
+  - Utilize Electron-builder for building and packaging the application for Windows, macOS, and Linux.  
+  - Abstract OS-specific behavior (paths, notifications, etc.) within modular components.
 
-- [Vitest](https://vitest.dev)
-- [Playwright](https://playwright.dev)
-- [React Testing Library](https://testing-library.com/docs/react-testing-library/intro)
+- **Security Practices:**  
+  - Enforce context isolation and disable Node integration in the renderer process where possible.  
+  - Regularly audit dependencies and follow Electron’s security guidelines.
 
-### Packing and distribution 📦
+- **Performance:**  
+  - Implement file indexing and caching mechanisms to ensure smooth performance even when scanning large directories.  
+  - Use asynchronous operations for file system access and 3D model loading to keep the UI responsive.
 
-- [Electron Forge](https://www.electronforge.io)
+---
 
-### CI/CD 🚀
+### 2.3 External Libraries & Plugins
 
-- Pre-configured [GitHub Actions workflow](https://github.com/LuanRoger/electron-shadcn/blob/main/.github/workflows/playwright.yml), for test with Playwright
+- Consider integrating additional libraries/code modules to enhance the functionality:
+  - **Chokidar:** For robust file system monitoring.
+  - **Material UI or similar:** To provide a consistent design language to the React interface.
+  - **Plugin Architecture:** Design modular components so that future extra features (e.g., cloud integration or advanced mesh repair) can be added without a major overhaul.
 
-### Project preferences 🎯
+---
 
-- Use Context isolation
-- [React Compiler](https://react.dev/learn/react-compiler) is enabled by default.
-- `titleBarStyle`: hidden (Using custom title bar)
-- Geist as default font
-- Some default styles was applied, check the [`styles`](https://github.com/LuanRoger/electron-shadcn/tree/main/src/styles) directory
-- React DevTools are installed by default
+## 3. Core Features
 
-> If you don't know some of these libraries or tools, I recommend you to check their documentation to understand how they work and how to use them.
+### 3.1 File Management
 
-> [!WARNING]
-> Prefer to use the [`canary` release of `shadcn/ui`](https://ui.shadcn.com/docs/tailwind-v4) to avoid compatibility issues with React 19 and Tailwind v4.
+- **Folder Scanning & Import:**  
+  - Automatically scan specified directories for supported 3D file formats (e.g., STL, OBJ).  
+  - Allow manual import or directory selection.
+  - Model files in the same folder are treated as parts of a single multi-part model (e.g. for search purposes)
 
-```bash
-npx shadcn@canary add button
-```
+- **Metadata & Tagging:**  
+  - Extract and display basic file metadata (size, date modified, etc.).  
+  - Provide options for user-added tags or categorization for easier search and filtering.
+  - Fields for metdadata like License, URL to source, author
 
-## Directory structure
+- **File Operations:**  
+  - Enable operations such as rename, delete, copy/move—all within the app.
+  - Auto-cleanup function to reorder & rename files based on specified rules
 
-```plaintext
-.
-└── ./src/
-    ├── ./src/assets/
-    │   └── ./src/assets/fonts/
-    ├── ./src/components/
-    │   ├── ./src/components/template
-    │   └── ./src/components/ui/
-    ├── ./src/helpers/
-    │   └── ./src/helpers/ipc/
-    ├── ./src/layout/
-    ├── ./src/lib/
-    ├── ./src/pages/
-    ├── ./src/style/
-    └── ./src/tests/
-```
+- **Search & Filter Interface:**  
+  - Include dynamic search capabilities with attribute-based filtering (e.g., date, file type, tag).
 
-- `src/`: Main directory
-  - `assets/`: Store assets like images, fonts, etc.
-  - `components/`: Store UI components
-    - `template/`: Store the all not important components used by the template. It doesn't include the `WindowRegion` or the theme toggler, if you want to start an empty project, you can safely delete this directory.
-    - `ui/`: Store Shadcn UI components (this is the default direcotry used by Shadcn UI)
-  - `helpers/`: Store IPC related functions to be called in the renderer process
-    - `ipc/`: Directory to store IPC context and listener functions
-      - Some implementations are already done, like `theme` and `window` for the custom title bar
-  - `layout/`: Directory to store layout components
-  - `lib/`: Store libraries and other utilities
-  - `pages/`: Store app's pages
-  - `style/`: Store global styles
-  - `tests/`: Store tests (from Vitest and Playwright)
+---
 
-## NPM script
+### 3.2 3D Model Visualization & Interaction
 
-To run any of those scripts:
+- **Interactive Preview:**  
+  - Utilize Three.js to create cached thumbnails
+  - Utilize Three.js to render a real-time preview of each model.  
+  - Support navigation tools such as pan, rotate, zoom, and reset view.
 
-```bash
-npm run <script>
-```
+- **Basic Editing & Analysis:**  
+  - Allow basic transformations (e.g., scaling, rotation) for a quick visual check.  
+  - Integrate mesh analysis tools to check for errors (e.g., non-manifold edges) that might affect printing.
 
-- `start`: Start the app in development mode
-- `package`: Package your application into a platform-specific executable bundle and put the result in a folder.
-- `make`: Generate platform-specific distributables (e.g. .exe, .dmg, etc) of your application for distribution.
-- `publish`: Electron Forge's way of taking the artifacts generated by the `make` command and sending them to a service somewhere for you to distribute or use as updates.
-- `lint`: Run ESLint to lint the code
-- `format`: Run Prettier to check the code (it doesn't change the code)
-- `format:write`: Run Prettier to format the code
-- `test`: Run the default unit-test script (Vitest)
-- `test:watch`: Run the default unit-test script in watch mode (Vitest)
-- `test:unit`: Run the Vitest tests
-- `test:e2e`: Run the Playwright tests
-- `test:all`: Run all tests (Vitest and Playwright)
 
-> The test scripts involving Playwright require the app be builded before running the tests. So, before run the tests, run the `package`, `make` or `publish` script.
+---
 
-## How to use
+### 3.4 User Experience & Customization
 
-1. Clone this repository
+- **Dashboard:**  
+  - Central view summarizing model inventory, recent activity
 
-```bash
-git clone https://github.com/LuanRoger/electron-shadcn.git
-```
+- **Preferences & Configuration:**  
+  - Settings module for specifying default directories, file formats, theme customization, and notifications.
+  
+- **Notifications & Error Handling:**  
+  - Real-time feedback for file changes, import errors, or print preparation issues.
+  - Status bar, indicating background processes like indexing, thumbnail generation
+  - Log history
 
-Or use it as a template on GitHub
+- **Future Proofing:**  
+  - A plugin system for future features, such as cloud integration for model backups or sharing.
 
-2. Install dependencies
+---
 
-```bash
-npm install
-```
+## 4. Development & Testing Considerations
 
-3. Run the app
+- **Version Control:**  
+  - Use Git with a clear branching strategy to manage features, bugs, and releases.
+  
+- **Continuous Integration/Continuous Deployment (CI/CD):**  
+  - Set up automated testing (unit and integration) and build pipelines to ensure code quality and simplify deployments.
 
-```bash
-npm run start
-```
+- **Documentation:**  
+  - Maintain technical and user documentation detailing API usage, development guidelines, and troubleshooting instructions.
 
-## Used by
+- **User Feedback Loop:**  
+  - Incorporate analytics/logging to monitor application behavior and gather user insights for iterative improvements.
 
-- [yaste](https://github.com/LuanRoger/yaste) - yaste (Yet another super ₛᵢₘₚₗₑ text editor) is a text editor, that can be used as an alternative to the native text editor of your SO, maybe.
-- [eletric-drizzle](https://github.com/LuanRoger/electric-drizzle) - shadcn-ui and Drizzle ORM with Electron.
-- [Wordle Game](https://github.com/masonyekta/wordle-game) - A Wordle game which features interactive gameplay, cross-platform compatibility, and integration with a custom Wordle API for word validation and letter correctness.
-- [Mehr 🌟](https://github.com/xmannii/MehrLocalChat) - A modern, elegant local AI chatbot application using Electron, React, shadcn/ui, and Ollama.
+---
 
-> Does you've used this template in your project? Add it here and open a PR.
+## 5. Summary & Next Steps
 
-## License
+This document establishes the initial technical direction for your Electron-based 3D model management app. It covers the technology stack, architectural design, security considerations, and outlines the key user features that will guide further development.  
 
-This project is licensed under the MIT License - see the [LICENSE](https://github.com/LuanRoger/electron-shadcn/blob/main/LICENSE) file for details.
+**Next Steps:**
+- Flesh out detailed specifications for each module and design UI prototypes.
+- Set up a minimal viable project structure to validate the technical decisions.
+- Begin development of core modules (file management and 3D model preview) in parallel with testing frameworks.
