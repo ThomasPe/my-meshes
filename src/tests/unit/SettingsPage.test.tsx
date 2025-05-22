@@ -4,6 +4,34 @@ import SettingsPage from "@/pages/SettingsPage";
 import React from "react";
 import * as themeHelpers from "@/helpers/theme_helpers";
 
+// Mock Radix Themes components
+vi.mock("@radix-ui/themes", () => ({
+  Box: ({ children, className }: any) => <div className={className}>{children}</div>,
+  Flex: ({ children, className, gap, direction, align }: any) => (
+    <div className={`flex ${className || ''}`} data-gap={gap} data-direction={direction} data-align={align}>{children}</div>
+  ),
+  Text: ({ children, color, as: Component = "span", mb, weight }: any) => (
+    <Component data-color={color} data-mb={mb} data-weight={weight}>{children}</Component>
+  ),
+  Heading: ({ children, mb, size }: any) => <h2 data-mb={mb} data-size={size}>{children}</h2>,
+  ToggleGroup: {
+    Root: ({ children, type, value, onValueChange }: any) => (
+      <div data-testid="toggle-group" data-type={type} data-value={value}>
+        {React.Children.map(children, child => 
+          React.cloneElement(child, {
+            onClick: () => onValueChange && onValueChange(child.props.value)
+          })
+        )}
+      </div>
+    ),
+    Item: ({ children, value, "aria-label": ariaLabel, onClick }: any) => (
+      <button data-value={value} aria-label={ariaLabel} onClick={onClick}>
+        {children}
+      </button>
+    )
+  }
+}));
+
 // Mock the theme helpers
 vi.mock("@/helpers/theme_helpers", () => ({
   getCurrentTheme: vi.fn().mockResolvedValue({
