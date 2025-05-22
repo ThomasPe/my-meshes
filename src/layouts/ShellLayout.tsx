@@ -12,7 +12,7 @@ export default function ShellLayout({
   sidebarWidth = "250px"
 }: ShellLayoutProps) {
   return (
-    <div className="flex h-screen">
+    <div className="flex h-full">
       {/* Sidebar (Master View) */}
       <div 
         className="border-r border-border bg-card overflow-auto"
