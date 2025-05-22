@@ -10,6 +10,7 @@ import {
 import { FolderItem, ExplorerItem } from "./ExplorerTypes";
 import { useTranslation } from "react-i18next";
 import { saveRootFolder, getRootFolder } from "@/helpers/folder_helpers";
+import * as ScrollArea from "@radix-ui/react-scroll-area";
 
 interface ExplorerSidebarProps {
   onSelectItem: (item: ExplorerItem) => void;
@@ -316,15 +317,23 @@ export default function ExplorerSidebar({
           </span>
         </div>
       </div>
-      <div className="flex-grow overflow-auto">
-        {folders.length > 0 ? (
-          renderItems(folders)
-        ) : (
-          <div className="text-muted-foreground flex h-full items-center justify-center">
-            <span className="text-sm">{t("explorer.noRootFolder")}</span>
-          </div>
-        )}
-      </div>
+      <ScrollArea.Root className="flex-grow" scrollHideDelay={400}>
+        <ScrollArea.Viewport className="h-full w-full">
+          {folders.length > 0 ? (
+            renderItems(folders)
+          ) : (
+            <div className="text-muted-foreground flex h-full items-center justify-center">
+              <span className="text-sm">{t("explorer.noRootFolder")}</span>
+            </div>
+          )}
+        </ScrollArea.Viewport>
+        <ScrollArea.Scrollbar 
+          className="flex touch-none select-none bg-muted/10 p-0.5 transition-colors duration-150 hover:bg-muted/20" 
+          orientation="vertical"
+        >
+          <ScrollArea.Thumb className="relative flex-1 rounded-full bg-border" />
+        </ScrollArea.Scrollbar>
+      </ScrollArea.Root>
       <div className="border-border border-t p-2">
         <div
           className="hover:bg-muted/50 flex cursor-pointer items-center rounded px-2 py-2"
