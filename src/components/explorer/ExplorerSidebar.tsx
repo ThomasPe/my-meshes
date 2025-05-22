@@ -277,10 +277,14 @@ export default function ExplorerSidebar({
                 handleItemClick(item);
               }}
             >
-              {item.expanded ? (
-                <ChevronDown size={16} />
+              {item.items.some(child => child.type === "folder") ? (
+                item.expanded ? (
+                  <ChevronDown size={16} />
+                ) : (
+                  <ChevronRight size={16} />
+                )
               ) : (
-                <ChevronRight size={16} />
+                <div style={{ width: '16px' }}></div>
               )}
               <span className="text-sm ml-3">{item.name}</span>
             </div>
