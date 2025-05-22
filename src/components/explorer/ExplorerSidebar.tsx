@@ -336,7 +336,7 @@ export default function ExplorerSidebar({
           </ScrollArea.Scrollbar>
         </ScrollArea.Root>
       </div>
-      <div className="border-border border-t p-2 bg-card z-10 mt-auto">
+      <div className="border-border border-t p-2 bg-card z-10">
         <div
           className="hover:bg-muted/50 flex cursor-pointer items-center rounded px-2 py-2"
           onClick={onSettingsClick}
