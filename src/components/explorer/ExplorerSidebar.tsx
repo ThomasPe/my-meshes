@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { Folder, File, ChevronRight, ChevronDown, Settings } from "lucide-react";
-import { FileItem, FolderItem, ExplorerItem } from "./ExplorerTypes";
-import { Link } from "@tanstack/react-router";
+import { FolderItem, ExplorerItem } from "./ExplorerTypes";
 import { useTranslation } from "react-i18next";
 
 // Mock data for demonstration purposes
@@ -164,14 +163,13 @@ export default function ExplorerSidebar({ onSelectItem, onSettingsClick }: Explo
         {renderItems(folders)}
       </div>
       <div className="mt-auto border-t border-border p-2">
-        <Link
-          to="/settings"
+        <div
           className="flex items-center py-2 px-2 rounded hover:bg-muted/50 cursor-pointer"
           onClick={onSettingsClick}
         >
           <Settings size={16} className="mr-2 text-gray-500" />
           <span className="text-sm">{t("titleSettingsPage")}</span>
-        </Link>
+        </div>
       </div>
     </div>
   );

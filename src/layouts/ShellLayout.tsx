@@ -1,5 +1,4 @@
 import React, { ReactNode } from "react";
-import DragWindowRegion from "@/components/DragWindowRegion";
 
 interface ShellLayoutProps {
   children: ReactNode;
@@ -13,22 +12,19 @@ export default function ShellLayout({
   sidebarWidth = "250px"
 }: ShellLayoutProps) {
   return (
-    <>
-      <DragWindowRegion title="My Meshes" />
-      <div className="flex h-screen pt-12">
-        {/* Sidebar (Master View) */}
-        <div 
-          className="border-r border-border bg-card overflow-auto"
-          style={{ width: sidebarWidth }}
-        >
-          {sidebar}
-        </div>
-        
-        {/* Main Content (Detail View) */}
-        <div className="flex-1 overflow-auto p-4">
-          {children}
-        </div>
+    <div className="flex h-screen">
+      {/* Sidebar (Master View) */}
+      <div 
+        className="border-r border-border bg-card overflow-auto"
+        style={{ width: sidebarWidth }}
+      >
+        {sidebar}
       </div>
-    </>
+      
+      {/* Main Content (Detail View) */}
+      <div className="flex-1 overflow-auto p-4">
+        {children}
+      </div>
+    </div>
   );
 }

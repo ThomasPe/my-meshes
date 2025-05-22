@@ -8,9 +8,9 @@ export const RootRoute = createRootRoute({
 
 function Root() {
   return (
-    <div>
+    <div className="h-screen flex flex-col">
       <DragWindowRegion title="My Meshes" />
-      <div className="pt-12">
+      <div className="flex-1 overflow-hidden">
         <Outlet />
       </div>
     </div>

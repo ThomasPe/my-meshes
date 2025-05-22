@@ -3,11 +3,9 @@ import ShellLayout from "@/layouts/ShellLayout";
 import ExplorerSidebar from "@/components/explorer/ExplorerSidebar";
 import DetailView from "@/components/explorer/DetailView";
 import { ExplorerItem } from "@/components/explorer/ExplorerTypes";
-import { useTranslation } from "react-i18next";
 import SettingsPage from "./SettingsPage";
 
 export default function ExplorerPage() {
-  const { t } = useTranslation();
   const [selectedItem, setSelectedItem] = useState<ExplorerItem | null>(null);
   const [showSettings, setShowSettings] = useState(false);
 
