@@ -1,6 +1,5 @@
-import React, { ReactNode, useState } from "react";
+import React, { ReactNode } from "react";
 import DragWindowRegion from "@/components/DragWindowRegion";
-import NavigationMenu from "@/components/template/NavigationMenu";
 
 interface ShellLayoutProps {
   children: ReactNode;
@@ -16,7 +15,6 @@ export default function ShellLayout({
   return (
     <>
       <DragWindowRegion title="My Meshes" />
-      <NavigationMenu />
       <div className="flex h-screen pt-12">
         {/* Sidebar (Master View) */}
         <div 

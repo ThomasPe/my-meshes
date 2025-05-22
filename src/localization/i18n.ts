@@ -6,9 +6,9 @@ i18n.use(initReactI18next).init({
   resources: {
     en: {
       translation: {
-        appName: "electron-shadcn",
+        appName: "My Meshes",
         titleHomePage: "Home Page",
-        titleSecondPage: "Second Page",
+        titleSettingsPage: "Settings",
         titleExplorerPage: "Explorer",
         explorer: {
           selectItem: "Select an item to view details",
@@ -26,14 +26,20 @@ i18n.use(initReactI18next).init({
           size: "Size",
           modified: "Modified",
           contents: "Contents",
+        },
+        settings: {
+          appearance: "Appearance",
+          appearanceDescription: "Configure the application's theme and visual settings.",
+          fileSystem: "File System",
+          fileSystemDescription: "Configure file system access and default directories."
         }
       },
     },
     "pt-BR": {
       translation: {
-        appName: "electron-shadcn",
+        appName: "My Meshes",
         titleHomePage: "Página Inicial",
-        titleSecondPage: "Segunda Página",
+        titleSettingsPage: "Configurações",
         titleExplorerPage: "Explorador",
         explorer: {
           selectItem: "Selecione um item para ver detalhes",
@@ -51,6 +57,12 @@ i18n.use(initReactI18next).init({
           size: "Tamanho",
           modified: "Modificado",
           contents: "Conteúdo",
+        },
+        settings: {
+          appearance: "Aparência",
+          appearanceDescription: "Configure o tema e as configurações visuais do aplicativo.",
+          fileSystem: "Sistema de Arquivos",
+          fileSystemDescription: "Configure o acesso ao sistema de arquivos e diretórios padrão."
         }
       },
     },

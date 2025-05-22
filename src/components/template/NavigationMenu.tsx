@@ -8,7 +8,7 @@ import {
   NavigationMenuList,
   navigationMenuTriggerStyle,
 } from "../ui/navigation-menu";
-import { FolderOpen } from "lucide-react";
+import { FolderOpen, Settings } from "lucide-react";
 
 export default function NavigationMenu() {
   const { t } = useTranslation();
@@ -19,22 +19,16 @@ export default function NavigationMenu() {
         <NavigationMenuItem>
           <Link to="/">
             <NavigationMenuLink className={navigationMenuTriggerStyle()}>
-              {t("titleHomePage")}
-            </NavigationMenuLink>
-          </Link>
-        </NavigationMenuItem>
-        <NavigationMenuItem>
-          <Link to="/second-page">
-            <NavigationMenuLink className={navigationMenuTriggerStyle()}>
-              {t("titleSecondPage")}
-            </NavigationMenuLink>
-          </Link>
-        </NavigationMenuItem>
-        <NavigationMenuItem>
-          <Link to="/explorer">
-            <NavigationMenuLink className={navigationMenuTriggerStyle()}>
               <FolderOpen className="mr-1 h-4 w-4" />
               {t("titleExplorerPage")}
+            </NavigationMenuLink>
+          </Link>
+        </NavigationMenuItem>
+        <NavigationMenuItem>
+          <Link to="/settings">
+            <NavigationMenuLink className={navigationMenuTriggerStyle()}>
+              <Settings className="mr-1 h-4 w-4" />
+              {t("titleSettingsPage")}
             </NavigationMenuLink>
           </Link>
         </NavigationMenuItem>

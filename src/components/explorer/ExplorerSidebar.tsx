@@ -1,6 +1,8 @@
 import React, { useState } from "react";
-import { Folder, File, ChevronRight, ChevronDown } from "lucide-react";
+import { Folder, File, ChevronRight, ChevronDown, Settings } from "lucide-react";
 import { FileItem, FolderItem, ExplorerItem } from "./ExplorerTypes";
+import { Link } from "@tanstack/react-router";
+import { useTranslation } from "react-i18next";
 
 // Mock data for demonstration purposes
 
@@ -72,9 +74,11 @@ const mockData: FolderItem[] = [
 
 interface ExplorerSidebarProps {
   onSelectItem: (item: ExplorerItem) => void;
+  onSettingsClick?: () => void;
 }
 
-export default function ExplorerSidebar({ onSelectItem }: ExplorerSidebarProps) {
+export default function ExplorerSidebar({ onSelectItem, onSettingsClick }: ExplorerSidebarProps) {
+  const { t } = useTranslation();
   const [folders, setFolders] = useState<FolderItem[]>(mockData);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
@@ -154,9 +158,21 @@ export default function ExplorerSidebar({ onSelectItem }: ExplorerSidebarProps) 
   };
 
   return (
-    <div className="p-2">
-      <div className="text-sm font-semibold mb-2 px-2">Explorer</div>
-      {renderItems(folders)}
+    <div className="flex flex-col h-full">
+      <div className="flex-grow overflow-auto">
+        <div className="text-sm font-semibold mb-2 px-2">Explorer</div>
+        {renderItems(folders)}
+      </div>
+      <div className="mt-auto border-t border-border p-2">
+        <Link
+          to="/settings"
+          className="flex items-center py-2 px-2 rounded hover:bg-muted/50 cursor-pointer"
+          onClick={onSettingsClick}
+        >
+          <Settings size={16} className="mr-2 text-gray-500" />
+          <span className="text-sm">{t("titleSettingsPage")}</span>
+        </Link>
+      </div>
     </div>
   );
 }
