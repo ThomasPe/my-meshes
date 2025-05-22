@@ -27,7 +27,7 @@ i18n.use(initReactI18next).init({
           modified: "Modified",
           contents: "Contents",
           selectRootFolder: "Select Root Folder",
-          changeRootFolder: "Change Root Folder",
+          changeRootFolder: "Open Folder",
           noRootFolder: "No root folder selected"
         },
         settings: {
