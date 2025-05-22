@@ -12,6 +12,8 @@ i18n.use(initReactI18next).init({
         titleExplorerPage: "Explorer",
         explorer: {
           selectItem: "Select an item to view details",
+          fileSelected: "File details are shown in the panel on the right",
+          noFileSelected: "No file selected",
           folderInfo: "Folder Information",
           fileInfo: "File Information",
           preview: "Preview",
@@ -50,6 +52,8 @@ i18n.use(initReactI18next).init({
         titleExplorerPage: "Explorador",
         explorer: {
           selectItem: "Selecione um item para ver detalhes",
+          fileSelected: "Os detalhes do arquivo são mostrados no painel à direita",
+          noFileSelected: "Nenhum arquivo selecionado",
           folderInfo: "Informações da Pasta",
           fileInfo: "Informações do Arquivo",
           preview: "Prévia",

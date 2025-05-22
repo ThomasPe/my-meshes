@@ -7,9 +7,10 @@ import FileInfoPanel from "./FileInfoPanel";
 
 interface DetailViewProps {
   selectedItem: ExplorerItem | null;
+  onFileSelect?: (file: FileItem | null) => void;
 }
 
-export default function DetailView({ selectedItem }: DetailViewProps) {
+export default function DetailView({ selectedItem, onFileSelect }: DetailViewProps) {
   const { t } = useTranslation();
   const [selectedFileItem, setSelectedFileItem] = useState<FileItem | null>(null);
   
@@ -17,10 +18,12 @@ export default function DetailView({ selectedItem }: DetailViewProps) {
   React.useEffect(() => {
     if (selectedItem && selectedItem.type === "file") {
       setSelectedFileItem(selectedItem as FileItem);
+      // Notify parent component about the selected file
+      onFileSelect?.(selectedItem as FileItem);
     } else {
       setSelectedFileItem(null);
     }
-  }, [selectedItem]);
+  }, [selectedItem, onFileSelect]);
   
   const renderContent = () => {
     if (!selectedItem) {
@@ -77,6 +80,8 @@ export default function DetailView({ selectedItem }: DetailViewProps) {
                         onClick={() => {
                           if (item.type === 'file') {
                             setSelectedFileItem(item as FileItem);
+                            // Notify parent component about the selected file
+                            onFileSelect?.(item as FileItem);
                           }
                         }}
                       >
@@ -131,12 +136,7 @@ export default function DetailView({ selectedItem }: DetailViewProps) {
   const fileToDisplay = selectedFileItem || 
     (selectedItem?.type === "file" ? selectedItem as FileItem : null);
   
-  return (
-    <>
-      {renderContent()}
-      {fileToDisplay && <FileInfoPanel fileItem={fileToDisplay} />}
-    </>
-  );
+  return renderContent();
 }
 
 // Helper functions to count files and folders recursively
