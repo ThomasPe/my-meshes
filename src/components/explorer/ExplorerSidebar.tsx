@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from "react";
 import {
-  Folder,
-  File,
   ChevronRight,
   ChevronDown,
   Settings,
@@ -273,18 +271,36 @@ export default function ExplorerSidebar({
               className={`hover:bg-muted/50 flex cursor-pointer items-center px-2 py-1 ${selectedItemId === item.id ? "bg-muted text-accent-foreground" : ""}`}
               style={{ paddingLeft }}
               onClick={() => {
-                toggleFolder(item.id, item.path);
-                handleItemClick(item);
+                // If folder is not expanded, expand it; otherwise toggle as before
+                if (!item.expanded) {
+                  // Force expand the folder on first click
+                  const updatedItem = { ...item, expanded: true };
+                  setFolders((prevFolders) =>
+                    prevFolders.map((folder) => {
+                      if (folder.id === item.id) {
+                        return { ...folder, expanded: true };
+                      } else if (folder.type === "folder") {
+                        return {
+                          ...folder,
+                          items: toggleFolderInItems(folder.items, item.id, item.path),
+                        };
+                      }
+                      return folder;
+                    })
+                  );
+                  // Trigger loading of folder contents
+                  setExpandedFolder(item.id);
+                  handleItemClick(updatedItem);
+                } else {
+                  toggleFolder(item.id, item.path);
+                  handleItemClick(item);
+                }
               }}
             >
-              {item.items.some(child => child.type === "folder") ? (
-                item.expanded ? (
-                  <ChevronDown size={16} />
-                ) : (
-                  <ChevronRight size={16} />
-                )
+              {item.expanded ? (
+                <ChevronDown size={16} />
               ) : (
-                <div style={{ width: '16px' }}></div>
+                <ChevronRight size={16} />
               )}
               <span className="text-sm ml-3">{item.name}</span>
             </div>

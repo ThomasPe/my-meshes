@@ -46,7 +46,7 @@
     "electron": "^35.2.1",
     "electron-devtools-installer": "^4.0.0",
     "electron-playwright-helpers": "^1.7.1",
-    "eslint": "^9.25.1",
+    "eslint": "^9.27.0",
     "eslint-config-prettier": "^10.1.2",
     "eslint-plugin-prettier": "^5.2.6",
     "eslint-plugin-react": "^7.37.5",
@@ -60,7 +60,7 @@
     "typescript": "^5.8.3",
     "typescript-eslint": "^8.31.0",
     "vite": "^6.3.3",
-    "vitest": "^3.1.2"
+    "vitest": "^3.1.4"
   },
   "dependencies": {
     "@icons-pack/react-simple-icons": "^12.7.0",
