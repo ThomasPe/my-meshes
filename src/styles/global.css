@@ -203,4 +203,37 @@
   .cursor-col-resize {
     cursor: col-resize;
   }
+  
+  /* Custom Scrollbar Styles */
+  /* For WebKit browsers (Chrome, Safari, Edge) */
+  .virtual-scrollbar {
+    scrollbar-width: thin; /* For Firefox */
+    scrollbar-color: transparent transparent; /* For Firefox */
+  }
+  
+  .virtual-scrollbar::-webkit-scrollbar {
+    width: 8px;
+    height: 8px;
+    background-color: transparent;
+    opacity: 0;
+  }
+  
+  .virtual-scrollbar::-webkit-scrollbar-thumb {
+    background-color: transparent;
+    border-radius: 4px;
+  }
+  
+  /* Show scrollbar on hover */
+  .virtual-scrollbar:hover::-webkit-scrollbar-thumb {
+    background-color: hsl(var(--muted-foreground) / 0.3);
+  }
+  
+  .virtual-scrollbar:hover {
+    scrollbar-color: hsl(var(--muted-foreground) / 0.3) transparent; /* For Firefox */
+  }
+  
+  /* Hide horizontal scrollbar */
+  .hide-horizontal-scrollbar {
+    overflow-x: hidden;
+  }
 }

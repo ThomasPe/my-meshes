@@ -268,7 +268,7 @@ export default function ExplorerSidebar({
           </span>
         </div>
       </div>
-      <div className="flex-grow overflow-auto">
+      <div className="flex-grow virtual-scrollbar hide-horizontal-scrollbar">
         {folders.length > 0 ? (
           renderItems(folders)
         ) : (
