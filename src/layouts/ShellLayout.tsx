@@ -83,7 +83,7 @@ export default function ShellLayout({
     <div className="flex h-full" ref={containerRef}>
       {/* Sidebar (Master View) */}
       <div 
-        className="border-r border-border bg-card overflow-auto"
+        className="border-r border-border bg-card"
         style={{ width, transition: isDragging ? 'none' : 'width 0.1s ease' }}
       >
         {sidebar}
@@ -103,7 +103,7 @@ export default function ShellLayout({
       </div>
       
       {/* Main Content (Detail View) */}
-      <div className="flex-1 overflow-auto p-4">
+      <div className="flex-1 h-full overflow-hidden p-4">
         {children}
       </div>
     </div>
