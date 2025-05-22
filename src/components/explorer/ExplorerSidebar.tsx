@@ -33,7 +33,7 @@ export default function ExplorerSidebar({ onSelectItem, onSettingsClick }: Explo
           name: rootName,
           type: "folder",
           expanded: true,
-          items: contents,
+          items: contents as ExplorerItem[],
           path: selectedDir
         };
         
@@ -102,7 +102,7 @@ export default function ExplorerSidebar({ onSelectItem, onSettingsClick }: Explo
                   const contents = await window.filesystem.readSubdirectory(item.path);
                   updatedItems[i] = {
                     ...item,
-                    items: contents
+                    items: contents as ExplorerItem[]
                   };
                 } catch (error) {
                   console.error(`Error loading contents for folder ${item.name}:`, error);
@@ -124,7 +124,7 @@ export default function ExplorerSidebar({ onSelectItem, onSettingsClick }: Explo
                 const contents = await window.filesystem.readSubdirectory(folder.path);
                 return {
                   ...folder,
-                  items: contents
+                  items: contents as ExplorerItem[]
                 };
               } catch (error) {
                 console.error(`Error loading contents for folder ${folder.name}:`, error);

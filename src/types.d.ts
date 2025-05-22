@@ -4,6 +4,9 @@
 declare const MAIN_WINDOW_VITE_DEV_SERVER_URL: string;
 declare const MAIN_WINDOW_VITE_NAME: string;
 
+// Import necessary types
+import { FileItem, FolderItem, ExplorerItem } from "./components/explorer/ExplorerTypes";
+
 // Preload types
 interface ThemeModeContext {
   toggle: () => Promise<boolean>;
@@ -21,8 +24,8 @@ interface ElectronWindow {
 // Filesystem types
 interface FilesystemContext {
   selectDirectory: () => Promise<string | null>;
-  readDirectory: (dirPath: string) => Promise<any[]>;
-  readSubdirectory: (dirPath: string) => Promise<any[]>;
+  readDirectory: (dirPath: string) => Promise<ExplorerItem[]>;
+  readSubdirectory: (dirPath: string) => Promise<ExplorerItem[]>;
 }
 
 declare interface Window {

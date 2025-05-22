@@ -1,15 +1,15 @@
-import { contextBridge, ipcRenderer } from "electron";
+import {
+  FILESYSTEM_SELECT_DIRECTORY_CHANNEL,
+  FILESYSTEM_READ_DIRECTORY_CHANNEL,
+  FILESYSTEM_READ_SUBDIRECTORY_CHANNEL
+} from "./filesystem-channels";
 
 export function exposeFilesystemContext() {
+  const { contextBridge, ipcRenderer } = window.require("electron");
+  
   contextBridge.exposeInMainWorld("filesystem", {
-    selectDirectory: async () => {
-      return ipcRenderer.invoke("select-directory");
-    },
-    readDirectory: async (dirPath: string) => {
-      return ipcRenderer.invoke("read-directory", dirPath);
-    },
-    readSubdirectory: async (dirPath: string) => {
-      return ipcRenderer.invoke("read-subdirectory", dirPath);
-    }
+    selectDirectory: () => ipcRenderer.invoke(FILESYSTEM_SELECT_DIRECTORY_CHANNEL),
+    readDirectory: (dirPath: string) => ipcRenderer.invoke(FILESYSTEM_READ_DIRECTORY_CHANNEL, dirPath),
+    readSubdirectory: (dirPath: string) => ipcRenderer.invoke(FILESYSTEM_READ_SUBDIRECTORY_CHANNEL, dirPath)
   });
 }

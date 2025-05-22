@@ -2,6 +2,11 @@ import { dialog, ipcMain } from "electron";
 import * as fs from "fs";
 import * as path from "path";
 import { v4 as uuidv4 } from "uuid";
+import {
+  FILESYSTEM_SELECT_DIRECTORY_CHANNEL,
+  FILESYSTEM_READ_DIRECTORY_CHANNEL,
+  FILESYSTEM_READ_SUBDIRECTORY_CHANNEL
+} from "./filesystem-channels";
 
 // Function to get file stats in a format compatible with our UI types
 const getStats = (filePath: string) => {
@@ -23,7 +28,7 @@ const getFileExtension = (filename: string): string => {
 
 export function addFileSystemEventListeners() {
   // Handler for selecting a root folder
-  ipcMain.handle("select-directory", async () => {
+  ipcMain.handle(FILESYSTEM_SELECT_DIRECTORY_CHANNEL, async () => {
     const result = await dialog.showOpenDialog({
       properties: ["openDirectory"],
     });
@@ -37,7 +42,7 @@ export function addFileSystemEventListeners() {
   });
 
   // Handler for reading directory contents
-  ipcMain.handle("read-directory", async (_event, dirPath: string) => {
+  ipcMain.handle(FILESYSTEM_READ_DIRECTORY_CHANNEL, async (_event, dirPath: string) => {
     try {
       const items = fs.readdirSync(dirPath);
       
@@ -78,7 +83,7 @@ export function addFileSystemEventListeners() {
   });
 
   // Handler for reading subdirectory contents
-  ipcMain.handle("read-subdirectory", async (_event, dirPath: string) => {
+  ipcMain.handle(FILESYSTEM_READ_SUBDIRECTORY_CHANNEL, async (_event, dirPath: string) => {
     try {
       const items = fs.readdirSync(dirPath);
       
