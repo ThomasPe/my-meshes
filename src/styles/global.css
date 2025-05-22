@@ -200,4 +200,7 @@
   body {
     @apply bg-background text-foreground;
   }
+  .cursor-col-resize {
+    cursor: col-resize;
+  }
 }
