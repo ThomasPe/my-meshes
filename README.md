@@ -20,7 +20,7 @@ This application is designed to help users organize, preview, and prepare local 
 | Layer              | Technology(s)                                        | Rationale                                                                                  |
 |--------------------|------------------------------------------------------|--------------------------------------------------------------------------------------------|
 | **Application Base** | Electron, Electron Forge, Typescript                                         | Cross-platform desktop application packaging and native integration                        |
-| **Frontend UI**    | React, [shadcn/ui](https://ui.shadcn.com/), [Radix UI](https://www.radix-ui.com/), Tailwind CSS | Component-based architecture with accessible primitives and utility-first CSS               |
+| **Frontend UI**    | React, [Radix Themes](https://www.radix-ui.com/themes), [Radix UI](https://www.radix-ui.com/), Tailwind CSS | Component-based architecture with accessible primitives and utility-first CSS               |
 | **Routing & State** | [@tanstack/react-router](https://tanstack.com/router), [@tanstack/react-query](https://tanstack.com/query) | Type-safe routing and efficient data fetching, caching, and state management                 |
 | **File System Access** | Node.js built-in `fs` module or libraries like `chokidar`  | Efficient access and monitoring of local file systems for detecting changes in real time      |
 | **Bundling & Building** | Vite                                   | Effective asset bundling with optimized builds for production                                |
@@ -56,7 +56,7 @@ This application is designed to help users organize, preview, and prepare local 
 ### 2.3 External Libraries & Plugins
 
 - The project currently integrates these key libraries:
-  - **shadcn/ui:** Component library built on top of Tailwind CSS and Radix UI primitives.
+  - **Radix Themes:** Full-featured component library built on top of React and Radix UI primitives.
   - **Tailwind CSS:** Utility-first CSS framework for rapid UI development.
   - **TanStack Router:** Fully type-safe React router with first-class search params support.
   - **TanStack Query:** Data-fetching and state management library for React applications.

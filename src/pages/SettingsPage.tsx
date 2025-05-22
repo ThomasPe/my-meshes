@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Moon, Sun, Computer } from "lucide-react";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Heading, Text, Box, Flex, RadioCards } from "@radix-ui/themes";
 import { getCurrentTheme, setTheme } from "@/helpers/theme_helpers";
 import { ThemeMode } from "@/types/theme-mode";
 
@@ -27,41 +27,47 @@ export default function SettingsPage() {
   };
 
   return (
-    <div className="flex h-full flex-col">
-      <div className="flex flex-1 flex-col gap-4">
-        <h1 className="text-2xl font-bold">{t("titleSettingsPage")}</h1>
-        <div className="rounded border border-border p-4">
-          <h2 className="mb-2 text-lg font-semibold">{t("settings.appearance")}</h2>
-          <p className="text-muted-foreground mb-4">{t("settings.appearanceDescription")}</p>
+    <Box className="flex h-full flex-col">
+      <Box className="flex flex-1 flex-col gap-4">
+        <Heading size="5">{t("titleSettingsPage")}</Heading>
+        <Box className="rounded border border-border p-4">
+          <Heading size="4" mb="2">{t("settings.appearance")}</Heading>
+          <Text color="gray" as="p" mb="4">{t("settings.appearanceDescription")}</Text>
           
-          <div className="space-y-2">
-            <div className="font-medium">{t("settings.themeMode")}</div>
-            <ToggleGroup 
-              type="single" 
+          <Flex direction="column" gap="2">
+            <Text weight="medium">{t("settings.themeMode")}</Text>
+            <RadioCards.Root 
               value={currentTheme} 
               onValueChange={handleThemeChange}
-              className="justify-start"
+              columns={{initial: '1', sm: '3'}}
+              gap="3"
             >
-              <ToggleGroupItem value="light" aria-label={t("settings.lightMode")}>
-                <Sun className="h-4 w-4 mr-2" />
-                {t("settings.lightMode")}
-              </ToggleGroupItem>
-              <ToggleGroupItem value="dark" aria-label={t("settings.darkMode")}>
-                <Moon className="h-4 w-4 mr-2" />
-                {t("settings.darkMode")}
-              </ToggleGroupItem>
-              <ToggleGroupItem value="system" aria-label={t("settings.systemMode")}>
-                <Computer className="h-4 w-4 mr-2" />
-                {t("settings.systemMode")}
-              </ToggleGroupItem>
-            </ToggleGroup>
-          </div>
-        </div>
-        <div className="rounded border border-border p-4">
-          <h2 className="mb-2 text-lg font-semibold">{t("settings.fileSystem")}</h2>
-          <p className="text-muted-foreground">{t("settings.fileSystemDescription")}</p>
-        </div>
-      </div>
-    </div>
+              <RadioCards.Item value="light" aria-label={t("settings.lightMode")}>
+                <Flex gap="2" align="center" justify="center">
+                  <Sun className="h-4 w-4" />
+                  <Text>{t("settings.lightMode")}</Text>
+                </Flex>
+              </RadioCards.Item>
+              <RadioCards.Item value="dark" aria-label={t("settings.darkMode")}>
+                <Flex gap="2" align="center" justify="center">
+                  <Moon className="h-4 w-4" />
+                  <Text>{t("settings.darkMode")}</Text>
+                </Flex>
+              </RadioCards.Item>
+              <RadioCards.Item value="system" aria-label={t("settings.systemMode")}>
+                <Flex gap="2" align="center" justify="center">
+                  <Computer className="h-4 w-4" />
+                  <Text>{t("settings.systemMode")}</Text>
+                </Flex>
+              </RadioCards.Item>
+            </RadioCards.Root>
+          </Flex>
+        </Box>
+        <Box className="rounded border border-border p-4">
+          <Heading size="4" mb="2">{t("settings.fileSystem")}</Heading>
+          <Text color="gray" as="p">{t("settings.fileSystemDescription")}</Text>
+        </Box>
+      </Box>
+    </Box>
   );
 }

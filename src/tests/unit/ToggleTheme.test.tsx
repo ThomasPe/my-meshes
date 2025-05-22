@@ -1,7 +1,20 @@
 import { render } from "@testing-library/react";
-import { test, expect } from "vitest";
+import { test, expect, vi } from "vitest";
 import ToggleTheme from "@/components/ToggleTheme";
 import React from "react";
+
+// Mock Radix Themes Button component
+vi.mock("@radix-ui/themes", () => ({
+  Button: ({ children, onClick, variant, size }: any) => (
+    <button 
+      onClick={onClick} 
+      data-variant={variant} 
+      data-size={size}
+    >
+      {children}
+    </button>
+  )
+}));
 
 test("renders ToggleTheme", () => {
   const { getByRole } = render(<ToggleTheme />);

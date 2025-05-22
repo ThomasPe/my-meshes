@@ -4,6 +4,34 @@ import SettingsPage from "@/pages/SettingsPage";
 import React from "react";
 import * as themeHelpers from "@/helpers/theme_helpers";
 
+// Mock Radix Themes components
+vi.mock("@radix-ui/themes", () => ({
+  Box: ({ children, className }: any) => <div className={className}>{children}</div>,
+  Flex: ({ children, className, gap, direction, align, justify }: any) => (
+    <div className={`flex ${className || ''}`} data-gap={gap} data-direction={direction} data-align={align} data-justify={justify}>{children}</div>
+  ),
+  Text: ({ children, color, as: Component = "span", mb, weight }: any) => (
+    <Component data-color={color} data-mb={mb} data-weight={weight}>{children}</Component>
+  ),
+  Heading: ({ children, mb, size }: any) => <h2 data-mb={mb} data-size={size}>{children}</h2>,
+  RadioCards: {
+    Root: ({ children, value, onValueChange, columns, gap }: any) => (
+      <div data-testid="radio-cards" data-value={value} data-columns={JSON.stringify(columns)} data-gap={gap}>
+        {React.Children.map(children, child => 
+          React.cloneElement(child, {
+            onClick: () => onValueChange && onValueChange(child.props.value)
+          })
+        )}
+      </div>
+    ),
+    Item: ({ children, value, "aria-label": ariaLabel, onClick }: any) => (
+      <button data-value={value} aria-label={ariaLabel} onClick={onClick}>
+        {children}
+      </button>
+    )
+  }
+}));
+
 // Mock the theme helpers
 vi.mock("@/helpers/theme_helpers", () => ({
   getCurrentTheme: vi.fn().mockResolvedValue({
@@ -21,7 +49,7 @@ beforeEach(() => {
 test("renders SettingsPage with theme mode selection", async () => {
   render(<SettingsPage />);
   
-  // Check that the theme selection toggle group is rendered
+  // Check that the theme selection radio cards are rendered
   expect(await screen.findByText("settings.themeMode")).toBeInTheDocument();
   expect(await screen.findByText("settings.lightMode")).toBeInTheDocument();
   expect(await screen.findByText("settings.darkMode")).toBeInTheDocument();
@@ -31,7 +59,7 @@ test("renders SettingsPage with theme mode selection", async () => {
   expect(themeHelpers.getCurrentTheme).toHaveBeenCalledTimes(1);
 });
 
-test("changes theme when toggle buttons are clicked", async () => {
+test("changes theme when radio cards are clicked", async () => {
   render(<SettingsPage />);
   
   // Wait for elements to be in the document
