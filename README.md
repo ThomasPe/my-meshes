@@ -20,12 +20,13 @@ This application is designed to help users organize, preview, and prepare local 
 | Layer              | Technology(s)                                        | Rationale                                                                                  |
 |--------------------|------------------------------------------------------|--------------------------------------------------------------------------------------------|
 | **Application Base** | Electron, Electron Forge, Typescript                                         | Cross-platform desktop application packaging and native integration                        |
-| **Frontend UI**    | React, [Fluent UI v9 React](https://react.fluentui.dev/)                    | Robust component-based architecture and dynamic UI for interactive dashboards               |
-| **3D Visualization** | Three.js (with STLLoader, OBJLoader, etc.)           | Mature library for rendering and manipulating 3D content within a web-based environment       |
+| **Frontend UI**    | React, [shadcn/ui](https://ui.shadcn.com/), [Radix UI](https://www.radix-ui.com/), Tailwind CSS | Component-based architecture with accessible primitives and utility-first CSS               |
+| **Routing & State** | [@tanstack/react-router](https://tanstack.com/router), [@tanstack/react-query](https://tanstack.com/query) | Type-safe routing and efficient data fetching, caching, and state management                 |
 | **File System Access** | Node.js built-in `fs` module or libraries like `chokidar`  | Efficient access and monitoring of local file systems for detecting changes in real time      |
 | **Bundling & Building** | Vite                                   | Effective asset bundling with optimized builds for production                                |
-| **Testing**        | Jest (unit tests), Spectron (Electron integration tests) | Ensures components work individually and the app functions as a whole                          |
+| **Testing**        | Vitest (unit tests), Playwright (e2e tests) | Ensures components work individually and the app functions as a whole                          |
 | **Code Quality**   | ESLint, Prettier                                     | Maintain clear, consistent coding standards throughout the project                           |
+| **Internationalization** | i18next, react-i18next                        | Support for multiple languages and localization                                            |
 
 ---
 
@@ -39,7 +40,7 @@ This application is designed to help users organize, preview, and prepare local 
   - Use secure IPC channels to exchange data without compromising application integrity.
 
 - **Cross-Platform Considerations:**  
-  - Utilize Electron-builder for building and packaging the application for Windows, macOS, and Linux.  
+  - Utilize Electron Forge for building and packaging the application for Windows, macOS, and Linux.  
   - Abstract OS-specific behavior (paths, notifications, etc.) within modular components.
 
 - **Security Practices:**  
@@ -54,9 +55,17 @@ This application is designed to help users organize, preview, and prepare local 
 
 ### 2.3 External Libraries & Plugins
 
-- Consider integrating additional libraries/code modules to enhance the functionality:
+- The project currently integrates these key libraries:
+  - **shadcn/ui:** Component library built on top of Tailwind CSS and Radix UI primitives.
+  - **Tailwind CSS:** Utility-first CSS framework for rapid UI development.
+  - **TanStack Router:** Fully type-safe React router with first-class search params support.
+  - **TanStack Query:** Data-fetching and state management library for React applications.
+  - **Zod:** TypeScript-first schema validation with static type inference.
+  - **i18next:** Internationalization framework for JavaScript.
+
+- Consider adding these libraries for future development:
   - **Chokidar:** For robust file system monitoring.
-  - **Material UI or similar:** To provide a consistent design language to the React interface.
+  - **Three.js:** For 3D model visualization and manipulation.
   - **Plugin Architecture:** Design modular components so that future extra features (e.g., cloud integration or advanced mesh repair) can be added without a major overhaul.
 
 ---
