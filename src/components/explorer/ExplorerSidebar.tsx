@@ -4,6 +4,7 @@ import {
   ChevronDown,
   Settings,
   FolderPlus,
+  Folder,
 } from "lucide-react";
 import { FolderItem, ExplorerItem } from "./ExplorerTypes";
 import { useTranslation } from "react-i18next";
@@ -23,6 +24,31 @@ export default function ExplorerSidebar({
   const [folders, setFolders] = useState<FolderItem[]>([]);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [rootFolder, setRootFolder] = useState<string | null>(null);
+  // Helper function to load folder contents one level deep
+  const loadFolderContentsOneLevel = async (folders: FolderItem[]): Promise<FolderItem[]> => {
+    const loadedFolders = await Promise.all(
+      folders.map(async (folder) => {
+        if (folder.path && folder.items.length === 0) {
+          try {
+            const contents = await window.filesystem.readSubdirectory(folder.path);
+            return {
+              ...folder,
+              items: contents as ExplorerItem[],
+              _contentsLoaded: true,
+            };
+          } catch (error) {
+            console.error(`Error loading contents for folder ${folder.name}:`, error);
+            return {
+              ...folder,
+              _contentsLoaded: true, // Mark as loaded even if failed, to prevent repeated attempts
+            };
+          }
+        }
+        return folder;
+      })
+    );
+    return loadedFolders;
+  };
 
   // Handle root folder selection
   const handleSelectRootFolder = async () => {
@@ -35,12 +61,8 @@ export default function ExplorerSidebar({
 
         // Create root folder item from the selected directory path
         const pathParts = selectedDir.split(/[/\\]/);
-        const rootName = pathParts[pathParts.length - 1] || selectedDir;
-
-        // Load folder contents
-        const contents = await window.filesystem.readDirectory(selectedDir);
-
-        const rootItem: FolderItem = {
+        const rootName = pathParts[pathParts.length - 1] || selectedDir;        // Load folder contents
+        const contents = await window.filesystem.readDirectory(selectedDir);        const rootItem: FolderItem = {
           id: "root",
           name: rootName,
           type: "folder",
@@ -50,7 +72,11 @@ export default function ExplorerSidebar({
         };
 
         // Instead of showing the root folder, show its children
-        setFolders(rootItem.items.filter(item => item.type === "folder") as FolderItem[]);
+        const childFolders = rootItem.items.filter(item => item.type === "folder") as FolderItem[];
+        
+        // Load contents of all child folders one level deep
+        const loadedChildFolders = await loadFolderContentsOneLevel(childFolders);
+        setFolders(loadedChildFolders);
 
         // Select the root folder
         setSelectedItemId("root");
@@ -121,22 +147,20 @@ export default function ExplorerSidebar({
           try {
             // Create root folder item from the saved directory path
             const pathParts = savedRootFolder.split(/[/\\]/);
-            const rootName = pathParts[pathParts.length - 1] || savedRootFolder;
-
-            // Load folder contents
-            const contents = await window.filesystem.readDirectory(savedRootFolder);
-
-            const rootItem: FolderItem = {
+            const rootName = pathParts[pathParts.length - 1] || savedRootFolder;            // Load folder contents
+            const contents = await window.filesystem.readDirectory(savedRootFolder);            const rootItem: FolderItem = {
               id: "root",
               name: rootName,
               type: "folder",
               expanded: true,
               items: contents as ExplorerItem[],
               path: savedRootFolder,
-            };
-
-            // Instead of showing the root folder, show its children
-            setFolders(rootItem.items.filter(item => item.type === "folder") as FolderItem[]);
+            };            // Instead of showing the root folder, show its children
+            const childFolders = rootItem.items.filter(item => item.type === "folder") as FolderItem[];
+            
+            // Load contents of all child folders one level deep
+            const loadedChildFolders = await loadFolderContentsOneLevel(childFolders);
+            setFolders(loadedChildFolders);
 
             // Select the root folder
             setSelectedItemId("root");
@@ -169,21 +193,24 @@ export default function ExplorerSidebar({
             const updatedItems = [...items];
 
             for (let i = 0; i < updatedItems.length; i++) {
-              const item = updatedItems[i];
-
-              if (
+              const item = updatedItems[i];              if (
                 item.type === "folder" &&
                 item.expanded &&
                 item.items.length === 0 &&
                 item.path
               ) {
-                try {
-                  const contents = await window.filesystem.readSubdirectory(
+                try {                  const contents = await window.filesystem.readSubdirectory(
                     item.path,
                   );
+                    // Load contents of child folders one level deep
+                  const childFolders = contents.filter((child: ExplorerItem) => child.type === "folder") as FolderItem[];
+                  const loadedChildFolders = await loadFolderContentsOneLevel(childFolders);
+                  const otherItems = contents.filter((child: ExplorerItem) => child.type !== "folder");
+                  
                   updatedItems[i] = {
                     ...item,
-                    items: contents as ExplorerItem[],
+                    items: [...loadedChildFolders, ...otherItems] as ExplorerItem[],
+                    _contentsLoaded: true, // Mark as loaded
                   };
                 } catch (error) {
                   console.error(
@@ -200,19 +227,22 @@ export default function ExplorerSidebar({
             }
 
             return updatedItems;
-          };
-
-          const processFolder = async (
+          };          const processFolder = async (
             folder: FolderItem,
           ): Promise<FolderItem> => {
             if (folder.expanded && folder.items.length === 0 && folder.path) {
-              try {
-                const contents = await window.filesystem.readSubdirectory(
+              try {                const contents = await window.filesystem.readSubdirectory(
                   folder.path,
                 );
+                  // Load contents of child folders one level deep
+                const childFolders = contents.filter((item: ExplorerItem) => item.type === "folder") as FolderItem[];
+                const loadedChildFolders = await loadFolderContentsOneLevel(childFolders);
+                const otherItems = contents.filter((item: ExplorerItem) => item.type !== "folder");
+                
                 return {
                   ...folder,
-                  items: contents as ExplorerItem[],
+                  items: [...loadedChildFolders, ...otherItems] as ExplorerItem[],
+                  _contentsLoaded: true, // Mark as loaded
                 };
               } catch (error) {
                 console.error(
@@ -257,20 +287,21 @@ export default function ExplorerSidebar({
   const handleItemClick = (item: ExplorerItem) => {
     setSelectedItemId(item.id);
     onSelectItem(item);
-  };
-
-  const renderItems = (items: ExplorerItem[], level = 0) => {
+  };  const renderItems = (items: ExplorerItem[], level = 0) => {
     return items.map((item) => {
       // Only render folders
       if (item.type === "folder") {
         const paddingLeft = `${level * 16 + 8}px`;
+          // Show chevron logic:
+        // - If contents not loaded yet: show chevron (we don't know if there are child folders)
+        // - If contents loaded: only show chevron if there are actual child folders
+        const hasChildFolders = !item._contentsLoaded || item.items.some(child => child.type === "folder");
         
         return (
           <div key={item.id}>
             <div
               className={`hover:bg-muted/50 flex cursor-pointer items-center px-2 py-1 ${selectedItemId === item.id ? "bg-muted text-accent-foreground" : ""}`}
-              style={{ paddingLeft }}
-              onClick={() => {
+              style={{ paddingLeft }}              onClick={() => {
                 // If folder is not expanded, expand it; otherwise toggle as before
                 if (!item.expanded) {
                   // Force expand the folder on first click
@@ -288,21 +319,33 @@ export default function ExplorerSidebar({
                       return folder;
                     })
                   );
-                  // Trigger loading of folder contents
-                  setExpandedFolder(item.id);
+                  // Trigger loading of folder contents if needed
+                  if (item.items.length === 0) {
+                    setExpandedFolder(item.id);
+                  }
                   handleItemClick(updatedItem);
                 } else {
                   toggleFolder(item.id, item.path);
                   handleItemClick(item);
                 }
               }}
-            >
-              {item.expanded ? (
-                <ChevronDown size={16} />
+            >              {/* Show chevron only if folder has or might have child folders */}
+              {hasChildFolders ? (
+                item.expanded ? (
+                  <ChevronDown size={16} />
+                ) : (
+                  <ChevronRight size={16} />
+                )
               ) : (
-                <ChevronRight size={16} />
+                <div className="w-4" />
               )}
-              <span className="text-sm ml-3 whitespace-nowrap overflow-hidden text-ellipsis">{item.name}</span>
+              
+              {/* Folder icon */}
+              <Folder size={16} className="mx-2 text-blue-500 flex-shrink-0" />
+              
+              <span className="text-sm whitespace-nowrap overflow-hidden text-ellipsis">
+                {item.name}
+              </span>
             </div>
             {item.expanded && renderItems(item.items, level + 1)}
           </div>

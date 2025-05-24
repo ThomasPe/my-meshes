@@ -3,16 +3,21 @@ import React, { ReactNode, useState, useRef, useCallback, useEffect } from "reac
 interface ShellLayoutProps {
   children: ReactNode;
   sidebar: ReactNode;
+  infoPanel?: ReactNode;
   sidebarWidth?: string;
+  infoPanelWidth?: string;
 }
 
 // Storage key for saving sidebar width preferences
 const SIDEBAR_WIDTH_STORAGE_KEY = 'app-sidebar-width';
+const INFO_PANEL_WIDTH_STORAGE_KEY = 'app-infopanel-width';
 
 export default function ShellLayout({
   children,
   sidebar,
-  sidebarWidth = "250px"
+  infoPanel,
+  sidebarWidth = "250px",
+  infoPanelWidth = "350px"
 }: ShellLayoutProps) {
   // Initialize width from localStorage if available, otherwise use the prop value
   const [width, setWidth] = useState(() => {
@@ -23,7 +28,16 @@ export default function ShellLayout({
       return sidebarWidth;
     }
   });
+  const [infoPanelWidthState, setInfoPanelWidthState] = useState(() => {
+    try {
+      const savedWidth = localStorage.getItem(INFO_PANEL_WIDTH_STORAGE_KEY);
+      return savedWidth || infoPanelWidth;
+    } catch (e) {
+      return infoPanelWidth;
+    }
+  });
   const [isDragging, setIsDragging] = useState(false);
+  const [isDraggingInfoPanel, setIsDraggingInfoPanel] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   
   // Save width to localStorage when it changes
@@ -35,13 +49,28 @@ export default function ShellLayout({
     }
   }, [width]);
   
-  // Start resize when mouse down on the resize handle
+  // Save info panel width to localStorage when it changes
+  useEffect(() => {
+    try {
+      localStorage.setItem(INFO_PANEL_WIDTH_STORAGE_KEY, infoPanelWidthState);
+    } catch (e) {
+      // Ignore localStorage errors
+    }
+  }, [infoPanelWidthState]);
+  
+  // Start resize for the sidebar
   const startResize = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     setIsDragging(true);
   }, []);
   
-  // Handle dragging
+  // Start resize for the info panel
+  const startInfoPanelResize = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    setIsDraggingInfoPanel(true);
+  }, []);
+  
+  // Handle dragging for sidebar
   const handleMouseMove = useCallback((e: MouseEvent) => {
     if (!isDragging || !containerRef.current) return;
     
@@ -52,15 +81,34 @@ export default function ShellLayout({
     setWidth(`${newWidth}px`);
   }, [isDragging]);
   
+  // Handle dragging for info panel
+  const handleInfoPanelMouseMove = useCallback((e: MouseEvent) => {
+    if (!isDraggingInfoPanel || !containerRef.current) return;
+    
+    const containerRect = containerRef.current.getBoundingClientRect();
+    // Calculate width from right edge of container to current mouse position
+    const newWidth = Math.max(200, Math.min(containerRect.right - e.clientX, containerRect.width * 0.5));
+    
+    setInfoPanelWidthState(`${newWidth}px`);
+  }, [isDraggingInfoPanel]);
+  
   // Stop resize when mouse is up
   const stopResize = useCallback(() => {
     setIsDragging(false);
+    setIsDraggingInfoPanel(false);
   }, []);
   
   // Add and remove event listeners
   useEffect(() => {
     if (isDragging) {
       document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', stopResize);
+      
+      // Change cursor for the entire document during drag
+      document.body.style.cursor = 'col-resize';
+      document.body.style.userSelect = 'none'; // Prevent text selection during resize
+    } else if (isDraggingInfoPanel) {
+      document.addEventListener('mousemove', handleInfoPanelMouseMove);
       document.addEventListener('mouseup', stopResize);
       
       // Change cursor for the entire document during drag
@@ -73,11 +121,12 @@ export default function ShellLayout({
     
     return () => {
       document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mousemove', handleInfoPanelMouseMove);
       document.removeEventListener('mouseup', stopResize);
       document.body.style.cursor = '';
       document.body.style.userSelect = '';
     };
-  }, [isDragging, handleMouseMove, stopResize]);
+  }, [isDragging, isDraggingInfoPanel, handleMouseMove, handleInfoPanelMouseMove, stopResize]);
   
   return (
     <div className="flex h-full" ref={containerRef}>
@@ -103,8 +152,36 @@ export default function ShellLayout({
       </div>
       
       {/* Main Content (Detail View) */}
-      <div className="flex-1 h-full overflow-hidden p-4">
-        {children}
+      <div className="flex flex-1 h-full overflow-hidden">
+        <div className="flex-1 h-full overflow-hidden p-4">
+          {children}
+        </div>
+        
+        {/* Info Panel (only shown when infoPanel is provided) */}
+        {infoPanel && (
+          <>
+            {/* Info Panel Resize Handle */}
+            <div 
+              className="relative w-1 cursor-col-resize flex items-center justify-center"
+              onMouseDown={startInfoPanelResize}
+            >
+              <div className={`absolute h-full w-1 ${isDraggingInfoPanel ? 'bg-primary' : 'hover:bg-border'}`}></div>
+              
+              {/* Visual indicator for resize handle */}
+              <div className={`absolute h-8 w-4 rounded-sm flex items-center justify-center ${isDraggingInfoPanel ? 'bg-primary' : 'hover:bg-muted'}`}>
+                <div className="w-[2px] h-4 bg-border mx-[1px]"></div>
+              </div>
+            </div>
+            
+            {/* Info Panel */}
+            <div 
+              className="border-l border-border bg-card h-full overflow-hidden"
+              style={{ width: infoPanelWidthState, transition: isDraggingInfoPanel ? 'none' : 'width 0.1s ease' }}
+            >
+              {infoPanel}
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
