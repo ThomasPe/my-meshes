@@ -1,6 +1,7 @@
 import { useEffect, useState, useRef } from 'react';
 import { LogMessage } from '@/helpers/ipc/logs/logs-context';
 import { ChevronUp, ChevronDown, XCircle, AlertCircle, CheckCircle, Info } from 'lucide-react';
+import React from 'react';
 
 // Maximum height of the expanded status bar (1/3 of the window height)
 const MAX_EXPANDED_HEIGHT = window.innerHeight / 3;
