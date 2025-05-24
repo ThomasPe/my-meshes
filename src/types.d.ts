@@ -6,6 +6,7 @@ declare const MAIN_WINDOW_VITE_NAME: string;
 
 // Import necessary types
 import { FileItem, FolderItem, ExplorerItem } from "./components/explorer/ExplorerTypes";
+import { LogMessage } from "./helpers/ipc/logs/logs-context";
 
 // Preload types
 interface ThemeModeContext {
@@ -28,8 +29,17 @@ interface FilesystemContext {
   readSubdirectory: (dirPath: string) => Promise<ExplorerItem[]>;
 }
 
+// Logs types
+interface LogsContext {
+  add: (message: string, type?: 'info' | 'warning' | 'error' | 'success') => Promise<LogMessage>;
+  getAll: () => Promise<LogMessage[]>;
+  clear: () => Promise<boolean>;
+  onNewLog: (callback: (log: LogMessage) => void) => () => void;
+}
+
 declare interface Window {
   themeMode: ThemeModeContext;
   electronWindow: ElectronWindow;
   filesystem: FilesystemContext;
+  logs: LogsContext;
 }

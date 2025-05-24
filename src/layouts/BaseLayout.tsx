@@ -1,6 +1,7 @@
 import React from "react";
 import DragWindowRegion from "@/components/DragWindowRegion";
 import NavigationMenu from "@/components/template/NavigationMenu";
+import StatusBar from "@/components/StatusBar";
 
 export default function BaseLayout({
   children,
@@ -11,7 +12,8 @@ export default function BaseLayout({
     <>
       <DragWindowRegion title="My Meshes" />
       <NavigationMenu />
-      <main className="h-screen pb-20 p-2">{children}</main>
+      <main className="h-screen pb-10 p-2">{children}</main>
+      <StatusBar />
     </>
   );
 }

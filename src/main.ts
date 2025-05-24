@@ -7,6 +7,7 @@ import {
   installExtension,
   REACT_DEVELOPER_TOOLS,
 } from "electron-devtools-installer";
+import { generateTestLogs } from "./helpers/ipc/logs/logs-test";
 
 const inDevelopment = process.env.NODE_ENV === "development";
 
@@ -37,6 +38,11 @@ function createWindow() {
 
   // Open the DevTools.
   mainWindow.webContents.openDevTools();
+  
+  // Generate test logs
+  setTimeout(() => {
+    generateTestLogs();
+  }, 1000);
 }
 
 async function installExtensions() {
