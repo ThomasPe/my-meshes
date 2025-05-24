@@ -16,6 +16,7 @@ export interface FolderItem {
   items: (FileItem | FolderItem)[];
   expanded?: boolean;
   path?: string; // Path to the actual folder
+  _contentsLoaded?: boolean; // Flag to indicate if contents have been loaded
 }
 
 export type ExplorerItem = FileItem | FolderItem;
