@@ -123,7 +123,7 @@ export default function StatusBar() {
 
   return (
     <div
-      className={`fixed left-0 right-0 bottom-0 border-t border-border bg-card transition-height duration-150 ease-in-out ${
+      className={`border-t border-border bg-card transition-height duration-150 ease-in-out ${
         isExpanded ? 'shadow-lg' : ''
       }`}
       style={{ 
@@ -134,7 +134,8 @@ export default function StatusBar() {
       {/* Resize handle - only shown when expanded */}
       {isExpanded && (
         <div
-          className="absolute top-0 left-0 right-0 h-1 cursor-row-resize flex justify-center items-center"
+          className="absolute left-0 right-0 h-1 cursor-row-resize flex justify-center items-center"
+          style={{ top: 0 }}
           onMouseDown={handleMouseDown}
         >
           <div className={`h-1 w-20 ${isDragging ? 'bg-primary' : 'hover:bg-border'} rounded-b`}></div>

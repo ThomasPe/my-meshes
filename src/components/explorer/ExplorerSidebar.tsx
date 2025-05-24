@@ -10,6 +10,7 @@ import { FolderItem, ExplorerItem } from "./ExplorerTypes";
 import { useTranslation } from "react-i18next";
 import { saveRootFolder, getRootFolder } from "@/helpers/folder_helpers";
 import * as ScrollArea from "@radix-ui/react-scroll-area";
+import StatusBar from "@/components/StatusBar";
 
 interface ExplorerSidebarProps {
   onSelectItem: (item: ExplorerItem) => void;
@@ -356,7 +357,7 @@ export default function ExplorerSidebar({
   };
 
   return (
-    <div className="grid grid-cols-1 grid-rows-[auto_1fr_auto] h-full">
+    <div className="grid grid-cols-1 grid-rows-[auto_1fr_auto_auto] h-full">
       <div className="border-border border-b p-2">
         <div
           className="hover:bg-muted/50 flex cursor-pointer items-center rounded px-2 py-2"
@@ -398,6 +399,7 @@ export default function ExplorerSidebar({
           <span className="text-sm">{t("titleSettingsPage")}</span>
         </div>
       </div>
+      <StatusBar />
     </div>
   );
 }
