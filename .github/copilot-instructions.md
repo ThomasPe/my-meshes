@@ -18,14 +18,21 @@
 - **Archives (Import):** interactions with uploaded/dragged ZIPs must **auto-extract** them into a new Project folder.
 - **Archives (Existing):** ZIPs found residing inside existing folders are treated as **"Project Attachments"** (opaque, read-only backups). Do not mount them as folders.
 - **3MF Files:** Treat as 3D Model files (parseable geometry), but respect their archive structure for thumbnail extraction.
+- **Streams & Buffers:** **ALWAYS prefer streaming** over buffering for large file I/O to prevent Renderer OOM.
+- **Worker Offloading:** **MANDATORY:** All geometry parsing (STL/OBJ/3MF) and heavy math must run in a **Web Worker**, never on the main UI thread.
 
-### 3. UI & Styling
+### 3. Security
+- **Content Security Policy:** Enforce strict CSP. No inline scripts.
+- **Node Integration:** Explicitly strictly forbid `nodeIntegration: true` and `contextIsolation: false` in all BrowserWindow configurations.
+
+### 4. UI & Styling
 - **Frameless:** Use a custom title bar (e.g. `electron-titlebar` or custom component).
+- **Internationalization:** Wrap **ALL** user-facing strings in `t('key')` from the start. No hardcoded text.
 - **Components:** Use Radix UI primitives for behavior and Tailwind CSS for styling.
 - **Performance:** Use `react-window` for the main grid view (virtualization required for large libraries).
 - **Thumbnails:** Generate offscreen in a hidden window or worker, never block the main UI thread.
 
-### 4. IPC Communication
+### 5. IPC Communication
 - Use `contextBridge` for all Main <-> Renderer communication.
 - Prefix IPC channels with `app:` (e.g., `app:scan-folder`, `app:get-metadata`).
 - Prefer `ipcRenderer.invoke` (Promises) over `send/on` for request/response flows.
@@ -43,6 +50,10 @@
 - **TypeScript:** Strict mode enabled. No `any`. Use interfaces for IPC payloads.
 - **React:** Functional components only. Use `TanStack Query` for async state (DB reads).
 - **CSS:** Tailwind utility classes. Avoid CSS-in-JS libraries unless necessary for dynamic values.
+- **Naming Conventions:**
+  - Components: `PascalCase` (e.g., `MeshViewer.tsx`)
+  - Utilities/Hooks: `camelCase` (e.g., `useMeshLoader.ts`, `fileSystem.ts`)
+  - Constants: `UPPER_SNAKE_CASE`
 
 ### Debugging
 - **Main Process:** Logs must go to `electron-log` file output (Standard `console.log` is invisible in production).
@@ -50,6 +61,6 @@
 - **IPC Debugging:** Log all `ipcRenderer.invoke` calls in dev mode to track flow.
 
 ### Quality Assurance
-- **Unit Tests:** Implement unit tests for logic-heavy components (parsers, data sync) where they provide value.
-- **E2E Verification:** Test new UI features using Playwright. Iterate on the implementation until all acceptance criteria are met.
+- **Unit Tests (Vitest):** implementation-agnostic tests for pure logic, hooks, and utilities.
+- **E2E Verification (Playwright):** Full user flows and smoke tests. Iterate until acceptance criteria are met.
 - **Code Standards:** Ensure all new code runs clean through `eslint` and `prettier` before considering a task complete.
