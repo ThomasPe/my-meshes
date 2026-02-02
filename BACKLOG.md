@@ -7,8 +7,12 @@ This backlog is derived from the Technical Document `README.md`. It is organized
 
 ### Epic 1: Scaffold & Architecture
 - [ ] **Initialize Repo:** Set up Electron + Vite + React + TypeScript boilerplate.
+- [ ] **Linting & Formatting:** Configure `eslint` and `prettier` with strict TypeScript rules.
+- [ ] **Testing Infrastructure:** Configure Playwright for Electron E2E testing.
 - [ ] **IPC Bridge:** Implement secure `contextBridge` for Main/Renderer communication.
-- [ ] **SQLite Integration:** Set up `better-sqlite3` instancing and basic schema (Projects, Files, Tags).
+- [ ] **SQLite Integration:** 
+    - Set up `better-sqlite3` instancing and basic schema (Projects, Files, Tags).
+    - **Rebuild Strategy:** DB is disposable cache. Schema changes = Delete DB file & Rescan (No migrations).
 - [ ] **Logging System:** Implement specific logging for Main and Renderer processes (e.g., `electron-log`).
 - [ ] **Window Management:** Implement `electron-titlebar` for custom frameless UI.
 
@@ -41,7 +45,8 @@ This backlog is derived from the Technical Document `README.md`. It is organized
 
 ### Epic 5: Ingestion & Import
 - [ ] **Staging Area UI:** Temporary view for reviewing new folders found or files dropped.
-- [ ] **Import Workflow:** 
+- [ ] **Ictive Import (App Drop):** Dragging to App window -> Staging -> Auto-Unzips to new Project.
+    - **Passive Sync (OS Drop):** Dragging to Explorer -> Watcher detects -> Treated as "Attachment" (No unzip)
     - Move files from Staging -> Library folder structure.
     - **Auto-Unzip:** Automatically extract imported `.zip` files into new Project folders.
 - [ ] **Safe Delete:** Implement `shell.moveItemToTrash`.
@@ -62,6 +67,7 @@ This backlog is derived from the Technical Document `README.md`. It is organized
 - [ ] **Keyboard Shortcuts:** Global keybinding manager (Search, Delete, Rename).
 - [ ] **Undo/Redo System:** Transaction stack for critical file operations (Rename, Move).
 - [ ] **Hardware Check:** WebGL capability detection on startup.
+- [ ] **Log Viewer:** Built-in UI to view application logs (main/renderer/watcher) for debugging.
 
 ### Epic 8: Customization & Safety
 - [ ] **Thumbnail Customization:** "Set Current View as Thumbnail" context menu action.

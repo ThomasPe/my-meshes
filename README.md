@@ -171,7 +171,7 @@ files:
   - Real-time feedback for file changes, import errors, or print preparation issues.
   - **Hardware Checks:** Startup validation for WebGL/GPU acceleration with graceful fallback to static icons on unsupported hardware.
   - Status bar, indicating background processes like indexing, thumbnail generation
-  - Log history
+  - **Log Viewer:** A dedicated interface to view, filter, and export application logs (Main Process, Renderer, and Watcher services) to assist in troubleshooting and bug reporting.
 
 - **Application Lifecycle:**
   - Integrated auto-update mechanism (`electron-updater`) to seamlessly deliver patches and new features.
