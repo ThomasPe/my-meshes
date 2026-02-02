@@ -81,6 +81,7 @@ files:
   - A database (e.g., SQLite) serves as a **read-only cache** for performance/indexing.
   - **File Sync:** A robust file watcher service monitors file system events.
     - **Network/NAS Support:** Includes fallback modes for non-watchable volumes (e.g., Polled Refresh, Manual Rescan).
+    - **Offline Protection:** Detects if a volume/drive is disconnected (missing root path); marks files as "Offline" instead of deleting them from the database to prevent data loss.
     - **Sync Status:** UI indicators for "Last Sync Time," "Syncing in Progress," and detailed status logs.
 
 - **Project Definition:**
@@ -95,12 +96,14 @@ files:
   - **Staging Area:** A dedicated workflow for ingesting raw files. The app scans input directories and proposes project structures in a temporary view. Users review and confirm these structures before the app writes metadata and moves files to the main library.
   - **Inbox/Unsorted:** Loose files or quick downloads are handled via an "Inbox" or "Unsorted" project, requiring later promotion to a proper project structure.
   - **Import Priority:** Focus on importing individual projects to ensure adherence to the curated structure. Automatic metadata enrichment and manual verification are key steps.
+  - **Ignored Patterns:** Configurable global ignore list (glob patterns) to exclude system folders (e.g., `.git`, `__MACOSX`) or specific file types (e.g., `.gcode`) from the library.
   - **Organizational Rules:** Users can define default folder structures (e.g., group by `Designer`, `Source Platform`, or `Tag`).
   - **Maintenance:** Tools provided to reorganize, rename, and clean up files to adhere to the conventions.
   - *Note:* Traditional loose folder scanning is deprioritized in favor of strict "Project" validation to ensure data integrity.
 
 - **Search & Filter Interface:**  
   - Dynamic attribute-based filtering (e.g., date, file type, tag) derived from the local metadata.
+  - **View Modes:** Multiple display options including a responsive Grid View (with adjustable zoom levels for thumbnails) and a Detailed List View allowing sorting by metadata columns.
 
 - **File Operations:**
   - **Batch Editing:** Select multiple projects to apply changes simultaneously, such as adding tags, setting designers, or moving files to a new collection.
@@ -115,6 +118,7 @@ files:
 - **Interactive Preview:**  
   - **Thumbnail Generation:**
     - Defaults to generating sidecar images (`preview.png`) stored alongside the model files.
+    - **Customization:** Ability to "Set View as Thumbnail" from the 3D viewport or upload a custom image (e.g., photo of the printed model) to replace the auto-generated preview.
     - Global preference available to switch to a centralized `AppData` cache to keep source folders clean.
   - Utilize Three.js to render a real-time preview of each model.  
   - **3MF Support:** Extract geometry and metadata from `.3mf` archives for seamless previewing and data ingestion.
@@ -131,6 +135,9 @@ files:
 
 ### 3.3 Collections & Organization
 
+- **Physical Folder Tree:**
+  - Sidebar navigation mirroring the actual disk structure (Lightroom-style), strictly scoped to the user-defined library root directories.
+
 - **Virtual Collections:** 
   - **Persistence:** Metadata for collections is stored in a resilient JSON sidecar (`collections.json`) in the user data folder, ensuring configuration survives database rebuildstructure.
   - Stored strictly in the SQLite cache (restorable via backup, but not essential for file integrity).
@@ -142,6 +149,14 @@ files:
 ---
 
 ### 3.4 User Experience & Customization
+  - **Project Tabs:** Multi-tab interface allowing multiple projects to be open simultaneously for quick switching and comparison without losing state.
+
+- **Window Management:**
+  - **Frameless UI:** Custom, native-feeling title bar (via `electron-titlebar` or similar) to ensure a consistent, premium aesthetic across Windows, macOS, and Linux.
+
+- **Productivity:**
+  - **Keyboard Shortcuts:** Centralized keybinding manager supporting standard shortcuts (e.g., `Ctrl+F` for search, `Del` for safe delete, `F2` to rename).
+  - **Undo/Redo Strategy:** "Professional Level" transaction support. Disk operations (Rename, Move, Tag) generate inverse operations on an undo stack, preventing accidental data loss from bulk edits.
 
 - **Dashboard:**  
   - Central view summarizing model inventory, recent activity
