@@ -7,14 +7,19 @@ This backlog is derived from the Technical Document `README.md`. It is organized
 
 ### Epic 1: Scaffold & Architecture
 - [ ] **Initialize Repo:** Set up Electron + Vite + React + TypeScript boilerplate.
+- [ ] **UI & Styling:** Configure Tailwind CSS, Radix UI, and Radix Themes.
+- [ ] **State & Routing:** Set up React Router and TanStack Query.
+- [ ] **Internationalization:** Configure `i18next` and `react-i18next`.
 - [ ] **Linting & Formatting:** Configure `eslint` and `prettier` with strict TypeScript rules.
 - [ ] **Testing Infrastructure:** Configure Playwright for Electron E2E testing.
+- [ ] **Unit Testing:** Configure Vitest for component and logic testing.
 - [ ] **IPC Bridge:** Implement secure `contextBridge` for Main/Renderer communication.
 - [ ] **SQLite Integration:** 
     - Set up `better-sqlite3` instancing and basic schema (Projects, Files, Tags).
     - **Rebuild Strategy:** DB is disposable cache. Schema changes = Delete DB file & Rescan (No migrations).
 - [ ] **Logging System:** Implement specific logging for Main and Renderer processes (e.g., `electron-log`).
 - [ ] **Window Management:** Implement `electron-titlebar` for custom frameless UI.
+- [ ] **CI/CD Pipeline:** Basic GitHub Action workflow for linting, building, and testing.
 
 ### Epic 2: Core File Management (The "Engine")
 - [ ] **Library Root Setup:** Ability to add/remove local directories as "Library Roots".
