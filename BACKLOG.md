@@ -47,9 +47,16 @@ This backlog is derived from the Technical Document `README.md`. It is organized
     - Content Security Policy (CSP) headers are present in dev and prod.
     - `electron-log` writes to a log file in the user data directory.
 - [ ] **CI/CD Pipeline**
-  - Goal: Automate checks.
+  - Goal: Automate checks and releases.
   - AC:
     - GitHub Action triggers on push; runs lint, test, and build.
+    - **Multi-Platform Release:** Main builds publish binaries (Win/Mac/Linux) to GitHub Releases.
+    - **Versioning:** `Nerdbank.GitVersioning` manages semantic versioning via git history.
+- [ ] **Auto-Updater**
+  - Goal: Integrated update flow.
+  - AC:
+    - App checks GitHub Releases for updates (electron-updater).
+    - Notification/Prompt when update is available.
 
 ### Epic 2: Core File Management (The "Engine")
 - [ ] **Library Root Setup**
@@ -206,8 +213,3 @@ This backlog is derived from the Technical Document `README.md`. It is organized
   - AC:
     - Ignore Patterns are editable.
     - Theme selector (System/Dark/Light).
-- [ ] **Auto-Updater**
-  - Goal: Modern app lifecycle.
-  - AC:
-    - App checks GitHub Releases for updates.
-    - Notification when update is available.
