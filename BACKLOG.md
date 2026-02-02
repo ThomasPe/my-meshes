@@ -19,12 +19,13 @@ This backlog is derived from the Technical Document `README.md`. It is organized
 - [ ] **Offline Handling:** Logic to mark items as "Offline" (not deleted) when a drive unmounts.
 - [ ] **YAML Logic:** 
     - Function to read `project.yaml`.
-    - Function to generate `project.yaml` for new folders (Enrichment).
+    - **Lazy Enrichment:** Generate `project.yaml` only on user edit (Tag/Rename), not during initial scan.
     - Bi-directional sync (File changed -> DB updated).
 
 ### Epic 3: Visualization & Interaction
 - [ ] **Three.js Viewport:** Basic React component to render an STL file.
-- [ ] **Archive Support:** Logic to inspect ZIP/3MF contents without full extraction (using `jszip`).
+- [ ] **3MF Support:** Logic to parse 3MF structure (technically zip-based) to extract geometry and thumbnail.
+- [ ] **Zip Handling:** Treat `.zip` files found in existing folders as generic "Project Attachments" (non-browsable).
 - [ ] **Thumbnail Generator:** 
     - Implementation of Offscreen Rendering window.
     - Queue system to process images in background.
@@ -35,11 +36,14 @@ This backlog is derived from the Technical Document `README.md`. It is organized
 - [ ] **Grid View:** Virtualized Grid (using `react-window`) with adjustable thumbnail size.
 - [ ] **Folder Tree:** Sidebar component mirroring the physical disk structure of Library Roots.
 - [ ] **Detail View:** Side panel showing metadata (`project.yaml` content) and file list.
+- [ ] **Optimistic UI:** Immediate UI reflection for Metadata/Tag changes; rollback on disk-write failure.
 - [ ] **Search:** Implementation of FTS5 SQLite search for fast filtering.
 
 ### Epic 5: Ingestion & Import
 - [ ] **Staging Area UI:** Temporary view for reviewing new folders found or files dropped.
-- [ ] **Simple Import:** Moving files from Staging -> Library folder structure.
+- [ ] **Import Workflow:** 
+    - Move files from Staging -> Library folder structure.
+    - **Auto-Unzip:** Automatically extract imported `.zip` files into new Project folders.
 - [ ] **Safe Delete:** Implement `shell.moveItemToTrash`.
 
 ---

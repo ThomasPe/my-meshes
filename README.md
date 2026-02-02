@@ -80,17 +80,20 @@ files:
   - A text-based description file (e.g. JSON/YAML) serves as the source of truth for each "Project". 
   - A database (e.g., SQLite) serves as a **read-only cache** for performance/indexing.
   - **File Sync:** A robust file watcher service monitors file system events.
+    - **Optimistic UI:** The interface updates immediately upon user interaction (e.g., tagging), writing to disk in the background to ensure responsiveness.
     - **Network/NAS Support:** Includes fallback modes for non-watchable volumes (e.g., Polled Refresh, Manual Rescan).
     - **Offline Protection:** Detects if a volume/drive is disconnected (missing root path); marks files as "Offline" instead of deleting them from the database to prevent data loss.
     - **Sync Status:** UI indicators for "Last Sync Time," "Syncing in Progress," and detailed status logs.
 
 - **Project Definition:**
   - A "Project" is defined as a directory containing a metadata file.
+  - **Lazy Creation:** To preserve disk sanctity, `project.yaml` files are only created when a user explicitly modifies a project (e.g., adds a tag), not during the initial scan.
   - All subdirectories and files within are considered parts of that Project.
   - Nested metadata files (projects within projects) are not permitted.
+  - **Zip Attachments:** Existing `.zip` or archive files found *inside* a project folder are treated as "Project Attachments". They are cataloged but **not** mounted as folders or extracted; they serve as backup/source containers.
 
 - **Import & Folder Structure:**
-  - **Archive Import:** Native support for importing ZIP files. Each archive is treated as a distinct Project. Supports bulk import of multiple archives simultaneously, extracting them into the Staging Area for review.
+  - **Archive Import:** Native support for importing ZIP files. The system **automatically extracts** uploaded Archives into new, dedicated Project folders. Supports bulk import of multiple archives simultaneously, extracting them into the Staging Area for review.
   - **External Enrichment:** Detects model source (e.g., Thingiverse, Printables) from imported archive contents or filenames. Automatically fetches and merges missing details (images, summary, tags) from the online platform into the local `project.yaml`.
   - **Duplicate Detection:** Automatic SHA-256 hash calculation during scan to identify and resolve duplicate files across the library.
   - **Staging Area:** A dedicated workflow for ingesting raw files. The app scans input directories and proposes project structures in a temporary view. Users review and confirm these structures before the app writes metadata and moves files to the main library.
