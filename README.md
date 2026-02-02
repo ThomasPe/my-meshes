@@ -29,6 +29,7 @@ This application is designed to help users organize, preview, and prepare local 
 | **Routing & State** | React Router, TanStack Query | Manage navigation and efficient server-state caching                         |
 | **Database (Cache)** | SQLite (`better-sqlite3`)           | High-performance read-only cache with Full-Text Search (FTS5)              |
 | **File System & IPC**| Node.js `fs`, Chokidar, Electron IPC | Secure, isolated file access via Context Bridge; real-time watching        |
+| **Data & Rendering** | Three.js, JSZip, js-yaml             | 3D viewport access; Handling ZIP/3MF Archives; Parsing YAML metadata       |
 | **Bundling & Building** | Vite                                   | Effective asset bundling with optimized builds for production                                |
 | **Testing**        | Vitest (unit tests), Playwright (e2e tests) | Ensures components work individually and the app functions as a whole                          |
 | **Code Quality**   | ESLint, Prettier                                     | Maintain clear, consistent coding standards throughout the project                           |
@@ -60,9 +61,15 @@ files:
 
 ### 2.3 Performance & Architecture strategy
 
-- **Worker Threads:** CPU-intensive tasks (STL parsing, thumbnail generation) must execute in Node.js Worker Threads to avoid blocking the main UI.
+- **Worker Threads:** CPU-intensive tasks (STL parsing, geometry analysis) execute in Node.js Worker Threads. 
+- **Offscreen Rendering:** Thumbnail generation utilizes Electron's hidden BrowserWindow (offscreen rendering) to access WebGL contexts correctly, avoiding "headless" limitations.
 - **IPC Pattern:** Strict `Context Isolation` usage. The frontend requests actions (e.g. `scanProject`) via a secure API bridge; the Main process handles the disk I/O.
 - **Virtual Lists:** The UI will use list virtualization (e.g. `react-window`) to performantly render libraries with thousands of items.
+
+### 2.4 Privacy & Security
+
+- **Offline First:** The application operates entirely locally. No telemetry, metadata, or file content is uploaded to the cloud.
+- **Local Processing:** All analysis, thumbnail generation, and indexing occur on the user's machine.
 
 ## 3. Core Features
 
@@ -82,6 +89,9 @@ files:
   - Nested metadata files (projects within projects) are not permitted.
 
 - **Import & Folder Structure:**
+  - **Archive Import:** Native support for importing ZIP files. Each archive is treated as a distinct Project. Supports bulk import of multiple archives simultaneously, extracting them into the Staging Area for review.
+  - **External Enrichment:** Detects model source (e.g., Thingiverse, Printables) from imported archive contents or filenames. Automatically fetches and merges missing details (images, summary, tags) from the online platform into the local `project.yaml`.
+  - **Duplicate Detection:** Automatic SHA-256 hash calculation during scan to identify and resolve duplicate files across the library.
   - **Staging Area:** A dedicated workflow for ingesting raw files. The app scans input directories and proposes project structures in a temporary view. Users review and confirm these structures before the app writes metadata and moves files to the main library.
   - **Inbox/Unsorted:** Loose files or quick downloads are handled via an "Inbox" or "Unsorted" project, requiring later promotion to a proper project structure.
   - **Import Priority:** Focus on importing individual projects to ensure adherence to the curated structure. Automatic metadata enrichment and manual verification are key steps.
@@ -92,14 +102,28 @@ files:
 - **Search & Filter Interface:**  
   - Dynamic attribute-based filtering (e.g., date, file type, tag) derived from the local metadata.
 
+- **File Operations:**
+  - **Batch Editing:** Select multiple projects to apply changes simultaneously, such as adding tags, setting designers, or moving files to a new collection.
+  - **Safe Deletion:** All delete operations use the OS Trash/Recycle Bin (`shell.moveItemToTrash`) preventing accidental permanent data loss.
+  - **Structure Sync:** Renaming a project in the App automatically renames the directory on disk.
+  - **Conflict Resolution:** To prevent data loss during concurrent editing (external vs. internal), the app employs a "UI Reload" strategy. If an external change is detected while editing, the save operation is disabled and the user is prompted to reload.
+
 ---
 
 ### 3.2 3D Model Visualization & Interaction
 
 - **Interactive Preview:**  
-  - Utilize Three.js to create cached thumbnails
+  - **Thumbnail Generation:**
+    - Defaults to generating sidecar images (`preview.png`) stored alongside the model files.
+    - Global preference available to switch to a centralized `AppData` cache to keep source folders clean.
   - Utilize Three.js to render a real-time preview of each model.  
+  - **3MF Support:** Extract geometry and metadata from `.3mf` archives for seamless previewing and data ingestion.
   - Support navigation tools such as pan, rotate, zoom, and reset view.
+  - **Drag-and-Drop Export:** Native OS support to drag a model from the app directly into external software (Slicers, Blender, etc.).
+
+- **Non-3D Asset Support:**
+  - **Images (JPG/PNG):** Built-in native viewer for project reference images.
+  - **Others (PDF, SCAD, TXT):** "Open in Default System App" behavior to maintain lightweight scope.
 
 - **Basic Editing & Analysis:**  
   - Allow basic transformations (e.g., scaling, rotation) for a quick visual check.  
@@ -108,7 +132,7 @@ files:
 ### 3.3 Collections & Organization
 
 - **Virtual Collections:** 
-  - Create arbitrary groups (e.g., "To Print", "Favorites") without altering the physical directory structure.
+  - **Persistence:** Metadata for collections is stored in a resilient JSON sidecar (`collections.json`) in the user data folder, ensuring configuration survives database rebuildstructure.
   - Stored strictly in the SQLite cache (restorable via backup, but not essential for file integrity).
 
 - **Smart Collections:**
@@ -127,15 +151,13 @@ files:
   
 - **Notifications & Error Handling:**  
   - Real-time feedback for file changes, import errors, or print preparation issues.
+  - **Hardware Checks:** Startup validation for WebGL/GPU acceleration with graceful fallback to static icons on unsupported hardware.
   - Status bar, indicating background processes like indexing, thumbnail generation
   - Log history
 
 - **Application Lifecycle:**
   - Integrated auto-update mechanism (`electron-updater`) to seamlessly deliver patches and new features.
   - User options to check for updates manually or opt-in to beta channels.
-
-- **Future Proofing:**  
-  - A plugin system for future features, such as cloud integration for model backups or sharing.
 
 ---
 
