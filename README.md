@@ -7,9 +7,15 @@
 This application is designed to help users organize, preview, and prepare local 3D model files (e.g., STL, OBJ) for 3D printing. By leveraging Electron, the app can run on major platforms (Windows, macOS, Linux) while offering a seamless, native desktop experience.
 
 **Goals:**
-- Provide an intuitive interface for browsing and managing 3D model files stored on a hard drive.
-- Render 3D models interactively using built-in visualization tools.
+- Provide an intuitive interface for browsing and managing 3D model files stored on a hard drive. Similar user experience to 3D model repositories like Thingiverse or MyMiniFactory, but focused on local files.
+- Enable users to tag, categorize, and search their 3D model collections efficiently.
+- Easily add new models by drag-and-drop or folder scanning.
 ---
+
+** Similar applications &  inspiration**:
+- **Photoshop Lightroom**: For photo organization and management.
+- **Plex**: For media file organization and streaming.
+- **3D Model Repositories**: Thingiverse, MyMiniFactory, Makerworld, Thangs
 
 ## 2. Technical Decisions
 
@@ -18,36 +24,73 @@ This application is designed to help users organize, preview, and prepare local 
 | Layer              | Technology(s)                                        | Rationale                                                                                  |
 |--------------------|------------------------------------------------------|--------------------------------------------------------------------------------------------|
 | **Application Base** | Electron, Electron Forge, Typescript                                         | Cross-platform desktop application packaging and native integration                        |
+| **Updates**          | electron-updater                                                             | Over-the-air auto-updates for bug fixes and features                                       |
 | **Frontend UI**    | React, [Radix Themes](https://www.radix-ui.com/themes), [Radix UI](https://www.radix-ui.com/), Tailwind CSS | Component-based architecture with accessible primitives and utility-first CSS               |
-| **Routing & State** | TBD | |
-| **File System Access** | TBD  |     |
+| **Routing & State** | React Router, TanStack Query | Manage navigation and efficient server-state caching                         |
+| **Database (Cache)** | SQLite (`better-sqlite3`)           | High-performance read-only cache with Full-Text Search (FTS5)              |
+| **File System & IPC**| Node.js `fs`, Chokidar, Electron IPC | Secure, isolated file access via Context Bridge; real-time watching        |
 | **Bundling & Building** | Vite                                   | Effective asset bundling with optimized builds for production                                |
 | **Testing**        | Vitest (unit tests), Playwright (e2e tests) | Ensures components work individually and the app functions as a whole                          |
 | **Code Quality**   | ESLint, Prettier                                     | Maintain clear, consistent coding standards throughout the project                           |
 | **Internationalization** | i18next, react-i18next                        | Support for multiple languages and localization                                            |
 
+### 2.2 Data Standard
 
+To ensure long-term compatibility and human readability, the project uses a standardized YAML sidecar format (`project.yaml`) inspired by **3MF** and **Dublin Core** standards.
+
+**Proposed Structure (`project.yaml`):**
+```yaml
+metadata:
+  title: "Gridfinity Storage Bin"       # dc:title
+  creator: "Zach Freedman"              # dc:creator / 3MF 'designer'
+  license: "CC-BY-NC-SA-4.0"            # dc:rights / 3MF 'licenseTerms'
+  source_url: "https://thangs.com/..."  # dc:identifier
+  tags:
+    - gridfinity
+    - organizer
+  
+printing:                               # Schema.org/3DModel technical properties
+  recommended_material: "PLA"
+  supports_required: false
+  
+files:
+  - path: "Bin_1x1.stl"
+    description: "Standard single bin"
+```
+
+### 2.3 Performance & Architecture strategy
+
+- **Worker Threads:** CPU-intensive tasks (STL parsing, thumbnail generation) must execute in Node.js Worker Threads to avoid blocking the main UI.
+- **IPC Pattern:** Strict `Context Isolation` usage. The frontend requests actions (e.g. `scanProject`) via a secure API bridge; the Main process handles the disk I/O.
+- **Virtual Lists:** The UI will use list virtualization (e.g. `react-window`) to performantly render libraries with thousands of items.
 
 ## 3. Core Features
 
-### 3.1 File Management
+### 3.1 File Management & Storage Strategy
 
-- **Folder Scanning & Import:**  
-  - Automatically scan specified directories for supported 3D file formats (e.g., STL, OBJ).  
-  - Allow manual import or directory selection.
-  - Model files in the same folder are treated as parts of a single multi-part model (e.g. for search purposes)
+- **Local Source of Truth:**
+  - All metadata and assets (images, SCAD, PDFs) must be stored on disk alongside the model files.
+  - A text-based description file (e.g. JSON/YAML) serves as the source of truth for each "Project". 
+  - A database (e.g., SQLite) serves as a **read-only cache** for performance/indexing.
+  - **File Sync:** A robust file watcher service monitors file system events.
+    - **Network/NAS Support:** Includes fallback modes for non-watchable volumes (e.g., Polled Refresh, Manual Rescan).
+    - **Sync Status:** UI indicators for "Last Sync Time," "Syncing in Progress," and detailed status logs.
 
-- **Metadata & Tagging:**  
-  - Extract and display basic file metadata (size, date modified, etc.).  
-  - Provide options for user-added tags or categorization for easier search and filtering.
-  - Fields for metdadata like License, URL to source, author
+- **Project Definition:**
+  - A "Project" is defined as a directory containing a metadata file.
+  - All subdirectories and files within are considered parts of that Project.
+  - Nested metadata files (projects within projects) are not permitted.
 
-- **File Operations:**  
-  - Enable operations such as rename, delete, copy/move—all within the app.
-  - Auto-cleanup function to reorder & rename files based on specified rules
+- **Import & Folder Structure:**
+  - **Staging Area:** A dedicated workflow for ingesting raw files. The app scans input directories and proposes project structures in a temporary view. Users review and confirm these structures before the app writes metadata and moves files to the main library.
+  - **Inbox/Unsorted:** Loose files or quick downloads are handled via an "Inbox" or "Unsorted" project, requiring later promotion to a proper project structure.
+  - **Import Priority:** Focus on importing individual projects to ensure adherence to the curated structure. Automatic metadata enrichment and manual verification are key steps.
+  - **Organizational Rules:** Users can define default folder structures (e.g., group by `Designer`, `Source Platform`, or `Tag`).
+  - **Maintenance:** Tools provided to reorganize, rename, and clean up files to adhere to the conventions.
+  - *Note:* Traditional loose folder scanning is deprioritized in favor of strict "Project" validation to ensure data integrity.
 
 - **Search & Filter Interface:**  
-  - Include dynamic search capabilities with attribute-based filtering (e.g., date, file type, tag).
+  - Dynamic attribute-based filtering (e.g., date, file type, tag) derived from the local metadata.
 
 ---
 
@@ -61,6 +104,15 @@ This application is designed to help users organize, preview, and prepare local 
 - **Basic Editing & Analysis:**  
   - Allow basic transformations (e.g., scaling, rotation) for a quick visual check.  
   - Integrate mesh analysis tools to check for errors (e.g., non-manifold edges) that might affect printing.
+
+### 3.3 Collections & Organization
+
+- **Virtual Collections:** 
+  - Create arbitrary groups (e.g., "To Print", "Favorites") without altering the physical directory structure.
+  - Stored strictly in the SQLite cache (restorable via backup, but not essential for file integrity).
+
+- **Smart Collections:**
+  - Dynamic saved searches (e.g., "Tag: Gridfinity AND Date: > 2024").
 
 
 ---
@@ -77,6 +129,10 @@ This application is designed to help users organize, preview, and prepare local 
   - Real-time feedback for file changes, import errors, or print preparation issues.
   - Status bar, indicating background processes like indexing, thumbnail generation
   - Log history
+
+- **Application Lifecycle:**
+  - Integrated auto-update mechanism (`electron-updater`) to seamlessly deliver patches and new features.
+  - User options to check for updates manually or opt-in to beta channels.
 
 - **Future Proofing:**  
   - A plugin system for future features, such as cloud integration for model backups or sharing.
