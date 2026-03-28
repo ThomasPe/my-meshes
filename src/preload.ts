@@ -133,6 +133,38 @@ const electronApi = {
     ipcRenderer.invoke('app:read-file-base64', filePath),
   dragStart: (filePath: string): Promise<{ success: boolean; error?: string }> =>
     ipcRenderer.invoke('app:drag-start', filePath),
+
+  // Import workflow
+  importInspectArchives: (
+    archivePaths: string[],
+  ): Promise<
+    Array<{
+      archivePath: string;
+      archiveName: string;
+      entries: Array<{
+        path: string;
+        name: string;
+        size: number;
+        isDirectory: boolean;
+        isModelFile: boolean;
+      }>;
+      modelFileCount: number;
+      totalSize: number;
+      suggestedProjectName: string;
+    }>
+  > => ipcRenderer.invoke('app:import-inspect-archives', archivePaths),
+  importExtractArchives: (
+    items: Array<{ archivePath: string; projectName: string }>,
+    targetRootPath: string,
+  ): Promise<
+    Array<{ archivePath: string; success: boolean; projectPath?: string; error?: string }>
+  > => ipcRenderer.invoke('app:import-extract-archives', items, targetRootPath),
+  importLooseFiles: (
+    filePaths: string[],
+    targetRootPath: string,
+  ): Promise<{ success: boolean; projectPath?: string; error?: string }> =>
+    ipcRenderer.invoke('app:import-loose-files', filePaths, targetRootPath),
+  importSelectFiles: (): Promise<string[]> => ipcRenderer.invoke('app:import-select-files'),
 };
 
 contextBridge.exposeInMainWorld('electronApi', electronApi);

@@ -7,6 +7,8 @@ import log from 'electron-log/main';
 import { getDatabase } from '../database';
 
 const MODEL_EXTENSIONS = new Set(['.stl', '.obj', '.3mf']);
+const ARCHIVE_EXTENSIONS = new Set(['.zip']);
+const ALL_TRACKED_EXTENSIONS = new Set([...MODEL_EXTENSIONS, ...ARCHIVE_EXTENSIONS]);
 
 interface WatcherState {
   watcher: FSWatcher;
@@ -52,7 +54,7 @@ function ensureProjectExists(rootId: number, projectPath: string, projectName: s
 
 function handleFileAdd(filePath: string, rootId: number): void {
   const ext = path.extname(filePath).toLowerCase();
-  if (!MODEL_EXTENSIONS.has(ext)) return;
+  if (!ALL_TRACKED_EXTENSIONS.has(ext)) return;
 
   const { projectPath, projectName } = findProjectForFile(filePath, rootId);
 
@@ -74,7 +76,7 @@ function handleFileAdd(filePath: string, rootId: number): void {
 
 function handleFileRemove(filePath: string, rootId: number): void {
   const ext = path.extname(filePath).toLowerCase();
-  if (!MODEL_EXTENSIONS.has(ext)) return;
+  if (!ALL_TRACKED_EXTENSIONS.has(ext)) return;
 
   try {
     const db = getDatabase();

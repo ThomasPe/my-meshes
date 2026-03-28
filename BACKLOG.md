@@ -148,7 +148,7 @@ This backlog is derived from the Technical Document `README.md`. It is organized
   - AC:
     - App extracts geometry from .3mf files.
     - Thumbnail is extracted from .3mf metadata if available.
-- [ ] **Zip Handling**
+- [x] **Zip Handling**
   - Goal: Handle Archives *inside* projects.
   - AC:
     - ZIPs inside a Project folder are listed as "Attachments".
@@ -206,14 +206,14 @@ This backlog is derived from the Technical Document `README.md`. It is organized
     - Search bar filters results instantly using FTS5 (SQLite).
 
 ### Epic 5: Ingestion & Import
-- [ ] **Import Workflow**
+- [x] **Import Workflow**
   - Goal: Bringing new files in.
   - AC:
     - Drag & Drop one or more ZIPs to App Window -> Opens Staging Area.
     - Staging Area allows reviewing contents before Import.
     - Import button unzips contents to a new Project Folder.
     - Loose files can be routed into an Inbox/Unsorted project for later promotion.
-- [ ] **Passive Sync (OS Drop)**
+- [x] **Passive Sync (OS Drop)**
   - Goal: Drag to Explorer.
   - AC:
     - Files dropped into Explorer (not App) are detected by Watcher.

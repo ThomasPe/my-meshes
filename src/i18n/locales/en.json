@@ -54,5 +54,19 @@
     "yes": "Yes",
     "no": "No",
     "cancel": "Cancel"
+  },
+  "import": {
+    "button": "Import",
+    "dropHere": "Drop files here to import",
+    "dropHint": "ZIP archives will be extracted into new projects",
+    "stagingTitle": "Import Files",
+    "inspecting": "Inspecting archives…",
+    "targetRoot": "Import to",
+    "modelFiles": "model files",
+    "looseFiles": "Loose Files",
+    "filesWillBeMovedToUnsorted": "files will be copied to Unsorted",
+    "noImportableFiles": "No importable files found.",
+    "importButton": "Import {{count}} item(s)",
+    "importing": "Importing…"
   }
 }

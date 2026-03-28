@@ -5,6 +5,8 @@ import log from 'electron-log/main';
 import { getDatabase } from '../database';
 
 const MODEL_EXTENSIONS = new Set(['.stl', '.obj', '.3mf']);
+const ARCHIVE_EXTENSIONS = new Set(['.zip']);
+const ALL_TRACKED_EXTENSIONS = new Set([...MODEL_EXTENSIONS, ...ARCHIVE_EXTENSIONS]);
 const IGNORED_PATTERNS = ['.git', '__MACOSX', 'node_modules', '.DS_Store', 'Thumbs.db'];
 
 interface ScannedFile {
@@ -54,7 +56,7 @@ function scanDirectory(dirPath: string): ScannedProject[] {
         hasYaml = true;
       }
 
-      if (MODEL_EXTENSIONS.has(ext)) {
+      if (ALL_TRACKED_EXTENSIONS.has(ext)) {
         try {
           const stats = fs.statSync(fullPath);
           files.push({
@@ -70,7 +72,10 @@ function scanDirectory(dirPath: string): ScannedProject[] {
     }
   }
 
-  if (files.length > 0) {
+  // A directory is a project if it contains model files.
+  // Archives (.zip) alone don't make a project, but are included if models are present.
+  const hasModelFiles = files.some((f) => MODEL_EXTENSIONS.has(f.extension));
+  if (hasModelFiles) {
     projects.push({
       path: dirPath,
       name: path.basename(dirPath),
