@@ -3,6 +3,9 @@ import path from 'node:path';
 import started from 'electron-squirrel-startup';
 import log from 'electron-log/main';
 import { getDatabase, closeDatabase } from './database';
+import { registerLibraryHandlers } from './ipc/library';
+import { registerScannerHandlers } from './ipc/scanner';
+import { registerYamlHandlers } from './ipc/yaml';
 
 log.initialize();
 log.info('Application starting...');
@@ -107,6 +110,9 @@ function registerIpcHandlers(): void {
 app.on('ready', () => {
   setupCSP();
   registerIpcHandlers();
+  registerLibraryHandlers();
+  registerScannerHandlers();
+  registerYamlHandlers();
   getDatabase();
   createWindow();
   log.info('Application ready');

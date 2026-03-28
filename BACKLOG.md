@@ -82,13 +82,13 @@ This backlog is derived from the Technical Document `README.md`. It is organized
     - Agent verification workflow and test-mode conventions are documented.
 
 ### Epic 2: Core File Management (The "Engine")
-- [ ] **Library Root Setup**
+- [x] **Library Root Setup**
   - Goal: Manage where the app looks for models.
   - AC:
     - User can add a folder path as a Library Root.
     - User can remove a Library Root.
     - Invalid paths are handled gracefully.
-- [ ] **Recursive Scanner**
+- [x] **Recursive Scanner**
   - Goal: Index files on disk.
   - AC:
     - Scanner finds STL, OBJ, 3MF files in nested folders.
@@ -106,7 +106,7 @@ This backlog is derived from the Technical Document `README.md`. It is organized
     - Library Roots on non-watchable volumes can use a polled refresh mode.
     - User can trigger a manual rescan for a Library Root.
     - Fallback modes do not create `project.yaml` files during scan.
-- [ ] **Offline Handling**
+- [x] **Offline Handling**
   - Goal: Handle disconnected drives.
   - AC:
     - If a Library Root path is missing, items are marked "Offline" in UI.
@@ -119,7 +119,7 @@ This backlog is derived from the Technical Document `README.md`. It is organized
     - Detailed sync status logs are available to the user.
     - Import errors and external file change failures trigger in-app notifications.
     - Status bar indicates background work such as indexing and thumbnail generation.
-- [ ] **YAML Logic & Attributes**
+- [x] **YAML Logic & Attributes**
   - Goal: Persistent metadata.
   - AC:
     - Parsing `project.yaml` works with Dublin Core fields (title, creator, license).

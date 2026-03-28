@@ -22,7 +22,11 @@
   "library": {
     "title": "Library",
     "empty": "No models found. Add a library root to get started.",
-    "addRoot": "Add Library Root"
+    "addRoot": "Add Library Root",
+    "roots": "Library Roots",
+    "projects": "Projects",
+    "lastScan": "Last scanned",
+    "offline": "Offline"
   },
   "settings": {
     "title": "Settings",
