@@ -69,7 +69,8 @@ This backlog is derived from the Technical Document `README.md`. It is organized
 - [ ] **Auto-Updater**
   - Goal: Integrated update flow.
   - AC:
-    - App checks GitHub Releases for updates (electron-updater).
+    - App uses `update-electron-app` with `@electron-forge/publisher-github` for Forge-native updates.
+    - Releases are published to GitHub Releases via Forge's publish pipeline.
     - Notification/Prompt when update is available.
     - User can manually check for updates from the app.
     - User can opt in to beta update channels.
@@ -124,7 +125,7 @@ This backlog is derived from the Technical Document `README.md`. It is organized
     - Parsing `project.yaml` works with Dublin Core fields (title, creator, license).
     - `project.yaml` is only created when user *edits* metadata.
     - Changing a tag in UI updates `project.yaml` in background.
-- [ ] **Conflict Resolution** (Missing Feature)
+- [ ] **Conflict Resolution**
   - Goal: Handle external edits to YAML.
   - AC:
     - App detects if `project.yaml` was modified externally while user is editing.

@@ -12,7 +12,7 @@ This application is designed to help users organize, preview, and prepare local 
 - Easily add new models by drag-and-drop or folder scanning.
 ---
 
-** Similar applications &  inspiration**:
+**Similar applications & inspiration**:
 - **Photoshop Lightroom**: For photo organization and management.
 - **Plex**: For media file organization and streaming.
 - **3D Model Repositories**: Thingiverse, MyMiniFactory, Makerworld, Thangs
@@ -24,7 +24,7 @@ This application is designed to help users organize, preview, and prepare local 
 | Layer              | Technology(s)                                        | Rationale                                                                                  |
 |--------------------|------------------------------------------------------|--------------------------------------------------------------------------------------------|
 | **Application Base** | Electron, Electron Forge, Typescript                                         | Cross-platform desktop application packaging and native integration                        |
-| **Updates**          | electron-updater                                                             | Over-the-air auto-updates for bug fixes and features                                       |
+| **Updates**          | update-electron-app, @electron-forge/publisher-github                        | Over-the-air auto-updates via update.electronjs.org with Forge-native publishing           |
 | **Frontend UI**    | React, [shadcn/ui](https://ui.shadcn.com/) (Radix primitives), Tailwind CSS | Component-based architecture with accessible primitives, pre-built Tailwind-styled components |
 | **Routing & State** | React Router, TanStack Query | Manage navigation and efficient server-state caching                         |
 | **Database (Cache)** | SQLite (`better-sqlite3`)           | High-performance read-only cache with Full-Text Search (FTS5)              |
@@ -184,7 +184,7 @@ files:
   - **Log Viewer:** A dedicated interface to view, filter, and export application logs (Main Process, Renderer, and Watcher services) to assist in troubleshooting and bug reporting.
 
 - **Application Lifecycle:**
-  - Integrated auto-update mechanism (`electron-updater`) to seamlessly deliver patches and new features.
+  - Integrated auto-update mechanism (`update-electron-app` with `@electron-forge/publisher-github`) to seamlessly deliver patches and new features.
   - User options to check for updates manually or opt-in to beta channels.
 
 ---
