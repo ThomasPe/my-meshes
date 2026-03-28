@@ -94,13 +94,13 @@ This backlog is derived from the Technical Document `README.md`. It is organized
     - Scanner finds STL, OBJ, 3MF files in nested folders.
     - Scanner respects "Ignored Patterns" (e.g., .git, __MACOSX).
     - Scanner does NOT create `project.yaml` files (Lazy Enrichment).
-- [ ] **Watcher Service**
+- [x] **Watcher Service**
   - Goal: Real-time sync.
   - AC:
     - `chokidar` detects new files moved into a Library Root.
     - `chokidar` detects deleted files and removes them from DB.
     - UI updates immediately when a file is added/removed externally.
-- [ ] **Fallback Sync Modes**
+- [x] **Fallback Sync Modes**
   - Goal: Support non-watchable and network-backed storage.
   - AC:
     - Library Roots on non-watchable volumes can use a polled refresh mode.
@@ -137,7 +137,7 @@ This backlog is derived from the Technical Document `README.md`. It is organized
     - Rename conflicts are surfaced before any destructive file operation occurs.
 
 ### Epic 3: Visualization & Interaction
-- [ ] **Three.js Viewport**
+- [x] **Three.js Viewport**
   - Goal: Render 3D models.
   - AC:
     - STL/OBJ files render in a React component.
@@ -160,24 +160,24 @@ This backlog is derived from the Technical Document `README.md`. It is organized
     - `preview.png` defaults to a per-project `.cache` subfolder (e.g., `<project-folder>/.cache/preview.png`).
     - Users can choose thumbnail storage in AppData, library root, or alongside source files.
     - Generator Queue processes images in background without lagging UI.
-- [ ] **Drag & Drop Export**
+- [x] **Drag & Drop Export**
   - Goal: Workflow integration.
   - AC:
     - Dragging a thumbnail from App to Slicer (e.g., Cura) opens the file.
     - Uses `ipcRenderer.invoke('app:drag-start')`.
-- [ ] **Non-3D Asset Support**
+- [x] **Non-3D Asset Support**
   - Goal: Keep related project files accessible.
   - AC:
     - JPG and PNG project images open in a built-in viewer.
     - PDF, SCAD, and TXT files can be opened in the default system app.
 
 ### Epic 4: Library UI & Organization
-- [ ] **Grid View**
+- [x] **Grid View**
   - Goal: Efficient browsing.
   - AC:
     - `react-window` renders 10,000+ items smoothly.
     - Thumbnail size is adjustable (Slider).
-- [ ] **Folder Tree**
+- [x] **Folder Tree**
   - Goal: Navigation.
   - AC:
     - Sidebar mirrors physical disk structure.
@@ -198,7 +198,7 @@ This backlog is derived from the Technical Document `README.md`. It is organized
   - AC:
     - User can switch between Grid View and Detailed List View.
     - Detailed List View supports sorting by metadata columns.
-- [ ] **Detail View & Search**
+- [x] **Detail View & Search**
   - Goal: Information access.
   - AC:
     - Sidebar shows metadata, file list, and file size.
@@ -218,7 +218,7 @@ This backlog is derived from the Technical Document `README.md`. It is organized
   - AC:
     - Files dropped into Explorer (not App) are detected by Watcher.
     - If ZIP, treated as Attachment (not auto-unzipped).
-- [ ] **Safe Delete**
+- [x] **Safe Delete**
   - Goal: Data safety.
   - AC:
     - Deleting a file moves it to OS Trash/Recycle Bin.

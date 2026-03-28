@@ -6,6 +6,8 @@ import { getDatabase, closeDatabase } from './database';
 import { registerLibraryHandlers } from './ipc/library';
 import { registerScannerHandlers } from './ipc/scanner';
 import { registerYamlHandlers } from './ipc/yaml';
+import { registerWatcherHandlers, stopAllWatchers } from './ipc/watcher';
+import { registerImportHandlers } from './ipc/import';
 
 log.initialize();
 log.info('Application starting...');
@@ -113,6 +115,8 @@ app.on('ready', () => {
   registerLibraryHandlers();
   registerScannerHandlers();
   registerYamlHandlers();
+  registerWatcherHandlers();
+  registerImportHandlers();
   getDatabase();
   createWindow();
   log.info('Application ready');
@@ -131,5 +135,6 @@ app.on('activate', () => {
 });
 
 app.on('before-quit', () => {
+  stopAllWatchers();
   closeDatabase();
 });

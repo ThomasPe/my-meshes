@@ -119,6 +119,9 @@ export function registerScannerHandlers(): void {
       db.prepare(
         'DELETE FROM files WHERE project_id IN (SELECT id FROM projects WHERE root_id = ?)',
       ).run(rootId);
+      db.prepare(
+        'DELETE FROM projects_fts WHERE rowid IN (SELECT id FROM projects WHERE root_id = ?)',
+      ).run(rootId);
       db.prepare('DELETE FROM projects WHERE root_id = ?').run(rootId);
 
       for (const project of projects) {
@@ -129,6 +132,13 @@ export function registerScannerHandlers(): void {
           project.hasYaml ? 1 : 0,
         );
         const projectId = projectInfo.lastInsertRowid;
+
+        // Populate FTS index
+        db.prepare('INSERT INTO projects_fts (rowid, name, path) VALUES (?, ?, ?)').run(
+          projectId,
+          project.name,
+          project.path,
+        );
 
         for (const file of project.files) {
           insertFile.run(projectId, file.path, file.name, file.extension, file.size);
@@ -163,5 +173,45 @@ export function registerScannerHandlers(): void {
   ipcMain.handle('app:get-project-files', (_event, projectId: number) => {
     const db = getDatabase();
     return db.prepare('SELECT * FROM files WHERE project_id = ? ORDER BY name').all(projectId);
+  });
+
+  ipcMain.handle('app:search-projects', (_event, query: string) => {
+    const db = getDatabase();
+    if (!query || query.trim().length === 0) {
+      return db
+        .prepare(
+          'SELECT p.*, lr.path as root_path FROM projects p JOIN library_roots lr ON p.root_id = lr.id ORDER BY p.name',
+        )
+        .all();
+    }
+
+    // Use FTS5 for fast text search
+    const ftsQuery = query
+      .trim()
+      .split(/\s+/)
+      .map((term) => `"${term}"*`)
+      .join(' ');
+
+    try {
+      return db
+        .prepare(
+          `SELECT p.*, lr.path as root_path
+           FROM projects_fts fts
+           JOIN projects p ON fts.rowid = p.id
+           JOIN library_roots lr ON p.root_id = lr.id
+           WHERE projects_fts MATCH ?
+           ORDER BY rank`,
+        )
+        .all(ftsQuery);
+    } catch {
+      // Fallback to LIKE search if FTS fails
+      return db
+        .prepare(
+          `SELECT p.*, lr.path as root_path FROM projects p
+           JOIN library_roots lr ON p.root_id = lr.id
+           WHERE p.name LIKE ? ORDER BY p.name`,
+        )
+        .all(`%${query}%`);
+    }
   });
 }
