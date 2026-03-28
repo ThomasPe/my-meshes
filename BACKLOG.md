@@ -9,9 +9,27 @@ This backlog is derived from the Technical Document `README.md`. It is organized
 - [ ] **Initialize Repo**
   - Goal: Set up the official Electron Forge boilerplate with React and TypeScript.
   - AC:
-    - Repo is initialized using `npm init electron-app -- --template=vite-typescript`.
+    - Repo is initialized using `npx create-electron-app@latest . --template=vite-typescript`.
     - `npm run start` launches the Electron window with React loaded.
     - `npm run make` creates a distributable executable.
+- [ ] **Testing Infrastructure**
+  - Goal: Set up test runners.
+  - AC:
+    - `npm run test` runs Vitest for unit tests.
+    - `npm run e2e` runs Playwright and passes a basic launch test.
+    - Playwright launches the Electron app directly, not just the renderer in a browser.
+    - Test runs store screenshots, traces, and logs for failed runs.
+    - A dedicated test mode isolates user data, cache, and logs from developer data.
+    - Seed fixture data can be injected so agent-run E2E flows are deterministic.
+    - Critical screens expose stable selectors for automation.
+- [ ] **Agent Verification Harness**
+  - Goal: Make every agent-delivered step executable and reproducible end to end.
+  - AC:
+    - Electron can be launched in a deterministic test mode via Playwright.
+    - Test mode disables nondeterministic behaviors such as auto-update prompts and uses temp app directories.
+    - E2E fixtures cover at least one valid library root and one malformed or offline scenario.
+    - A smoke test proves the first Electron window becomes interactive.
+    - A documented workflow exists for agent implementation: change code, run targeted E2E, inspect artifacts, fix, rerun.
 - [ ] **UI & Styling**
   - Goal: Configure the visual foundation.
   - AC:
@@ -34,11 +52,7 @@ This backlog is derived from the Technical Document `README.md`. It is organized
     - `eslint` disallows `any` type.
     - `prettier` formats code on save (or via script).
     - CI fails if code is not formatted/linted.
-- [ ] **Testing Infrastructure**
-  - Goal: Set up test runners.
-  - AC:
-    - `npm run test` runs Vitest for unit tests.
-    - `npm run e2e` runs Playwright and passes a basic launch test.
+
 - [ ] **Data & Security Architecture**
   - Goal: Secure and persistent foundation.
   - AC:
@@ -51,12 +65,19 @@ This backlog is derived from the Technical Document `README.md`. It is organized
   - AC:
     - GitHub Action triggers on push; runs lint, test, and build.
     - **Multi-Platform Release:** Main builds publish binaries (Win/Mac/Linux) to GitHub Releases.
-    - **Versioning:** `Nerdbank.GitVersioning` manages semantic versioning via git history.
 - [ ] **Auto-Updater**
   - Goal: Integrated update flow.
   - AC:
     - App checks GitHub Releases for updates (electron-updater).
     - Notification/Prompt when update is available.
+    - User can manually check for updates from the app.
+    - User can opt in to beta update channels.
+- [ ] **Documentation**
+  - Goal: Keep project and user guidance current.
+  - AC:
+    - Developer setup and build instructions are documented.
+    - User-facing import, library, and troubleshooting flows are documented.
+    - Agent verification workflow and test-mode conventions are documented.
 
 ### Epic 2: Core File Management (The "Engine")
 - [ ] **Library Root Setup**
@@ -77,12 +98,25 @@ This backlog is derived from the Technical Document `README.md`. It is organized
     - `chokidar` detects new files moved into a Library Root.
     - `chokidar` detects deleted files and removes them from DB.
     - UI updates immediately when a file is added/removed externally.
+- [ ] **Fallback Sync Modes**
+  - Goal: Support non-watchable and network-backed storage.
+  - AC:
+    - Library Roots on non-watchable volumes can use a polled refresh mode.
+    - User can trigger a manual rescan for a Library Root.
+    - Fallback modes do not create `project.yaml` files during scan.
 - [ ] **Offline Handling**
   - Goal: Handle disconnected drives.
   - AC:
     - If a Library Root path is missing, items are marked "Offline" in UI.
     - "Offline" items are NOT deleted from the DB.
     - Rescanning when drive is back removes "Offline" status.
+- [ ] **Sync Status & Notifications**
+  - Goal: Surface library activity and failures clearly.
+  - AC:
+    - UI shows "Last Sync Time" and "Syncing in Progress" for each Library Root.
+    - Detailed sync status logs are available to the user.
+    - Import errors and external file change failures trigger in-app notifications.
+    - Status bar indicates background work such as indexing and thumbnail generation.
 - [ ] **YAML Logic & Attributes**
   - Goal: Persistent metadata.
   - AC:
@@ -94,6 +128,11 @@ This backlog is derived from the Technical Document `README.md`. It is organized
   - AC:
     - App detects if `project.yaml` was modified externally while user is editing.
     - User is prompted to "Reload" UI to avoid overwriting external changes.
+- [ ] **Structure Sync**
+  - Goal: Keep project identity aligned on disk.
+  - AC:
+    - Renaming a project in the app renames the project directory on disk.
+    - Rename conflicts are surfaced before any destructive file operation occurs.
 
 ### Epic 3: Visualization & Interaction
 - [ ] **Three.js Viewport**
@@ -116,13 +155,19 @@ This backlog is derived from the Technical Document `README.md`. It is organized
   - Goal: Visual previews.
   - AC:
     - Thumbnails are generated via offscreen rendering.
-    - `preview.png` is saved next to the model file.
+    - `preview.png` defaults to a `.cache` location.
+    - Users can choose thumbnail storage in AppData, library root, or alongside source files.
     - Generator Queue processes images in background without lagging UI.
 - [ ] **Drag & Drop Export**
   - Goal: Workflow integration.
   - AC:
     - Dragging a thumbnail from App to Slicer (e.g., Cura) opens the file.
     - Uses `ipcRenderer.invoke('ondragstart')`.
+- [ ] **Non-3D Asset Support**
+  - Goal: Keep related project files accessible.
+  - AC:
+    - JPG and PNG project images open in a built-in viewer.
+    - PDF, SCAD, and TXT files can be opened in the default system app.
 
 ### Epic 4: Library UI & Organization
 - [ ] **Grid View**
@@ -135,24 +180,37 @@ This backlog is derived from the Technical Document `README.md`. It is organized
   - AC:
     - Sidebar mirrors physical disk structure.
     - Clicking a folder filters Grid View to that scope.
-- [ ] **Smart Collections** (Missing Feature)
+- [ ] **Virtual Collections**
+  - Goal: Manual organization independent of disk structure.
+  - AC:
+    - User can create and manage manual collections.
+    - Collection metadata is stored in `collections.json` in the user data directory.
+    - SQLite may cache collection data for querying, but is not the source of truth.
+- [ ] **Smart Collections**
   - Goal: Saved searches.
   - AC:
     - User can create a "Smart Collection" (e.g., "Tag = Gridfinity").
-    - Smart Collections are saved in `collections.json` (not SQLite).
+    - Smart Collection definitions are saved in `collections.json` in the user data directory.
+- [ ] **Detailed List View**
+  - Goal: Support metadata-heavy browsing workflows.
+  - AC:
+    - User can switch between Grid View and Detailed List View.
+    - Detailed List View supports sorting by metadata columns.
 - [ ] **Detail View & Search**
   - Goal: Information access.
   - AC:
     - Sidebar shows metadata, file list, and file size.
+    - Dynamic attribute-based filters are available for metadata fields.
     - Search bar filters results instantly using FTS5 (SQLite).
 
 ### Epic 5: Ingestion & Import
 - [ ] **Import Workflow**
   - Goal: Bringing new files in.
   - AC:
-    - Drag & Drop ZIP to App Window -> Opens Staging Area.
+    - Drag & Drop one or more ZIPs to App Window -> Opens Staging Area.
     - Staging Area allows reviewing contents before Import.
     - Import button unzips contents to a new Project Folder.
+    - Loose files can be routed into an Inbox/Unsorted project for later promotion.
 - [ ] **Passive Sync (OS Drop)**
   - Goal: Drag to Explorer.
   - AC:
@@ -172,8 +230,8 @@ This backlog is derived from the Technical Document `README.md`. It is organized
 - [ ] **External Scraper**
   - Goal: Auto-fill metadata.
   - AC:
-    - Regex detects Thingiverse/Printables URLs in text files/source.
-    - Scraper fetches Title, Author, Tags from URL.
+    - App detects supported source platforms from archive contents, filenames, or discovered URLs.
+    - Scraper fetches Title, Author, Tags, summary, and available images.
 - [ ] **Duplicate Detection**
   - Goal: Library hygiene.
   - AC:
@@ -184,8 +242,29 @@ This backlog is derived from the Technical Document `README.md`. It is organized
   - AC:
     - User can select multiple projects.
     - "Add Tag" applies to all selected.
+    - Bulk edit can update designer and collection assignment.
+- [ ] **Organizational Rules**
+  - Goal: Support predictable library layouts.
+  - AC:
+    - User can define default folder structures by Designer, Source Platform, or Tag.
+    - Import and move flows can target the configured organization rules.
+- [ ] **Library Maintenance**
+  - Goal: Keep the library consistent over time.
+  - AC:
+    - App provides tools to reorganize, rename, and clean up projects.
+    - Maintenance tools respect project boundaries and do not create nested projects.
 
 ### Epic 7: User Experience Polish
+- [ ] **Project Tabs**
+  - Goal: Compare and switch between projects quickly.
+  - AC:
+    - Multiple projects can be opened at once.
+    - Switching tabs preserves per-project UI state.
+- [ ] **Dashboard**
+  - Goal: Summarize library state.
+  - AC:
+    - Dashboard shows model inventory counts.
+    - Dashboard shows recent activity.
 - [ ] **Keybinding Manager**
   - Goal: Power user controls.
   - AC:
@@ -199,8 +278,14 @@ This backlog is derived from the Technical Document `README.md`. It is organized
 - [ ] **Log Viewer & Hardware Check**
   - Goal: Debugging.
   - AC:
-    - UI for viewing main/renderer logs.
+    - UI for viewing main, renderer, and watcher logs.
+    - Logs can be filtered and exported.
     - Startup check for WebGL support; warnings if missing.
+- [ ] **Local Diagnostics & Feedback Loop**
+  - Goal: Improve the app without cloud telemetry.
+  - AC:
+    - Diagnostic logging remains local-first and respects offline operation.
+    - Users can review and export information needed for bug reports.
 
 ### Epic 8: Customization & Safety
 - [ ] **Custom Thumbnails**
@@ -212,4 +297,14 @@ This backlog is derived from the Technical Document `README.md`. It is organized
   - Goal: Configuration.
   - AC:
     - Ignore Patterns are editable.
+    - Default directories are configurable.
+    - File format preferences are configurable.
     - Theme selector (System/Dark/Light).
+    - Notification preferences are configurable.
+
+### Epic 9: Advanced Model Tools
+- [ ] **Basic Model Editing & Analysis**
+  - Goal: Add deeper model inspection after the library foundation is stable.
+  - AC:
+    - User can apply basic transforms for visual inspection.
+    - App can run mesh analysis checks relevant to printability.

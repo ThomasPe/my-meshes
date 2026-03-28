@@ -63,4 +63,10 @@
 ### Quality Assurance
 - **Unit Tests (Vitest):** implementation-agnostic tests for pure logic, hooks, and utilities.
 - **E2E Verification (Playwright):** Full user flows and smoke tests. Iterate until acceptance criteria are met.
+- **Agent Completion Standard:** If an agent implements a backlog step, it must also execute end-to-end verification for that step before considering the work done.
+- **Electron App Control:** Use Playwright's Electron support to launch and control the desktop application directly. Do not treat browser-only automation as sufficient verification for Electron features.
+- **Deterministic Test Mode:** Maintain a test mode with isolated user data, cache, logs, seeded fixture paths, and disabled nondeterministic behaviors such as auto-update prompts.
+- **Stable Automation Hooks:** Critical UI flows must expose stable selectors and test-safe seams so agent-driven verification remains reliable.
+- **Outcome Assertions:** E2E coverage must validate user-visible behavior and persisted side effects on disk, YAML, cache, or logs when the feature changes those surfaces.
+- **Failure Diagnostics:** Preserve screenshots, traces, and application logs for failed E2E runs so agents can debug regressions without manual reproduction.
 - **Code Standards:** Ensure all new code runs clean through `eslint` and `prettier` before considering a task complete.

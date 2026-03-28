@@ -71,6 +71,15 @@ files:
 - **Offline First:** The application operates entirely locally. No telemetry, metadata, or file content is uploaded to the cloud.
 - **Local Processing:** All analysis, thumbnail generation, and indexing occur on the user's machine.
 
+### 2.5 Agent-Driven Verification Strategy
+
+- **Agent-Owned Acceptance:** Each backlog step implemented by an agent must be verified end to end before it is considered complete.
+- **Electron Control:** End-to-end verification must use Playwright's Electron support to launch and control the desktop app, not browser-only automation.
+- **Deterministic Test Mode:** The app must provide a dedicated test mode with isolated user data, cache, logs, and seeded fixture paths so agent runs are reproducible.
+- **Stable Selectors:** Critical UI flows must expose stable test selectors for automation.
+- **Outcome Verification:** Agent verification must assert both visible UI behavior and persisted side effects on disk or in the cache when relevant.
+- **Failure Evidence:** Test failures must produce usable diagnostics such as screenshots, traces, and application logs.
+
 ## 3. Core Features
 
 ### 3.1 File Management & Storage Strategy
@@ -120,10 +129,10 @@ files:
 
 - **Interactive Preview:**  
   - **Thumbnail Generation:**
-    - Defaults to generating sidecar images (`preview.png`) stored alongside the model files.
+    - Defaults to generating sidecar images (`preview.png`) stored in a `.cache` folder, ensuring they are easily accessible and can be regenerated if deleted.
+    - **Cache Folder Options:** Users can choose to store thumbnails in a centralized `AppData` cache, in the library root directory, or alongside source files, with clear documentation on the implications of each choice.
     - **Customization:** Ability to "Set View as Thumbnail" from the 3D viewport or upload a custom image (e.g., photo of the printed model) to replace the auto-generated preview.
-    - Global preference available to switch to a centralized `AppData` cache to keep source folders clean.
-  - Utilize Three.js to render a real-time preview of each model.  
+  - Utilize Three.js to render a real-time preview of each model that lacks a thumbnail. 
   - **3MF Support:** Extract geometry and metadata from `.3mf` archives for seamless previewing and data ingestion.
   - Support navigation tools such as pan, rotate, zoom, and reset view.
   - **Drag-and-Drop Export:** Native OS support to drag a model from the app directly into external software (Slicers, Blender, etc.).
@@ -142,8 +151,8 @@ files:
   - Sidebar navigation mirroring the actual disk structure (Lightroom-style), strictly scoped to the user-defined library root directories.
 
 - **Virtual Collections:** 
-  - **Persistence:** Metadata for collections is stored in a resilient JSON sidecar (`collections.json`) in the user data folder, ensuring configuration survives database rebuildstructure.
-  - Stored strictly in the SQLite cache (restorable via backup, but not essential for file integrity).
+  - **Persistence:** Metadata for collections is stored in a resilient JSON sidecar (`collections.json`) in the user data folder, ensuring configuration survives database rebuilds.
+  - SQLite may cache collection data for performance, but it is not the source of truth.
 
 - **Smart Collections:**
   - Dynamic saved searches (e.g., "Tag: Gridfinity AND Date: > 2024").
@@ -183,15 +192,26 @@ files:
 
 - **Version Control:**  
   - Use Git with a clear branching strategy to manage features, bugs, and releases.
+
+- **Agent Verification Standard:**
+  - Every agent-delivered feature must ship with an executable acceptance path, typically a Playwright Electron test that launches the app, performs the user flow, and verifies the expected result.
+  - Features are not considered complete when they are only implemented; they are complete when the corresponding end-to-end verification passes.
+  - Electron test runs must execute against deterministic fixture data and test-specific app directories to avoid coupling to a developer's real library.
+  - Where native OS dialogs or external integrations are difficult to automate directly, the app should expose narrow test seams in test mode rather than skipping verification.
   
 - **Continuous Integration/Continuous Deployment (CI/CD):**  
   - Set up automated testing (unit and integration) and build pipelines to ensure code quality and simplify deployments.
+
+- **E2E Harness Requirements:**
+  - Provide a smoke test that proves Electron launches and the first renderer window becomes interactive.
+  - Provide fixture-backed acceptance tests for critical file-management flows such as library setup, scan, metadata edits, import, and offline handling.
+  - Capture logs, screenshots, and Playwright traces for failed runs so an agent can diagnose regressions without manual reproduction.
 
 - **Documentation:**  
   - Maintain technical and user documentation detailing API usage, development guidelines, and troubleshooting instructions.
 
 - **User Feedback Loop:**  
-  - Incorporate analytics/logging to monitor application behavior and gather user insights for iterative improvements.
+  - Incorporate local-first diagnostic logging and feedback workflows to monitor application behavior and gather user insights for iterative improvements without requiring cloud telemetry.
 
 ---
 
