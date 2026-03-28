@@ -25,7 +25,7 @@ This application is designed to help users organize, preview, and prepare local 
 |--------------------|------------------------------------------------------|--------------------------------------------------------------------------------------------|
 | **Application Base** | Electron, Electron Forge, Typescript                                         | Cross-platform desktop application packaging and native integration                        |
 | **Updates**          | electron-updater                                                             | Over-the-air auto-updates for bug fixes and features                                       |
-| **Frontend UI**    | React, [Radix Themes](https://www.radix-ui.com/themes), [Radix UI](https://www.radix-ui.com/), Tailwind CSS | Component-based architecture with accessible primitives and utility-first CSS               |
+| **Frontend UI**    | React, [shadcn/ui](https://ui.shadcn.com/) (Radix primitives), Tailwind CSS | Component-based architecture with accessible primitives, pre-built Tailwind-styled components |
 | **Routing & State** | React Router, TanStack Query | Manage navigation and efficient server-state caching                         |
 | **Database (Cache)** | SQLite (`better-sqlite3`)           | High-performance read-only cache with Full-Text Search (FTS5)              |
 | **File System & IPC**| Node.js `fs`, Chokidar, Electron IPC | Secure, isolated file access via Context Bridge; real-time watching        |
@@ -61,7 +61,8 @@ files:
 
 ### 2.3 Performance & Architecture strategy
 
-- **Worker Threads:** CPU-intensive tasks (STL parsing, geometry analysis) execute in Node.js Worker Threads. 
+- **Worker Threads (Main Process):** CPU-intensive file-system tasks (hashing, archive extraction, bulk YAML parsing) execute in Node.js Worker Threads.
+- **Web Workers (Renderer):** Geometry parsing (STL/OBJ/3MF) for 3D preview runs in Web Workers to keep the UI thread free.
 - **Offscreen Rendering:** Thumbnail generation utilizes Electron's hidden BrowserWindow (offscreen rendering) to access WebGL contexts correctly, avoiding "headless" limitations.
 - **IPC Pattern:** Strict `Context Isolation` usage. The frontend requests actions (e.g. `scanProject`) via a secure API bridge; the Main process handles the disk I/O.
 - **Virtual Lists:** The UI will use list virtualization (e.g. `react-window`) to performantly render libraries with thousands of items.
@@ -119,7 +120,7 @@ files:
 
 - **File Operations:**
   - **Batch Editing:** Select multiple projects to apply changes simultaneously, such as adding tags, setting designers, or moving files to a new collection.
-  - **Safe Deletion:** All delete operations use the OS Trash/Recycle Bin (`shell.moveItemToTrash`) preventing accidental permanent data loss.
+  - **Safe Deletion:** All delete operations use the OS Trash/Recycle Bin (`shell.trashItem`) preventing accidental permanent data loss.
   - **Structure Sync:** Renaming a project in the App automatically renames the directory on disk.
   - **Conflict Resolution:** To prevent data loss during concurrent editing (external vs. internal), the app employs a "UI Reload" strategy. If an external change is detected while editing, the save operation is disabled and the user is prompted to reload.
 
@@ -129,7 +130,7 @@ files:
 
 - **Interactive Preview:**  
   - **Thumbnail Generation:**
-    - Defaults to generating sidecar images (`preview.png`) stored in a `.cache` folder, ensuring they are easily accessible and can be regenerated if deleted.
+    - Defaults to generating sidecar images (`preview.png`) stored in a per-project `.cache` subfolder (e.g., `<project-folder>/.cache/preview.png`), ensuring they travel with the project on disk and can be regenerated if deleted.
     - **Cache Folder Options:** Users can choose to store thumbnails in a centralized `AppData` cache, in the library root directory, or alongside source files, with clear documentation on the implications of each choice.
     - **Customization:** Ability to "Set View as Thumbnail" from the 3D viewport or upload a custom image (e.g., photo of the printed model) to replace the auto-generated preview.
   - Utilize Three.js to render a real-time preview of each model that lacks a thumbnail. 

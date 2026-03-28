@@ -10,7 +10,8 @@ This backlog is derived from the Technical Document `README.md`. It is organized
   - Goal: Set up the official Electron Forge boilerplate with React and TypeScript.
   - AC:
     - Repo is initialized using `npx create-electron-app@latest . --template=vite-typescript`.
-    - `npm run start` launches the Electron window with React loaded.
+    - `npm run dev` launches the Electron window with Vite HMR for development.
+    - `npm run start` launches via Electron Forge (no HMR, closer to production).
     - `npm run make` creates a distributable executable.
 - [ ] **Testing Infrastructure**
   - Goal: Set up test runners.
@@ -34,7 +35,7 @@ This backlog is derived from the Technical Document `README.md`. It is organized
   - Goal: Configure the visual foundation.
   - AC:
     - Tailwind CSS is configured and processing classes in Renderer.
-    - Radix UI Themes provider is wrapping the app.
+    - shadcn/ui is initialized; at least one component (e.g., Button) renders correctly.
     - Titlebar is frameless; custom controls (Close/Min/Max) work via IPC.
 - [ ] **State & Routing**
   - Goal: Set up global state and navigation.
@@ -155,14 +156,14 @@ This backlog is derived from the Technical Document `README.md`. It is organized
   - Goal: Visual previews.
   - AC:
     - Thumbnails are generated via offscreen rendering.
-    - `preview.png` defaults to a `.cache` location.
+    - `preview.png` defaults to a per-project `.cache` subfolder (e.g., `<project-folder>/.cache/preview.png`).
     - Users can choose thumbnail storage in AppData, library root, or alongside source files.
     - Generator Queue processes images in background without lagging UI.
 - [ ] **Drag & Drop Export**
   - Goal: Workflow integration.
   - AC:
     - Dragging a thumbnail from App to Slicer (e.g., Cura) opens the file.
-    - Uses `ipcRenderer.invoke('ondragstart')`.
+    - Uses `ipcRenderer.invoke('app:drag-start')`.
 - [ ] **Non-3D Asset Support**
   - Goal: Keep related project files accessible.
   - AC:

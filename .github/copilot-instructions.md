@@ -1,7 +1,7 @@
 # Copilot Instructions for "My Meshes" 3D Model Manager
 
 ## Project Architecture
-- **Core Stack:** Electron + Vite + React + TypeScript.
+- **Core Stack:** Electron + Electron Forge + Vite + React + TypeScript.
 - **Data Model:** 
   - **Local Source of Truth:** The file system and `project.yaml` sidecar files are the authority. 
   - **Database:** SQLite (`better-sqlite3`) is a **read-only cache** for fast searching/filtering. It can be rebuilt from disk at any time.
@@ -19,7 +19,7 @@
 - **Archives (Existing):** ZIPs found residing inside existing folders are treated as **"Project Attachments"** (opaque, read-only backups). Do not mount them as folders.
 - **3MF Files:** Treat as 3D Model files (parseable geometry), but respect their archive structure for thumbnail extraction.
 - **Streams & Buffers:** **ALWAYS prefer streaming** over buffering for large file I/O to prevent Renderer OOM.
-- **Worker Offloading:** **MANDATORY:** All geometry parsing (STL/OBJ/3MF) and heavy math must run in a **Web Worker**, never on the main UI thread.
+- **Worker Offloading:** **MANDATORY:** All geometry parsing (STL/OBJ/3MF) and heavy math must run in a **Web Worker** in the Renderer, never on the main UI thread. CPU-intensive file-system tasks (hashing, archive extraction, bulk YAML parsing) must run in **Node.js Worker Threads** in the Main process.
 
 ### 3. Security
 - **Content Security Policy:** Enforce strict CSP. No inline scripts.
@@ -28,7 +28,7 @@
 ### 4. UI & Styling
 - **Frameless:** Use a custom title bar (e.g. `electron-titlebar` or custom component).
 - **Internationalization:** Wrap **ALL** user-facing strings in `t('key')` from the start. No hardcoded text.
-- **Components:** Use Radix UI primitives for behavior and Tailwind CSS for styling.
+- **Components:** Use shadcn/ui (built on Radix UI primitives) for pre-styled, accessible components with Tailwind CSS.
 - **Performance:** Use `react-window` for the main grid view (virtualization required for large libraries).
 - **Thumbnails:** Generate offscreen in a hidden window or worker, never block the main UI thread.
 
@@ -42,7 +42,8 @@
 ### Workspace & Build
 - **Package Manager:** Use `npm` exclusively.
 - **Scripts:**
-  - `npm run dev`: Concurrent Vite server + Electron launch.
+  - `npm run dev`: Concurrent Vite server + Electron launch (day-to-day development).
+  - `npm run start`: Launch via Electron Forge (no HMR, closer to production).
   - `npm run build`: Type-check + compile implementation.
   - `npm run make`: Generate distributables (via Electron Forge).
 
