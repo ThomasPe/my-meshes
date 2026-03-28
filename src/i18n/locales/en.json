@@ -1,0 +1,33 @@
+{
+  "app": {
+    "name": "My Meshes",
+    "description": "3D Model Library Manager"
+  },
+  "titlebar": {
+    "minimize": "Minimize",
+    "maximize": "Maximize",
+    "restore": "Restore",
+    "close": "Close"
+  },
+  "nav": {
+    "home": "Home",
+    "library": "Library",
+    "settings": "Settings"
+  },
+  "home": {
+    "welcome": "Welcome to My Meshes",
+    "subtitle": "Your local 3D model library manager",
+    "getStarted": "Get Started"
+  },
+  "library": {
+    "title": "Library",
+    "empty": "No models found. Add a library root to get started.",
+    "addRoot": "Add Library Root"
+  },
+  "settings": {
+    "title": "Settings",
+    "general": "General",
+    "appearance": "Appearance",
+    "about": "About"
+  }
+}

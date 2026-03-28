@@ -6,14 +6,14 @@ This backlog is derived from the Technical Document `README.md`. It is organized
 *Goal: Local Library Manager with Read/Write/View Capabilities*
 
 ### Epic 1: Scaffold & Architecture
-- [ ] **Initialize Repo**
+- [x] **Initialize Repo**
   - Goal: Set up the official Electron Forge boilerplate with React and TypeScript.
   - AC:
     - Repo is initialized using `npx create-electron-app@latest . --template=vite-typescript`.
     - `npm run dev` launches the Electron window with Vite HMR for development.
     - `npm run start` launches via Electron Forge (no HMR, closer to production).
     - `npm run make` creates a distributable executable.
-- [ ] **Testing Infrastructure**
+- [x] **Testing Infrastructure**
   - Goal: Set up test runners.
   - AC:
     - `npm run test` runs Vitest for unit tests.
@@ -23,7 +23,7 @@ This backlog is derived from the Technical Document `README.md`. It is organized
     - A dedicated test mode isolates user data, cache, and logs from developer data.
     - Seed fixture data can be injected so agent-run E2E flows are deterministic.
     - Critical screens expose stable selectors for automation.
-- [ ] **Agent Verification Harness**
+- [x] **Agent Verification Harness**
   - Goal: Make every agent-delivered step executable and reproducible end to end.
   - AC:
     - Electron can be launched in a deterministic test mode via Playwright.
@@ -31,30 +31,30 @@ This backlog is derived from the Technical Document `README.md`. It is organized
     - E2E fixtures cover at least one valid library root and one malformed or offline scenario.
     - A smoke test proves the first Electron window becomes interactive.
     - A documented workflow exists for agent implementation: change code, run targeted E2E, inspect artifacts, fix, rerun.
-- [ ] **UI & Styling**
+- [x] **UI & Styling**
   - Goal: Configure the visual foundation.
   - AC:
     - Tailwind CSS is configured and processing classes in Renderer.
     - shadcn/ui is initialized; at least one component (e.g., Button) renders correctly.
     - Titlebar is frameless; custom controls (Close/Min/Max) work via IPC.
-- [ ] **State & Routing**
+- [x] **State & Routing**
   - Goal: Set up global state and navigation.
   - AC:
     - React Router is functioning (can navigate between dummy pages).
     - TanStack Query is set up; a test query returns data.
-- [ ] **Internationalization**
+- [x] **Internationalization**
   - Goal: Prepare app for multi-language support.
   - AC:
     - `i18next` is initialized in Renderer.
     - Hardcoded strings are replaced with `t('key')` in the initial boilerplate.
-- [ ] **Linting & Formatting**
+- [x] **Linting & Formatting**
   - Goal: Enforce code quality.
   - AC:
     - `eslint` disallows `any` type.
     - `prettier` formats code on save (or via script).
     - CI fails if code is not formatted/linted.
 
-- [ ] **Data & Security Architecture**
+- [x] **Data & Security Architecture**
   - Goal: Secure and persistent foundation.
   - AC:
     - `better-sqlite3` is installed and works in the Main process (rebuilt for Electron).
