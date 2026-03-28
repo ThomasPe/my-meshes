@@ -72,9 +72,10 @@ async function inspectArchive(archivePath: string): Promise<InspectedArchive> {
     const isModel = MODEL_EXTENSIONS.has(ext);
     if (isModel) modelFileCount++;
 
-    // Get size from decompressed content; fall back to 0 if unavailable
-    const content = await zipEntry.async('nodebuffer');
-    const fileSize = content.length;
+    // Use JSZip internal metadata for size instead of decompressing every entry
+    const fileSize =
+      (zipEntry as unknown as { _data?: { uncompressedSize?: number } })._data
+        ?.uncompressedSize ?? 0;
     totalSize += fileSize;
 
     entries.push({

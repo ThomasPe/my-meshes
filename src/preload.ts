@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, webUtils } from 'electron';
 
 const electronApi = {
   windowMinimize: (): Promise<void> => ipcRenderer.invoke('app:window-minimize'),
@@ -165,6 +165,9 @@ const electronApi = {
   ): Promise<{ success: boolean; projectPath?: string; error?: string }> =>
     ipcRenderer.invoke('app:import-loose-files', filePaths, targetRootPath),
   importSelectFiles: (): Promise<string[]> => ipcRenderer.invoke('app:import-select-files'),
+
+  // Utility: resolve File objects to native paths (required with sandbox: true)
+  getPathForFile: (file: File): string => webUtils.getPathForFile(file),
 };
 
 contextBridge.exposeInMainWorld('electronApi', electronApi);

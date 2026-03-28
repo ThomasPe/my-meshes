@@ -97,3 +97,9 @@ playwright-report/
 
 # Dist
 dist/
+
+# TypeScript build output (tsc emits alongside source when no outDir)
+src/**/*.js
+src/**/*.js.map
+*.config.js.map
+forge.config.js

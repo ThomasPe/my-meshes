@@ -1,4 +1,4 @@
-import { useState, useCallback, type DragEvent } from 'react';
+import { useRef, useState, useCallback, type DragEvent } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Package } from 'lucide-react';
 
@@ -13,18 +13,17 @@ export default function ImportDropZone({
 }: ImportDropZoneProps): React.JSX.Element {
   const { t } = useTranslation();
   const [isDragOver, setIsDragOver] = useState(false);
-  let dragCounter = 0;
+  const dragCounterRef = useRef(0);
 
   const handleDragEnter = useCallback(
     (e: DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      dragCounter++;
+      dragCounterRef.current++;
       if (e.dataTransfer.types.includes('Files')) {
         setIsDragOver(true);
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
@@ -32,12 +31,11 @@ export default function ImportDropZone({
     (e: DragEvent) => {
       e.preventDefault();
       e.stopPropagation();
-      dragCounter--;
-      if (dragCounter === 0) {
+      dragCounterRef.current--;
+      if (dragCounterRef.current === 0) {
         setIsDragOver(false);
       }
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 
@@ -51,20 +49,20 @@ export default function ImportDropZone({
       e.preventDefault();
       e.stopPropagation();
       setIsDragOver(false);
-      dragCounter = 0;
+      dragCounterRef.current = 0;
 
       const files = e.dataTransfer.files;
       if (files.length === 0) return;
 
       const paths: string[] = [];
       for (let i = 0; i < files.length; i++) {
-        // Electron extends File with a .path property
-        paths.push((files[i] as File & { path: string }).path);
+        // Use webUtils.getPathForFile via preload (required with sandbox: true)
+        const filePath = window.electronApi.getPathForFile(files[i]);
+        if (filePath) paths.push(filePath);
       }
 
-      onFilesDropped(paths);
+      if (paths.length > 0) onFilesDropped(paths);
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [onFilesDropped],
   );
 
