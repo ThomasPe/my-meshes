@@ -65,8 +65,17 @@ async function inspectArchive(archivePath: string): Promise<InspectedArchive> {
 
   for (const [relativePath, zipEntry] of Object.entries(zip.files)) {
     if (shouldIgnoreArchiveEntry(relativePath)) continue;
-    // Skip pure directory entries
-    if (zipEntry.dir) continue;
+
+    if (zipEntry.dir) {
+      entries.push({
+        path: relativePath,
+        name: path.basename(relativePath.replace(/\/$/, '')),
+        size: 0,
+        isDirectory: true,
+        isModelFile: false,
+      });
+      continue;
+    }
 
     const ext = path.extname(relativePath).toLowerCase();
     const isModel = MODEL_EXTENSIONS.has(ext);
@@ -136,12 +145,15 @@ async function extractArchiveToProject(
       topDirs.size === 1 && rootFiles.length === 0 ? [...topDirs][0] + '/' : '';
 
     for (const [relativePath, zipEntry] of Object.entries(zip.files)) {
-      if (zipEntry.dir || shouldIgnoreArchiveEntry(relativePath)) continue;
+      if (shouldIgnoreArchiveEntry(relativePath)) continue;
 
       let targetRelPath = relativePath;
       if (stripPrefix && targetRelPath.startsWith(stripPrefix)) {
         targetRelPath = targetRelPath.slice(stripPrefix.length);
       }
+
+      // Skip entries that collapse to empty string after prefix stripping
+      if (!targetRelPath || targetRelPath === '/') continue;
 
       // Prevent path traversal
       const resolved = path.resolve(projectDir, targetRelPath);
@@ -150,11 +162,16 @@ async function extractArchiveToProject(
         continue;
       }
 
-      const targetDir = path.dirname(resolved);
-      fs.mkdirSync(targetDir, { recursive: true });
+      if (zipEntry.dir) {
+        // Create directory entries explicitly (preserves empty folders)
+        fs.mkdirSync(resolved, { recursive: true });
+      } else {
+        const targetDir = path.dirname(resolved);
+        fs.mkdirSync(targetDir, { recursive: true });
 
-      const content = await zipEntry.async('nodebuffer');
-      fs.writeFileSync(resolved, content);
+        const content = await zipEntry.async('nodebuffer');
+        fs.writeFileSync(resolved, content);
+      }
     }
 
     log.info('Extracted archive to project:', projectDir);
