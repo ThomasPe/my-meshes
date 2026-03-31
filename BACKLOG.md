@@ -13,7 +13,7 @@ This backlog is derived from the Technical Document `README.md`. It is organized
     - `npm run dev` launches the Electron window with Vite HMR for development.
     - `npm run start` launches via Electron Forge (no HMR, closer to production).
     - `npm run make` creates a distributable executable.
-- [ ] **Testing Infrastructure**
+- [x] **Testing Infrastructure**
   - Goal: Set up test runners.
   - AC:
     - `npm run test` runs Vitest for unit tests.
@@ -23,7 +23,7 @@ This backlog is derived from the Technical Document `README.md`. It is organized
     - A dedicated test mode isolates user data, cache, and logs from developer data.
     - Seed fixture data can be injected so agent-run E2E flows are deterministic.
     - Critical screens expose stable selectors for automation.
-- [ ] **Agent Verification Harness**
+- [x] **Agent Verification Harness**
   - Goal: Make every agent-delivered step executable and reproducible end to end.
   - AC:
     - Electron can be launched in a deterministic test mode via Playwright.
@@ -31,18 +31,18 @@ This backlog is derived from the Technical Document `README.md`. It is organized
     - E2E fixtures cover at least one valid library root and one malformed or offline scenario.
     - A smoke test proves the first Electron window becomes interactive.
     - A documented workflow exists for agent implementation: change code, run targeted E2E, inspect artifacts, fix, rerun.
-- [ ] **UI & Styling**
+- [x] **UI & Styling**
   - Goal: Configure the visual foundation.
   - AC:
     - Tailwind CSS is configured and processing classes in Renderer.
     - shadcn/ui is initialized; at least one component (e.g., Button) renders correctly.
     - Titlebar is frameless; custom controls (Close/Min/Max) work via IPC.
-- [ ] **State & Routing**
+- [x] **State & Routing**
   - Goal: Set up global state and navigation.
   - AC:
     - React Router is functioning (can navigate between dummy pages).
     - TanStack Query is set up; a test query returns data.
-- [ ] **Internationalization**
+- [x] **Internationalization**
   - Goal: Prepare app for multi-language support.
   - AC:
     - `i18next` is initialized in Renderer.
@@ -54,7 +54,7 @@ This backlog is derived from the Technical Document `README.md`. It is organized
     - `prettier` formats code on save (or via script).
     - CI fails if code is not formatted/linted.
 
-- [ ] **Data & Security Architecture**
+- [x] **Data & Security Architecture**
   - Goal: Secure and persistent foundation.
   - AC:
     - `better-sqlite3` is installed and works in the Main process (rebuilt for Electron).
@@ -82,13 +82,13 @@ This backlog is derived from the Technical Document `README.md`. It is organized
     - Agent verification workflow and test-mode conventions are documented.
 
 ### Epic 2: Core File Management (The "Engine")
-- [ ] **Library Root Setup**
+- [x] **Library Root Setup**
   - Goal: Manage where the app looks for models.
   - AC:
     - User can add a folder path as a Library Root.
     - User can remove a Library Root.
     - Invalid paths are handled gracefully.
-- [ ] **Recursive Scanner**
+- [x] **Recursive Scanner**
   - Goal: Index files on disk.
   - AC:
     - Scanner finds STL, OBJ, 3MF files in nested folders.
@@ -106,7 +106,7 @@ This backlog is derived from the Technical Document `README.md`. It is organized
     - Library Roots on non-watchable volumes can use a polled refresh mode.
     - User can trigger a manual rescan for a Library Root.
     - Fallback modes do not create `project.yaml` files during scan.
-- [ ] **Offline Handling**
+- [x] **Offline Handling**
   - Goal: Handle disconnected drives.
   - AC:
     - If a Library Root path is missing, items are marked "Offline" in UI.

@@ -1,6 +1,92 @@
 # 3D Model Manager
 *Initial Technical Document*
 
+## Current MVP Foundation
+
+The repository now contains a working Electron Forge + Vite + React + TypeScript desktop app for the MVP foundation.
+
+Implemented and verified in Electron with Playwright:
+- Frameless desktop shell with custom minimize, maximize, and close controls routed through secure IPC.
+- React Router, TanStack Query, and i18next wired into the renderer.
+- SQLite cache in the main process using `better-sqlite3`, exposed to the renderer only through `contextBridge`.
+- Library root management: add, remove, and manual rescan for local folders.
+- Recursive indexing of nested `STL`, `OBJ`, and `3MF` files while ignoring `.git` and `__MACOSX` directories.
+- Offline handling that preserves cached items when a configured root disappears and restores the root when the path returns.
+- Deterministic Playwright Electron test mode with isolated app data, seeded fixture roots, screenshots, traces, videos, and copied logs on failure.
+
+## Developer Workflow
+
+### Setup
+
+```bash
+npm install
+```
+
+`npm install` triggers `npm run rebuild:natives`, which rebuilds `better-sqlite3` for the Electron runtime.
+
+### Scripts
+
+```bash
+npm run dev
+npm run start
+npm run test
+npm run e2e
+npm run verify
+npm run make
+```
+
+- `npm run dev`: launch the Electron app through Electron Forge during day-to-day development.
+- `npm run start`: launch the Electron app through Electron Forge with devtools disabled by default.
+- `npm run test`: run Vitest unit tests.
+- `npm run e2e`: package the app and run Playwright against Electron directly.
+- `npm run verify`: run lint, unit tests, and Electron E2E verification.
+- `npm run make`: generate distributables.
+
+## Current User Flow
+
+### Library Roots
+
+1. Open the `Library roots` view.
+2. Enter an existing folder path.
+3. Add the root to index nested mesh files.
+4. Use `Rescan` after external file changes.
+5. Use `Remove` to drop the root from the cache.
+
+If a configured root disappears, the UI marks it as offline without deleting cached records. When the path comes back, another rescan restores the root to online status.
+
+### Import Scope
+
+Archive import and staging workflows are still backlog items. The current implementation covers local library-root scanning, not ZIP import yet.
+
+## Agent Verification Workflow
+
+Use this flow for backlog work:
+
+1. Implement the feature.
+2. Run `npm run verify`.
+3. If Playwright fails, inspect `playwright-report/index.html` and the artifacts in `test-results/`.
+4. Fix the issue and rerun the same verification path until it is green.
+5. Only then mark the backlog item complete.
+
+## Test Mode Conventions
+
+The Electron app supports deterministic test mode through environment variables:
+
+```text
+MY_MESHES_TEST_MODE=1
+MY_MESHES_TEST_DATA_DIR=<temporary app data folder>
+MY_MESHES_TEST_LIBRARY_ROOTS=<json array of seeded root paths>
+MY_MESHES_DISABLE_DEVTOOLS=1
+```
+
+In test mode, the app uses isolated user data, cache, and log directories and can boot with seeded online and offline library roots for reproducible Playwright runs.
+
+## Troubleshooting
+
+- If Electron fails to load `better-sqlite3` after dependency changes, run `npm run rebuild:natives`.
+- If Playwright fails before the app opens, run `npx playwright install` once on the machine.
+- If Playwright tests fail, inspect `playwright-report/index.html` and the corresponding `trace.zip`, screenshot, video, and copied logs in `test-results/`.
+
 ## 1. Overview
 
 **Purpose:**  

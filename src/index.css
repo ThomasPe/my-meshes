@@ -1,0 +1,79 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 42 35% 95%;
+    --foreground: 220 26% 14%;
+    --card: 42 38% 98%;
+    --card-foreground: 220 26% 14%;
+    --popover: 42 38% 98%;
+    --popover-foreground: 220 26% 14%;
+    --primary: 194 82% 32%;
+    --primary-foreground: 42 38% 98%;
+    --secondary: 27 76% 90%;
+    --secondary-foreground: 220 20% 18%;
+    --muted: 37 40% 91%;
+    --muted-foreground: 220 11% 38%;
+    --accent: 12 75% 66%;
+    --accent-foreground: 220 26% 14%;
+    --destructive: 0 72% 55%;
+    --destructive-foreground: 42 38% 98%;
+    --border: 28 28% 80%;
+    --input: 30 26% 84%;
+    --ring: 194 82% 32%;
+    --radius: 1.25rem;
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  html {
+    @apply h-full;
+  }
+
+  body {
+    @apply min-h-full bg-background text-foreground antialiased;
+    margin: 0;
+    font-family: 'Segoe UI Variable', 'Aptos', 'Trebuchet MS', sans-serif;
+    background-image:
+      radial-gradient(circle at top left, rgba(245, 150, 92, 0.28), transparent 28%),
+      radial-gradient(circle at bottom right, rgba(9, 123, 145, 0.22), transparent 34%),
+      linear-gradient(180deg, rgba(255, 251, 242, 0.96), rgba(246, 239, 226, 0.98));
+  }
+
+  button,
+  input {
+    font: inherit;
+  }
+
+  #root {
+    @apply min-h-screen;
+  }
+}
+
+@layer components {
+  .app-shell {
+    @apply relative min-h-screen overflow-hidden;
+  }
+
+  .mesh-grid {
+    background-image:
+      linear-gradient(rgba(15, 23, 42, 0.035) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(15, 23, 42, 0.035) 1px, transparent 1px);
+    background-position: center;
+    background-size: 24px 24px;
+  }
+
+  .surface-panel {
+    @apply rounded-[28px] border border-white/70 bg-white/75 shadow-[0_24px_60px_-32px_rgba(15,23,42,0.4)] backdrop-blur-xl;
+  }
+}
+
+@layer utilities {
+  .text-balance {
+    text-wrap: balance;
+  }
+}
