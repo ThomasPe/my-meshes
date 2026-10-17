@@ -141,6 +141,7 @@ async function renderThumbnails() {
       const m = e.data as ThumbEvent;
       if (m.type === 'error') { w.terminate(); resolve(m.error); return; }
       await handle(m);
+      if (m.type === 'thumb') w.postMessage({ type: 'ack', index: m.index });
       if (m.type === 'done') { w.terminate(); resolve(null); }
     };
     const positions = current!.positions.slice(), normals = current!.normals.slice();
