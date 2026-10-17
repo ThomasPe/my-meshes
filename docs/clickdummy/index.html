@@ -1,0 +1,878 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>My Meshes Click Dummy</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* My Meshes click dummy, visual direction D "Gallery" (ADR-0002).
+   Layout: fixed app frame (top bar / body / status bar); body = sidebar | main | inspector.
+   Light-first; dark via data-theme. Static HTML + vanilla JS, no framework, no build. */
+:root{
+  --bg:#f4f5f7; --panel:#ffffff; --card:#ffffff; --raised:#ffffff; --border:#e5e7eb; --border-strong:#d1d5db; --hover:#eef0f3;
+  --fg:#111827; --fg-2:#374151; --muted:#6b7280; --faint:#9ca3af;
+  --accent:#0f8b8d; --accent-hover:#0c7275; --accent-soft:#e0f2f2; --accent-fg:#ffffff;
+  --thumb:#334155; --thumb-fill:rgba(15,139,141,.12); --thumb-bg:linear-gradient(160deg,#e0f2f2,#f4f5f7);
+  --shadow:0 1px 2px rgba(17,24,39,.06),0 6px 16px rgba(17,24,39,.06); --shadow-hover:0 2px 4px rgba(17,24,39,.08),0 14px 28px rgba(17,24,39,.10);
+  --ok:#16a34a; --ok-soft:#dcfce7; --warn:#d97706; --warn-soft:#fef3c7; --danger:#dc2626; --danger-soft:#fee2e2; --off:#9ca3af;
+  --font:"Manrope",system-ui,-apple-system,"Segoe UI",sans-serif; --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+  --r:14px; --rs:10px; --rx:8px; --tile:230px;
+  color-scheme:light;
+}
+:root[data-theme="dark"]{
+  --bg:#0f1115; --panel:#161920; --card:#1b1f27; --raised:#20252e; --border:#262b35; --border-strong:#343a46; --hover:#232834;
+  --fg:#f3f4f6; --fg-2:#d1d5db; --muted:#9ca3af; --faint:#6b7280;
+  --accent:#2dd4bf; --accent-hover:#5eead4; --accent-soft:rgba(45,212,191,.14); --accent-fg:#0f1115;
+  --thumb:#e5e7eb; --thumb-fill:rgba(45,212,191,.12); --thumb-bg:linear-gradient(160deg,rgba(45,212,191,.12),#161920);
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 16px rgba(0,0,0,.3); --shadow-hover:0 2px 4px rgba(0,0,0,.4),0 14px 28px rgba(0,0,0,.45);
+  --ok:#4ade80; --ok-soft:rgba(74,222,128,.15); --warn:#fbbf24; --warn-soft:rgba(251,191,36,.15); --danger:#f87171; --danger-soft:rgba(248,113,113,.15); --off:#6b7280;
+  color-scheme:dark;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0f1115; --panel:#161920; --card:#1b1f27; --raised:#20252e; --border:#262b35; --border-strong:#343a46; --hover:#232834;
+  --fg:#f3f4f6; --fg-2:#d1d5db; --muted:#9ca3af; --faint:#6b7280;
+  --accent:#2dd4bf; --accent-hover:#5eead4; --accent-soft:rgba(45,212,191,.14); --accent-fg:#0f1115;
+  --thumb:#e5e7eb; --thumb-fill:rgba(45,212,191,.12); --thumb-bg:linear-gradient(160deg,rgba(45,212,191,.12),#161920);
+  --shadow:0 1px 2px rgba(0,0,0,.3),0 6px 16px rgba(0,0,0,.3); --shadow-hover:0 2px 4px rgba(0,0,0,.4),0 14px 28px rgba(0,0,0,.45);
+  --ok:#4ade80; --ok-soft:rgba(74,222,128,.15); --warn:#fbbf24; --warn-soft:rgba(251,191,36,.15); --danger:#f87171; --danger-soft:rgba(248,113,113,.15); --off:#6b7280;
+  color-scheme:dark;
+} }
+
+*{box-sizing:border-box} html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font:14px/1.5 var(--font);overflow:hidden;-webkit-font-smoothing:antialiased}
+button,input,select,textarea{font:inherit;color:inherit}
+button{background:none;border:0;cursor:pointer;padding:0}
+button:focus-visible,input:focus-visible,select:focus-visible,[tabindex]:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+a{color:var(--accent)}
+svg.i{width:18px;height:18px;flex:none;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.hidden,[hidden]{display:none!important}
+
+/* ---------- app frame ---------- */
+.app{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:56px 1fr 30px;height:100%;min-height:0}
+.topbar{display:flex;align-items:center;gap:8px;padding:0 16px;min-width:0;overflow:hidden;background:var(--panel);border-bottom:1px solid var(--border)}
+.brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:16px;letter-spacing:-.01em;margin-right:8px}
+.brand .logo{width:28px;height:28px;border-radius:9px;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center}
+.brand .logo svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2}
+.mainnav{display:flex;gap:2px;flex:none}
+.mainnav a{display:inline-flex;align-items:center;gap:7px;height:36px;padding:0 12px;border-radius:999px;color:var(--muted);font-weight:700;font-size:13px;text-decoration:none}
+.mainnav a:hover{background:var(--hover);color:var(--fg)} .mainnav a.active{background:var(--accent-soft);color:var(--accent)}
+.mainnav a .n{font-size:11px;background:var(--accent);color:var(--accent-fg);border-radius:999px;padding:0 6px;line-height:16px}
+.search{margin-left:auto;display:flex;align-items:center;gap:10px;flex:0 1 380px;min-width:60px;height:38px;padding:0 14px;border-radius:999px;background:var(--bg);border:1px solid var(--border);color:var(--muted)}
+.search input{flex:1;min-width:0;background:none;border:0;outline:0;color:var(--fg)} .search input::placeholder{color:var(--faint)}
+.search kbd{font:11px/1 var(--mono);padding:3px 6px;border-radius:6px;background:var(--panel);border:1px solid var(--border);color:var(--faint)}
+.caption{display:flex;gap:2px;margin-left:4px}
+.ibtn{display:inline-grid;place-items:center;width:36px;height:36px;border-radius:999px;color:var(--muted)} .ibtn:hover{background:var(--hover);color:var(--fg)}
+.ibtn.sm{width:30px;height:30px} .ibtn.sm svg{width:16px;height:16px}
+.body{display:grid;grid-template-columns:250px minmax(0,1fr) 320px;min-height:0}
+.body.no-inspector{grid-template-columns:250px minmax(0,1fr)}
+.body.no-side{grid-template-columns:minmax(0,1fr)}
+.sidebar{padding:14px 12px;overflow:auto;background:var(--panel);border-right:1px solid var(--border)}
+.inspector{padding:20px;overflow:auto;background:var(--panel);border-left:1px solid var(--border)}
+.main{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto minmax(0,1fr);min-width:0;min-height:0}
+.main.scroll{display:block;overflow:auto}
+.statusbar{display:flex;align-items:center;gap:20px;padding:0 20px;background:var(--panel);border-top:1px solid var(--border);font-size:12px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums;white-space:nowrap;overflow:hidden}
+.statusbar .right{margin-left:auto;display:flex;gap:20px} .statusbar button{display:flex;align-items:center;gap:8px;color:inherit;font-weight:600} .statusbar button:hover{color:var(--fg)}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--ok);flex:none} .dot.off{background:var(--off)} .dot.warn{background:var(--warn)} .dot.busy{background:var(--accent);animation:pulse 1.2s infinite}
+@keyframes pulse{50%{opacity:.35}}
+@media (prefers-reduced-motion:reduce){.dot.busy{animation:none}}
+
+/* ---------- sidebar ---------- */
+.sec{margin-bottom:16px} .sec h3{display:flex;align-items:center;margin:0 12px 6px;font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.08em} .sec h3 .ibtn{margin-left:auto}
+.nav button,.nav a{display:flex;align-items:center;gap:10px;width:100%;height:36px;padding:0 12px;border-radius:var(--rs);color:var(--fg-2);text-align:left;font-weight:600;text-decoration:none}
+.nav button:hover{background:var(--hover)} .nav button.active{background:var(--accent-soft);color:var(--accent)}
+.nav .count{margin-left:auto;font-size:12px;color:var(--faint);font-weight:600;font-variant-numeric:tabular-nums}
+.nav button.active .count{color:var(--accent)}
+.tree button{height:32px;font-weight:500} .tree .d1{padding-left:28px} .tree .d2{padding-left:44px} .tree .chev{width:12px;color:var(--faint);font-size:10px;flex:none}
+
+/* ---------- toolbar & controls ---------- */
+.toolbar{display:flex;align-items:center;gap:8px;padding:14px 20px 8px;flex-wrap:wrap}
+.toolbar>*{flex:none}
+.btn{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 14px;border-radius:999px;background:var(--panel);border:1px solid var(--border);color:var(--fg-2);font-weight:700;font-size:13px;box-shadow:var(--shadow);white-space:nowrap;text-decoration:none}
+.btn:hover{border-color:var(--border-strong);color:var(--fg)} .btn.primary{background:var(--accent);color:var(--accent-fg);border-color:transparent} .btn.primary:hover{background:var(--accent-hover);color:var(--accent-fg)}
+.btn.ghost{background:transparent;border-color:transparent;box-shadow:none} .btn.danger{color:var(--danger)} .btn.sm{height:30px;padding:0 11px;font-size:12px} .btn:disabled{opacity:.5;cursor:not-allowed}
+.chip{display:inline-flex;align-items:center;gap:8px;height:32px;padding:0 12px;border-radius:999px;background:var(--accent-soft);color:var(--accent);font-weight:700;font-size:13px}
+.chip button{display:grid;place-items:center;width:18px;height:18px;border-radius:50%;color:inherit;opacity:.7} .chip button:hover{opacity:1;background:rgba(0,0,0,.08)}
+.seg{display:inline-flex;gap:2px;padding:3px;border-radius:999px;background:var(--panel);border:1px solid var(--border)}
+.seg button{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 12px;border-radius:999px;color:var(--muted);font-weight:700;font-size:13px} .seg button.on{background:var(--fg);color:var(--bg)}
+.select{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 10px 0 14px;border-radius:999px;background:var(--panel);border:1px solid var(--border);box-shadow:var(--shadow);font-weight:700;font-size:13px;color:var(--fg-2)}
+.select select{appearance:none;background:none;border:0;outline:0;font-weight:700;color:var(--fg-2);padding-right:18px;cursor:pointer;background-image:linear-gradient(45deg,transparent 50%,var(--muted) 50%),linear-gradient(135deg,var(--muted) 50%,transparent 50%);background-position:right 6px top 55%,right 1px top 55%;background-size:5px 5px;background-repeat:no-repeat}
+.zoom{display:flex;align-items:center;gap:10px;color:var(--muted);margin-left:auto;font-weight:600;font-size:12px}
+input[type=range]{accent-color:var(--accent);width:84px}
+.field{display:grid;gap:6px} .field label{font-size:12px;font-weight:700;color:var(--muted)}
+.input,textarea.input{height:38px;padding:0 12px;border-radius:var(--rs);border:1px solid var(--border);background:var(--bg);color:var(--fg);width:100%;outline:0} .input:focus{border-color:var(--accent)} textarea.input{height:auto;padding:10px 12px;resize:vertical;font-family:var(--mono);font-size:12px;line-height:1.6}
+.switch{position:relative;width:40px;height:22px;border-radius:999px;background:var(--border-strong);flex:none;transition:background .15s} .switch::after{content:"";position:absolute;top:3px;left:3px;width:16px;height:16px;border-radius:50%;background:#fff;transition:left .15s;box-shadow:0 1px 2px rgba(0,0,0,.3)} .switch[aria-checked="true"]{background:var(--accent)} .switch[aria-checked="true"]::after{left:21px}
+.radio-cards{display:grid;gap:10px;grid-template-columns:repeat(auto-fit,minmax(200px,1fr))}
+.radio-card{display:grid;gap:4px;padding:14px;border-radius:var(--rs);border:2px solid var(--border);cursor:pointer;background:var(--panel)} .radio-card b{font-size:14px} .radio-card span{color:var(--muted);font-size:12px} .radio-card.on{border-color:var(--accent);background:var(--accent-soft)}
+.tabs{display:flex;gap:6px;flex-wrap:wrap} .tab{display:inline-flex;align-items:center;gap:8px;height:36px;padding:0 16px;border-radius:999px;color:var(--muted);font-weight:700} .tab.active{background:var(--panel);color:var(--fg);box-shadow:var(--shadow)} .tab:hover{color:var(--fg)}
+.badge{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;background:var(--panel);color:var(--fg-2);box-shadow:var(--shadow);white-space:nowrap}
+.badge.off{color:var(--muted);background:var(--bg);box-shadow:none;border:1px solid var(--border)} .badge.ok{background:var(--ok-soft);color:var(--ok);box-shadow:none} .badge.warn{background:var(--warn-soft);color:var(--warn);box-shadow:none} .badge.accent{background:var(--accent-soft);color:var(--accent);box-shadow:none} .badge.danger{background:var(--danger-soft);color:var(--danger);box-shadow:none}
+.tag{display:inline-flex;align-items:center;gap:4px;font-size:12px;font-weight:600;padding:2px 10px;border-radius:999px;background:var(--bg);color:var(--fg-2);border:0;cursor:pointer} .tag:hover{background:var(--accent-soft);color:var(--accent)} .tag.add{border:1px dashed var(--border-strong);background:transparent;color:var(--muted)}
+.progress{height:6px;border-radius:3px;background:var(--border);overflow:hidden;min-width:60px} .progress i{display:block;height:100%;background:var(--accent);border-radius:3px}
+.card-panel{background:var(--panel);border-radius:var(--r);box-shadow:var(--shadow);padding:18px 20px}
+.kv{display:grid;grid-template-columns:100px 1fr;gap:10px 12px;font-size:13px} .kv dt{color:var(--faint);font-weight:600} .kv dd{margin:0;color:var(--fg-2);font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .kv a{text-decoration:none}
+.eyebrow{font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.08em}
+h1.page{margin:0;font-size:24px;font-weight:800;letter-spacing:-.02em} h2.sec-title{margin:0;font-size:16px;font-weight:800;letter-spacing:-.01em}
+.muted{color:var(--muted)} .mono{font-family:var(--mono);font-size:12px}
+.empty{display:grid;place-items:center;text-align:center;padding:60px 20px;color:var(--muted)} .empty .ico{width:72px;height:72px;border-radius:22px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center;margin-bottom:14px} .empty .ico svg{width:32px;height:32px} .empty b{color:var(--fg);font-size:16px}
+table.t{width:100%;border-collapse:collapse;font-size:13px} .t th{text-align:left;font-size:11px;font-weight:700;color:var(--faint);text-transform:uppercase;letter-spacing:.06em;padding:8px 12px;border-bottom:1px solid var(--border);white-space:nowrap} .t td{padding:10px 12px;border-bottom:1px solid var(--border);vertical-align:middle} .t tr:last-child td{border-bottom:0} .t tbody tr:hover td{background:var(--hover)} .t td.num{text-align:right;font-variant-numeric:tabular-nums;color:var(--muted)} .t th.num{text-align:right} .t th button{font-weight:700;color:inherit;display:inline-flex;gap:4px;align-items:center;text-transform:uppercase;letter-spacing:.06em;font-size:11px}
+.ext{font:11px/1.8 var(--mono);color:var(--accent);text-transform:uppercase;width:34px;display:inline-block}
+
+/* ---------- library grid & list ---------- */
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--tile),1fr));grid-auto-rows:max-content;gap:18px;padding:12px 20px 24px;overflow:auto;align-content:start}
+.card{display:flex;flex-direction:column;background:var(--card);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden;outline:0;border:2px solid transparent;cursor:default;transition:transform .15s,box-shadow .15s;position:relative}
+.card:hover{transform:translateY(-2px);box-shadow:var(--shadow-hover)} .card.selected{border-color:var(--accent)} .card.offline{opacity:.75}
+.thumb{flex:none;height:0;padding-top:100%;position:relative;background:var(--thumb-bg);color:var(--thumb)}
+.thumb svg.t{position:absolute;inset:0;margin:auto;width:62%;height:62%;fill:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.thumb .tl{position:absolute;top:12px;left:12px;display:flex;gap:6px} .thumb .tr{position:absolute;top:10px;right:10px;display:flex;gap:4px}
+.thumb .fav{color:var(--warn)} .thumb.generating svg.t{opacity:.3}
+.thumb .gen{position:absolute;bottom:12px;left:12px;right:12px;font-size:12px;font-weight:600;color:var(--muted);display:flex;align-items:center;gap:8px}
+.card .meta{padding:12px 14px 14px;display:grid;gap:6px} .card h4{margin:0;font-size:15px;font-weight:800;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .card .by{color:var(--muted);font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px}
+.avatar{display:inline-grid;place-items:center;width:18px;height:18px;border-radius:50%;background:var(--accent-soft);color:var(--accent);font-size:9px;font-weight:800;flex:none}
+.card .tags{display:flex;gap:6px;flex-wrap:wrap;min-height:22px} .card .row{display:flex;justify-content:space-between;color:var(--faint);font-size:12px;font-weight:600;font-variant-numeric:tabular-nums}
+.card .check{position:absolute;top:12px;left:12px;width:22px;height:22px;border-radius:50%;background:var(--panel);box-shadow:var(--shadow);display:grid;place-items:center;color:var(--accent);opacity:0;transition:opacity .1s} .card:hover .check,.card.selected .check{opacity:1}
+.card.selected .check{background:var(--accent);color:var(--accent-fg)}
+.listwrap{overflow:auto;padding:0 20px 24px} .listwrap .t{background:var(--panel);border-radius:var(--r);box-shadow:var(--shadow);overflow:hidden} .listwrap .t tr.selected td{background:var(--accent-soft)}
+.mini{display:inline-grid;place-items:center;width:40px;height:40px;border-radius:10px;background:var(--thumb-bg);color:var(--thumb);vertical-align:middle} .mini svg{width:26px;height:26px;fill:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+
+/* ---------- inspector ---------- */
+.inspector h2{margin:0 0 2px;font-size:20px;font-weight:800;letter-spacing:-.02em;text-wrap:balance} .inspector .sub{color:var(--muted);font-size:12px;margin-bottom:14px;word-break:break-all}
+.inspector h3{margin:18px 0 8px;font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.08em;font-weight:700}
+.files{display:grid;gap:4px;font-size:13px} .files div{display:flex;gap:10px;align-items:center;padding:8px 12px;border-radius:var(--rs);background:var(--bg);color:var(--fg-2);font-weight:600} .files .sz{margin-left:auto;color:var(--faint);font-variant-numeric:tabular-nums;white-space:nowrap} .files .nm{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.hint{font-size:12px;color:var(--muted);padding:12px 14px;border-radius:var(--rs);background:var(--accent-soft);margin-top:16px}
+.actions{display:flex;gap:8px;margin:12px 0 4px;flex-wrap:wrap}
+.insp-thumb{height:0;padding-top:60%;position:relative;border-radius:var(--rs);background:var(--thumb-bg);color:var(--thumb);margin-bottom:14px;overflow:hidden} .insp-thumb svg{position:absolute;inset:0;margin:auto;width:50%;height:50%;fill:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.insp-thumb .badge{position:absolute;right:10px;top:10px}
+
+/* ---------- pages ---------- */
+.page-wrap{padding:22px 24px 40px;display:grid;gap:20px;max-width:1200px}
+.page-head{display:flex;align-items:flex-start;gap:14px;flex-wrap:wrap} .page-head .grow{flex:1;min-width:200px;display:grid;gap:4px} .page-head .actions{margin:0}
+.crumbs{display:flex;gap:6px;align-items:center;color:var(--muted);font-size:12px;font-weight:600;flex-wrap:wrap} .crumbs a{color:var(--muted);text-decoration:none} .crumbs a:hover{color:var(--accent)}
+.two{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(280px,1fr);gap:20px;align-items:start} .cols-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px;align-items:start}
+.stack{display:grid;gap:14px}
+
+/* viewer */
+.viewer{position:relative;border-radius:var(--r);background:radial-gradient(120% 80% at 50% 110%,var(--accent-soft),transparent 60%),var(--bg);box-shadow:inset 0 0 0 1px var(--border);height:460px;overflow:hidden;perspective:1100px;touch-action:none;user-select:none}
+.viewer .stage{position:absolute;inset:0;display:grid;place-items:center;transform-style:preserve-3d}
+.obj{position:relative;width:0;height:0;transform-style:preserve-3d;transform:rotateX(-28deg) rotateY(32deg)}
+.obj .f{position:absolute;left:50%;top:50%;width:220px;height:220px;margin:-110px 0 0 -110px;border:1.5px solid rgba(15,139,141,.9);background:rgba(15,139,141,.10)}
+.obj .top{transform:rotateX(90deg) translateZ(24px);background:
+  linear-gradient(rgba(15,139,141,.6) 1.5px,transparent 1.5px) 0 0/44px 44px,linear-gradient(90deg,rgba(15,139,141,.6) 1.5px,transparent 1.5px) 0 0/44px 44px,rgba(15,139,141,.18)}
+.obj .bottom{transform:rotateX(-90deg) translateZ(24px);background:rgba(15,139,141,.22)}
+.obj .side{height:48px;margin-top:-24px;background:rgba(15,139,141,.16)}
+.obj .n{transform:rotateY(180deg) translateZ(110px)}
+.obj .s{transform:translateZ(110px)}
+.obj .w{transform:rotateY(-90deg) translateZ(110px)}
+.obj .e{transform:rotateY(90deg) translateZ(110px)}
+.viewer .grid-floor{position:absolute;left:50%;top:50%;width:700px;height:700px;transform:translate(-50%,-50%) rotateX(72deg) translateZ(-140px);background:linear-gradient(var(--border) 1px,transparent 1px) 0 0/35px 35px,linear-gradient(90deg,var(--border) 1px,transparent 1px) 0 0/35px 35px;opacity:.6;mask-image:radial-gradient(circle,#000 30%,transparent 70%);-webkit-mask-image:radial-gradient(circle,#000 30%,transparent 70%)}
+.viewer .vt{position:absolute;left:14px;top:14px;display:flex;gap:6px;flex-wrap:wrap} .viewer .vt .btn{height:32px;padding:0 12px;font-size:12px}
+.viewer .vb{position:absolute;left:14px;right:14px;bottom:12px;display:flex;gap:14px;align-items:center;font-size:12px;color:var(--muted);font-weight:600;flex-wrap:wrap}
+.viewer .vb .mono{color:var(--fg-2)}
+.viewer .legend{position:absolute;right:14px;top:14px;display:grid;gap:6px;text-align:right}
+
+/* dropzone / staging */
+.drop{display:grid;place-items:center;text-align:center;gap:6px;padding:28px;border-radius:var(--r);border:2px dashed var(--border-strong);background:var(--panel);color:var(--muted)} .drop b{color:var(--fg);font-size:15px} .drop.over{border-color:var(--accent);background:var(--accent-soft)}
+.stage-item{display:grid;grid-template-columns:48px minmax(0,1fr) auto;gap:14px;align-items:start;padding:16px 18px;background:var(--panel);border-radius:var(--r);box-shadow:var(--shadow)}
+.stage-item .ico{width:48px;height:48px;border-radius:12px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center} .stage-item .ico svg{width:24px;height:24px}
+.stage-item h4{margin:0;font-size:15px;font-weight:800} .stage-item .src{display:flex;gap:8px;align-items:center;flex-wrap:wrap;color:var(--muted);font-size:12px;font-weight:600;margin-top:2px}
+.stage-item .form{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:12px;margin-top:12px}
+.stage-item details{margin-top:10px} .stage-item summary{cursor:pointer;color:var(--accent);font-weight:700;font-size:13px}
+.filetree{margin:8px 0 0;padding:10px 12px;border-radius:var(--rs);background:var(--bg);font:12px/1.7 var(--mono);color:var(--fg-2);overflow-x:auto} .filetree .d{color:var(--muted)} .filetree .skip{color:var(--faint);text-decoration:line-through}
+
+/* smart collection editor */
+.rule{display:grid;grid-template-columns:140px 120px minmax(0,1fr) 36px;gap:8px;align-items:center}
+.rule .select,.rule .input{height:36px;box-shadow:none}
+.coll-card{display:grid;grid-template-columns:64px minmax(0,1fr) auto;gap:14px;align-items:center;padding:14px 16px;background:var(--panel);border-radius:var(--r);box-shadow:var(--shadow);cursor:pointer;border:2px solid transparent} .coll-card.on{border-color:var(--accent)}
+.coll-card .stackthumb{position:relative;width:64px;height:64px} .coll-card .stackthumb i{position:absolute;inset:0;border-radius:12px;background:var(--thumb-bg);box-shadow:var(--shadow)} .coll-card .stackthumb i:nth-child(1){transform:rotate(-8deg) translate(-3px,2px)} .coll-card .stackthumb i:nth-child(2){transform:rotate(5deg) translate(3px,-1px)} .coll-card .stackthumb i:nth-child(3){display:grid;place-items:center;color:var(--thumb)} .coll-card .stackthumb svg{width:36px;height:36px;fill:none;stroke:currentColor;stroke-width:2;stroke-linejoin:round;stroke-linecap:round}
+.coll-card h4{margin:0;font-size:15px;font-weight:800} .coll-card p{margin:2px 0 0;color:var(--muted);font-size:12px;font-weight:600}
+
+/* settings */
+.settings-nav{display:grid;gap:2px;position:sticky;top:0} .settings-nav a{display:block;padding:8px 12px;border-radius:var(--rs);color:var(--fg-2);font-weight:700;text-decoration:none;font-size:13px} .settings-nav a:hover{background:var(--hover)}
+.setting{display:grid;grid-template-columns:minmax(0,1fr) auto;gap:16px;align-items:center;padding:14px 0;border-bottom:1px solid var(--border)} .setting:last-child{border-bottom:0} .setting b{font-size:14px;display:block} .setting span{color:var(--muted);font-size:12px;font-weight:600}
+.root-row{display:grid;grid-template-columns:minmax(0,1fr) 150px 170px auto;gap:14px;align-items:center;padding:14px 0;border-bottom:1px solid var(--border)} .root-row:last-child{border-bottom:0}
+.root-row .path{font-weight:800;display:flex;gap:8px;align-items:center;min-width:0} .root-row .path span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .root-row small{display:block;color:var(--muted);font-weight:600;font-size:12px}
+
+/* activity */
+.job{display:grid;grid-template-columns:40px minmax(0,1fr) 160px auto;gap:14px;align-items:center;padding:14px 0;border-bottom:1px solid var(--border)} .job:last-child{border-bottom:0}
+.job .ico{width:40px;height:40px;border-radius:12px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center} .job b{display:block;font-size:14px} .job span{color:var(--muted);font-size:12px;font-weight:600}
+.log{font:12px/1.7 var(--mono);background:var(--bg);border-radius:var(--rs);padding:12px 14px;max-height:360px;overflow:auto;color:var(--fg-2)} .log .ts{color:var(--faint)} .log .lvl{display:inline-block;width:46px;font-weight:600} .log .INFO{color:var(--accent)} .log .WARN{color:var(--warn)} .log .ERROR{color:var(--danger)}
+
+/* welcome */
+.welcome{display:grid;place-items:center;height:100%;overflow:auto;padding:24px}
+.welcome .box{max-width:560px;width:100%;display:grid;gap:18px;text-align:center;justify-items:center}
+.welcome .box .ico{width:84px;height:84px;border-radius:26px;background:var(--accent);color:var(--accent-fg);display:grid;place-items:center} .welcome .box .ico svg{width:40px;height:40px;stroke-width:2}
+.welcome h1{margin:0;font-size:30px;letter-spacing:-.02em;text-wrap:balance} .welcome p{margin:0;color:var(--muted);max-width:46ch}
+.welcome .opts{display:grid;gap:10px;width:100%;text-align:left;margin-top:6px}
+.welcome .opt{display:grid;grid-template-columns:44px minmax(0,1fr) auto;gap:12px;align-items:center;padding:14px 16px;background:var(--panel);border-radius:var(--r);box-shadow:var(--shadow);border:2px solid transparent;cursor:pointer;text-align:left;width:100%} .welcome .opt:hover{border-color:var(--accent)} .welcome a.opt{color:inherit;text-decoration:none} .welcome .opt .ico2{width:44px;height:44px;border-radius:12px;background:var(--accent-soft);color:var(--accent);display:grid;place-items:center} .welcome .opt b{display:block;font-size:14px} .welcome .opt span{color:var(--muted);font-size:12px;font-weight:600}
+
+/* overlays */
+.toasts{position:fixed;right:20px;bottom:44px;display:grid;gap:8px;z-index:50}
+.toast{display:flex;align-items:center;gap:10px;padding:12px 16px;border-radius:var(--rs);background:var(--fg);color:var(--bg);font-weight:700;font-size:13px;box-shadow:var(--shadow-hover);animation:in .18s ease-out} .toast svg{width:16px;height:16px;stroke:var(--accent)} .toast button{color:inherit;opacity:.6;margin-left:6px}
+@keyframes in{from{transform:translateY(8px);opacity:0}}
+.overlay{position:fixed;inset:0;background:rgba(17,24,39,.45);display:grid;place-items:center;z-index:60;padding:20px}
+.dialog{width:min(440px,100%);background:var(--panel);border-radius:var(--r);box-shadow:var(--shadow-hover);padding:22px 24px;display:grid;gap:14px} .dialog h3{margin:0;font-size:18px;letter-spacing:-.01em} .dialog p{margin:0;color:var(--muted)} .dialog .row{display:flex;gap:8px;justify-content:flex-end;margin-top:6px}
+.menu{position:fixed;z-index:55;min-width:200px;background:var(--panel);border-radius:var(--rs);box-shadow:var(--shadow-hover);padding:6px;display:grid;border:1px solid var(--border)} .menu button{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:8px;text-align:left;font-weight:600;color:var(--fg-2)} .menu button:hover{background:var(--hover)} .menu hr{border:0;border-top:1px solid var(--border);margin:4px 0} .menu button.danger{color:var(--danger)}
+.demo-note{position:fixed;left:16px;bottom:44px;z-index:40;max-width:380px;padding:12px 16px;border-radius:var(--r);background:var(--panel);box-shadow:var(--shadow-hover);color:var(--muted);font-size:12px;font-weight:600} .demo-note b{color:var(--fg)} .demo-note button{float:right;color:var(--faint);margin-left:8px}
+.kbd{font:11px/1 var(--mono);padding:2px 6px;border-radius:5px;border:1px solid var(--border);background:var(--bg);color:var(--muted)}
+
+/* responsive (the real app is desktop-only; this keeps the dummy usable on a phone) */
+@media (max-width:1100px){ .body{grid-template-columns:230px minmax(0,1fr)} .inspector{display:none} .body.no-side{grid-template-columns:minmax(0,1fr)} }
+@media (max-width:760px){
+  .body,.body.no-inspector{grid-template-columns:minmax(0,1fr)} .sidebar{display:none}
+  .topbar{padding:0 max(12px,env(safe-area-inset-left,0px)) 0 max(12px,env(safe-area-inset-left,0px));gap:4px} .mainnav a span.l{display:none} .mainnav a{padding:0 10px} .brand span.t{display:none} .search{width:auto;flex:1} .search kbd{display:none}
+  .toolbar{padding:12px 14px 6px} .grid{padding:8px 14px 20px;gap:12px} .page-wrap{padding:16px 14px 32px} .two{grid-template-columns:1fr} .rule{grid-template-columns:1fr 1fr} .root-row,.job{grid-template-columns:1fr} .statusbar .right{display:none} .demo-note{display:none} .viewer{height:320px} .caption .ibtn:not(#themeBtn){display:none} .search{min-width:0}
+}
+</style>
+</head>
+<body>
+<div class="app" id="app">
+  <header class="topbar">
+    <a class="brand" href="#library" style="color:inherit;text-decoration:none"><span class="logo"><svg viewBox="0 0 24 24"><path d="M12 3 3 8l9 5 9-5-9-5zM3 8v8l9 5 9-5V8M12 13v8"/></svg></span><span class="t">My Meshes</span></a>
+    <nav class="mainnav" id="mainnav">
+      <a href="#library" data-nav="library"><svg class="i" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></svg><span class="l">Library</span></a>
+      <a href="#import" data-nav="import"><svg class="i" viewBox="0 0 24 24"><path d="M12 3v12M7 10l5 5 5-5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/></svg><span class="l">Import</span><span class="n">3</span></a>
+      <a href="#collections" data-nav="collections"><svg class="i" viewBox="0 0 24 24"><path d="M4 7h16M4 12h16M4 17h10"/></svg><span class="l">Collections</span></a>
+      <a href="#activity" data-nav="activity"><svg class="i" viewBox="0 0 24 24"><path d="M3 12h4l3-8 4 16 3-8h4"/></svg><span class="l">Activity</span></a>
+      <a href="#settings" data-nav="settings"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg><span class="l">Settings</span></a>
+    </nav>
+    <label class="search"><svg class="i" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg><input id="q" type="search" placeholder="Search library…" autocomplete="off"><kbd>Ctrl K</kbd></label>
+    <div class="caption">
+      <button class="ibtn" id="themeBtn" title="Toggle light/dark" aria-pressed="false"><svg class="i" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8"/><path d="M12 4a8 8 0 0 1 0 16z" fill="currentColor"/></svg></button>
+      <button class="ibtn" title="Minimize"><svg class="i" viewBox="0 0 24 24"><path d="M5 12h14"/></svg></button>
+      <button class="ibtn" title="Maximize"><svg class="i" viewBox="0 0 24 24"><rect x="5" y="5" width="14" height="14" rx="2"/></svg></button>
+      <button class="ibtn" title="Close"><svg class="i" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6 6 18"/></svg></button>
+    </div>
+  </header>
+
+  <div class="body" id="body"></div>
+
+  <footer class="statusbar" id="statusbar">
+    <button onclick="location.hash='activity'"><span class="dot" id="syncDot"></span><span id="syncText">Watching D:\3D Models · synced 2 min ago</span></button>
+    <button onclick="location.hash='activity'"><span class="dot busy"></span>Rendering thumbnails <span id="thumbCount">3 / 120</span></button>
+    <div class="right"><span id="selCount">0 selected</span><span>4,231 projects · 145.6 GB</span></div>
+  </footer>
+</div>
+<div class="toasts" id="toasts"></div>
+<div class="demo-note" id="demoNote"><button onclick="this.parentNode.remove()" aria-label="Dismiss">✕</button><b>Click dummy.</b> Everything is static data; clicks change what you see but nothing is saved. Try: click a card, double-click to open it, type in search, change the zoom, press <span class="kbd">Del</span> on a selection, visit Import.</div>
+<script>
+/* ================= data ================= */
+const ICONS = {
+  grid:'<rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/>',
+  list:'<path d="M8 6h13M8 12h13M8 18h13"/><circle cx="4" cy="6" r="1"/><circle cx="4" cy="12" r="1"/><circle cx="4" cy="18" r="1"/>',
+  folder:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>',
+  star:'<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z"/>',
+  starf:'<path d="m12 3 2.8 5.7 6.2.9-4.5 4.4 1.1 6.2L12 17.3 6.4 20.2l1.1-6.2L3 9.6l6.2-.9z" fill="currentColor"/>',
+  inbox:'<path d="M3 13h5l2 3h4l2-3h5M5 5h14l2 8v6a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1v-6z"/>',
+  clock:'<circle cx="12" cy="12" r="8"/><path d="M12 8v4l3 2"/>',
+  sparkle:'<path d="M12 3v4M12 17v4M3 12h4M17 12h4M6 6l2 2M16 16l2 2M6 18l2-2M16 8l2-2"/>',
+  collection:'<path d="M4 7h16M4 12h16M4 17h10"/>',
+  plus:'<path d="M12 5v14M5 12h14"/>', x:'<path d="M6 6l12 12M18 6 6 18"/>', check:'<path d="m5 12 5 5L20 7"/>',
+  chev:'<path d="m9 6 6 6-6 6"/>', chevd:'<path d="m6 9 6 6 6-6"/>', more:'<circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/>',
+  cube:'<path d="M12 3 3 8l9 5 9-5-9-5zM3 8v8l9 5 9-5V8M12 13v8"/>',
+  image:'<rect x="3" y="5" width="18" height="14" rx="2"/><circle cx="9" cy="10" r="1.5"/><path d="m21 16-5-5-8 8"/>',
+  file:'<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4"/>', zip:'<path d="M6 3h8l4 4v14H6z"/><path d="M14 3v4h4M10 7h1M10 9h1M10 11h1M10 13h1"/>',
+  trash:'<path d="M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13"/>', pencil:'<path d="M4 20l4-1L19 8l-3-3L5 16z"/>',
+  refresh:'<path d="M20 12a8 8 0 1 1-2.3-5.7M20 4v5h-5"/>', play:'<path d="M7 5v14l11-7z"/>', pause:'<path d="M8 5v14M16 5v14"/>',
+  external:'<path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/>',
+  open:'<path d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v2H7l-3 8"/>',
+  download:'<path d="M12 3v12M7 10l5 5 5-5M4 17v2a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-2"/>',
+  search:'<circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/>',
+  eye:'<path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12z"/><circle cx="12" cy="12" r="3"/>',
+  wand:'<path d="m4 20 10-10M14 4l1 2 2 1-2 1-1 2-1-2-2-1 2-1zM19 11l.6 1.4L21 13l-1.4.6L19 15l-.6-1.4L17 13l1.4-.6z"/>',
+  warn:'<path d="M12 3 2 21h20L12 3z"/><path d="M12 10v5M12 18h.01"/>',
+  cloudoff:'<path d="M3 3l18 18M7 18h11a4 4 0 0 0 1.2-7.8A6 6 0 0 0 9 7M5.5 9.5A4.5 4.5 0 0 0 7 18"/>',
+  layers:'<path d="M12 3 3 8l9 5 9-5-9-5zM3 13l9 5 9-5M3 18l9 5 9-5"/>',
+  tag:'<path d="M3 12V4h8l9 9-8 8-9-9z"/><circle cx="7" cy="8" r="1.5"/>',
+  rotate:'<path d="M3 12a9 9 0 1 0 3-6.7M3 4v5h5"/>', home:'<path d="M3 11 12 4l9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/>',
+  camera:'<path d="M4 8h3l2-3h6l2 3h3v11H4z"/><circle cx="12" cy="13" r="3"/>',
+  sun:'<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M2 12h2M20 12h2M5 5l1.5 1.5M17.5 17.5 19 19M5 19l1.5-1.5M17.5 6.5 19 5"/>',
+  moon:'<path d="M20 15A8 8 0 0 1 9 4a8 8 0 1 0 11 11z"/>', monitor:'<rect x="3" y="4" width="18" height="12" rx="2"/><path d="M8 20h8M12 16v4"/>',
+  hash:'<path d="M5 9h14M5 15h14M10 3 8 21M16 3l-2 18"/>', shield:'<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"/>',
+  info:'<circle cx="12" cy="12" r="9"/><path d="M12 10v6M12 7h.01"/>', drag:'<path d="M9 5h.01M15 5h.01M9 12h.01M15 12h.01M9 19h.01M15 19h.01"/>',
+  scan:'<path d="M3 7V4h3M21 7V4h-3M3 17v3h3M21 17v3h-3M7 12h10"/>', back:'<path d="m15 6-6 6 6 6"/>'
+};
+const ic = (n, cls='i') => `<svg class="${cls}" viewBox="0 0 24 24" aria-hidden="true">${ICONS[n]||''}</svg>`;
+const THUMBS = {
+  baseplate:'<path d="M8 40 32 28l24 12-24 12z" fill="var(--thumb-fill)"/><path d="M8 40v6l24 12v-6M56 40v6L32 58v-6M32 28v-6l-24 12 24 12 24-12-24-12"/><path d="M14 37l24 12M20 34l24 12M26 31l24 12M26 49l18-9M20 46l18-9M14 43l18-9"/>',
+  benchy:'<path d="M6 44h52l-6 10H12z" fill="var(--thumb-fill)"/><path d="M12 44V30h24v14M22 30v-8h8v8M36 36h10l6 8M30 22h-6v-4h6z"/><circle cx="18" cy="37" r="2"/><circle cx="26" cy="37" r="2"/>',
+  arm:'<circle cx="16" cy="52" r="6" fill="var(--thumb-fill)"/><path d="M16 46 24 24l16-8 12 12" stroke-width="4"/><circle cx="24" cy="24" r="4" fill="var(--thumb-fill)"/><circle cx="40" cy="16" r="4" fill="var(--thumb-fill)"/><path d="M52 28l6-6M52 28l-2 8M6 58h20"/>',
+  vase:'<path d="M24 8h16l-4 8c6 6 10 14 10 22a14 14 0 0 1-28 0c0-8 4-16 10-22z" fill="var(--thumb-fill)"/><path d="M20 30c4 2 8 2 12 0s8-2 12 0M18 40c4 2 10 2 14 0s10-2 14 0M20 50c4 2 8 2 12 0s8-2 12 0"/>',
+  stand:'<path d="M14 54h36l-6-10H20z" fill="var(--thumb-fill)"/><path d="M22 44 36 12l12 6-12 26M26 44h14"/><path d="M20 54v4M44 54v4"/>',
+  helmet:'<path d="M12 36a20 20 0 0 1 40 0v14H12z" fill="var(--thumb-fill)"/><path d="M12 36h40M20 42h10l4 4h-14zM32 16v8"/><path d="M12 50v4h40v-4"/>',
+  clip:'<path d="M10 50h44v6H10z" fill="var(--thumb-fill)"/><path d="M18 50V32a14 14 0 0 1 28 0v6M40 38h8M22 50V32a10 10 0 0 1 20 0v4"/><circle cx="32" cy="32" r="4" fill="var(--thumb-fill)"/>',
+  tower:'<path d="M20 58V22l12-10 12 10v36z" fill="var(--thumb-fill)"/><path d="M20 22h24M26 30h12M26 38h12M26 46h12M14 58h36M32 12V6M20 22l-4 4M44 22l4 4"/>',
+  box:'<path d="M10 24 32 14l22 10v22L32 56 10 46z" fill="var(--thumb-fill)"/><path d="M10 24l22 10 22-10M32 34v22M16 21l22 10"/>',
+  gear:'<circle cx="32" cy="32" r="9" fill="var(--thumb-fill)"/><path d="M32 8v8M32 48v8M8 32h8M48 32h8M15 15l6 6M43 43l6 6M15 49l6-6M43 21l6-6"/><circle cx="32" cy="32" r="17"/>',
+  planter:'<path d="M14 24h36l-4 30H18z" fill="var(--thumb-fill)"/><path d="M12 24h40v-6H12zM24 36h16M22 44h20"/>',
+  hook:'<path d="M20 8h24v10H20z" fill="var(--thumb-fill)"/><path d="M32 18v14a10 10 0 0 0 20 0M32 32a10 10 0 0 1-10 10"/>',
+};
+const th = (k, cls='t') => `<svg class="${cls}" viewBox="0 0 64 64" aria-hidden="true">${THUMBS[k]||THUMBS.box}</svg>`;
+const ROOTS = [
+  { id:'r1', path:'D:\\3D Models', mode:'watch', status:'online', lastSync:'2 min ago', projects:4219, size:'141.2 GB' },
+  { id:'r2', path:'\\\\nas\\models', mode:'poll', status:'offline', lastSync:'3 days ago', projects:12, size:'4.4 GB' },
+];
+const f = (name, size, kind) => ({ name, size, kind: kind || name.split('.').pop() });
+let PROJECTS = [
+  { id:'p1', title:'Gridfinity Baseplates', creator:'Zach Freedman', tags:['gridfinity','organizer'], folder:'Projects/Gridfinity/Baseplates', root:'r1', thumb:'baseplate', fav:true, size:'48.2 MB', added:'2026-03-02', license:'CC-BY-NC-SA-4.0', source:'https://thangs.com/designer/ZackFreedman/3d-model/Gridfinity-Baseplates', material:'PLA', supports:false, sidecar:true, description:'Parametric baseplates for the Gridfinity storage system. Print flat, no supports.', files:[f('Baseplate_2x2.stl','6.1 MB'),f('Baseplate_3x3.stl','13.4 MB'),f('Baseplate_4x4.stl','23.9 MB'),f('Baseplate_plate.3mf','4.0 MB'),f('photo_desk.png','0.7 MB'),f('README.md','2 KB'),f('original_download.zip','41 MB','zip')], tris:'184,220', dims:'168 × 168 × 7 mm' },
+  { id:'p2', title:'Low-Poly Benchy', creator:'CreativeTools', tags:['benchmark'], folder:'Projects/Calibration', root:'r1', thumb:'benchy', size:'3.1 MB', added:'2026-02-27', license:'CC-BY-4.0', source:'https://www.thingiverse.com/thing:763622', material:'PLA', supports:false, sidecar:true, description:'The classic torture test, decimated.', files:[f('benchy_lowpoly.stl','3.1 MB')], tris:'12,480', dims:'60 × 31 × 48 mm' },
+  { id:'p3', title:'Robotic Arm v4', creator:'ExampleCreator', tags:['robotics','functional'], folder:'Projects/Robotics/Arm v4', root:'r1', thumb:'arm', size:'212 MB', added:'2026-02-20', license:'GPL-3.0', source:'https://www.printables.com/model/123456', material:'PETG', supports:true, sidecar:true, description:'6-axis desktop arm, NEMA17 based.', files:[f('base.stl','18 MB'),f('shoulder.stl','22 MB'),f('upper_arm.stl','31 MB'),f('forearm.stl','27 MB'),f('wrist.3mf','9 MB'),f('gripper.stl','14 MB'),f('BOM.pdf','1.2 MB'),f('assembly.jpg','3.4 MB'),f('firmware.zip','84 MB','zip')], tris:'1,204,118', dims:'420 × 180 × 90 mm', recent:true },
+  { id:'p4', title:'Decorative Vase', creator:'Lena Hofer', tags:['vase','decor'], folder:'Projects/Decor', root:'r1', thumb:'vase', size:'9.8 MB', added:'2026-02-14', license:'CC-BY-NC-4.0', source:'', material:'PLA Silk', supports:false, sidecar:false, description:'', files:[f('vase_twist.stl','9.8 MB')], tris:'210,500', dims:'90 × 90 × 180 mm' },
+  { id:'p5', title:'Phone Stand', creator:'PrintTools', tags:['desk','functional'], folder:'Projects/Desk', root:'r1', thumb:'stand', size:'5.5 MB', added:'2026-02-09', license:'CC0-1.0', source:'https://makerworld.com/models/55511', material:'PLA', supports:false, sidecar:true, description:'Adjustable angle phone stand.', files:[f('stand_body.stl','4.1 MB'),f('stand_foot.stl','1.4 MB')], tris:'88,012', dims:'80 × 70 × 110 mm' },
+  { id:'p6', title:'Cosplay Helmet', creator:'Props Workshop', tags:['cosplay','props'], folder:'Props/Helmets/MK2', root:'r2', thumb:'helmet', size:'640 MB', added:'2026-01-30', license:'Personal use', source:'https://www.myminifactory.com/object/3d-print-helmet', material:'PLA', supports:true, sidecar:true, offline:true, description:'Split into 9 parts for a 256 mm bed.', files:[f('helmet_part1.stl','72 MB'),f('helmet_part2.stl','70 MB'),f('helmet_part3.stl','71 MB'),f('visor.stl','18 MB')], tris:'3,980,000', dims:'260 × 240 × 300 mm' },
+  { id:'p7', title:'Cable Clips', creator:'Maker Mia', tags:['cable','organizer'], folder:'Projects/Desk/Cable Clips', root:'r1', thumb:'clip', size:'1.2 MB', added:'2026-10-17', license:'CC-BY-4.0', source:'https://www.printables.com/model/998877', material:'TPU', supports:false, sidecar:false, generating:true, recent:true, description:'', files:[f('clip_6mm.stl','0.4 MB'),f('clip_8mm.stl','0.4 MB'),f('clip_10mm.stl','0.4 MB')], tris:'6,400', dims:'20 × 14 × 10 mm' },
+  { id:'p8', title:'Dice Tower', creator:'TableTop Forge', tags:['tabletop','gaming'], folder:'Projects/Tabletop', root:'r1', thumb:'tower', size:'31 MB', added:'2026-01-12', license:'CC-BY-NC-SA-4.0', source:'https://www.thingiverse.com/thing:4567123', material:'PLA', supports:false, sidecar:true, description:'Modular dice tower with removable tray.', files:[f('tower.3mf','31 MB')], tris:'640,100', dims:'110 × 110 × 240 mm' },
+  { id:'p9', title:'Gridfinity Rugged Box', creator:'Pred', tags:['gridfinity','storage'], folder:'Projects/Gridfinity/Rugged Box', root:'r1', thumb:'box', size:'96 MB', added:'2026-10-16', license:'CC-BY-NC-SA-4.0', source:'https://www.printables.com/model/543210', material:'PETG', supports:false, sidecar:true, fav:true, recent:true, description:'Stackable rugged box with Gridfinity floor.', files:[f('box_body.stl','44 MB'),f('box_lid.stl','31 MB'),f('latch_x2.stl','3 MB'),f('hinge_x2.stl','2 MB'),f('insert_3x3.stl','16 MB')], tris:'980,331', dims:'126 × 126 × 92 mm' },
+  { id:'p10', title:'Planetary Gearbox', creator:'GearWorks', tags:['mechanical','functional'], folder:'Projects/Mechanical', root:'r1', thumb:'gear', size:'27 MB', added:'2025-12-20', license:'MIT', source:'https://github.com/gearworks/planetary', material:'PETG', supports:false, sidecar:true, description:'5:1 planetary gearbox, print-in-place option.', files:[f('ring.stl','9 MB'),f('sun.stl','3 MB'),f('planet_x3.stl','6 MB'),f('carrier.stl','9 MB')], tris:'402,000', dims:'60 × 60 × 24 mm' },
+  { id:'p11', title:'Self-watering Planter', creator:'Lena Hofer', tags:['decor','garden'], folder:'Projects/Decor/Planter', root:'r1', thumb:'planter', size:'14 MB', added:'2025-12-02', license:'CC-BY-4.0', source:'', material:'PETG', supports:false, sidecar:false, description:'', files:[f('planter_outer.stl','9 MB'),f('planter_inner.stl','5 MB')], tris:'150,000', dims:'120 × 120 × 110 mm' },
+  { id:'p12', title:'Headphone Hook', creator:'PrintTools', tags:['desk','organizer'], folder:'Projects/Desk', root:'r1', thumb:'hook', size:'2.2 MB', added:'2025-11-18', license:'CC0-1.0', source:'https://makerworld.com/models/77001', material:'PLA', supports:false, sidecar:true, description:'Under-desk hook, screws included in BOM.', files:[f('hook.stl','2.2 MB')], tris:'30,120', dims:'40 × 60 × 90 mm' },
+  { id:'p13', title:'Gridfinity Bins 1×1 to 2×3', creator:'Zach Freedman', tags:['gridfinity','organizer'], folder:'Projects/Gridfinity/Bins', root:'r1', thumb:'box', size:'58 MB', added:'2025-11-02', license:'CC-BY-NC-SA-4.0', source:'https://thangs.com/designer/ZackFreedman', material:'PLA', supports:false, sidecar:true, fav:true, description:'Standard bins with label tab.', files:[f('bin_1x1.stl','3 MB'),f('bin_1x2.stl','5 MB'),f('bin_2x2.stl','9 MB'),f('bin_2x3.stl','14 MB'),f('bin_1x3.stl','7 MB'),f('bin_3x3.stl','20 MB')], tris:'720,000', dims:'126 × 84 × 42 mm' },
+  { id:'p14', title:'Camera Mount Adapter', creator:'ExampleCreator', tags:['photo','functional'], folder:'Projects/Mechanical', root:'r1', thumb:'clip', size:'1.9 MB', added:'2025-10-25', license:'CC-BY-4.0', source:'', material:'ASA', supports:true, sidecar:true, description:'1/4" to cold shoe.', files:[f('adapter.stl','1.9 MB')], tris:'22,000', dims:'30 × 22 × 18 mm' },
+  { id:'p15', title:'Articulated Dragon', creator:'Cinderwing3D', tags:['toy','articulated'], folder:'Props/Toys', root:'r2', thumb:'arm', size:'120 MB', added:'2025-10-02', license:'Personal use', source:'https://www.myminifactory.com/users/Cinderwing3D', material:'PLA Silk', supports:false, sidecar:true, offline:true, description:'Print-in-place, 2 color option.', files:[f('dragon.3mf','120 MB')], tris:'2,100,000', dims:'300 × 80 × 60 mm' },
+  { id:'p16', title:'IMG_4821.stl', creator:'', tags:[], folder:'_Inbox', root:'r1', thumb:'box', size:'7 MB', added:'2026-10-15', license:'', source:'', material:'', supports:false, sidecar:false, inbox:true, description:'', files:[f('IMG_4821.stl','7 MB')], tris:'90,000', dims:'? mm' },
+  { id:'p17', title:'wall_bracket_final_v3.stl', creator:'', tags:[], folder:'_Inbox', root:'r1', thumb:'hook', size:'1 MB', added:'2026-10-14', license:'', source:'', material:'', supports:false, sidecar:false, inbox:true, description:'', files:[f('wall_bracket_final_v3.stl','1 MB')], tris:'10,000', dims:'? mm' },
+  { id:'p18', title:'keycaps-set.zip', creator:'', tags:[], folder:'_Inbox', root:'r1', thumb:'box', size:'12 MB', added:'2026-10-12', license:'', source:'', material:'', supports:false, sidecar:false, inbox:true, description:'', files:[f('keycaps-set.zip','12 MB','zip')], tris:'', dims:'' },
+];
+let COLLECTIONS = [
+  { id:'c1', name:'Desk setup', projects:['p1','p5','p7','p12','p13'] },
+  { id:'c2', name:'Gifts 2026', projects:['p4','p8','p11'] },
+];
+let SMART = [
+  { id:'s1', name:'Gridfinity & PLA', match:'all', rules:[{field:'tag',op:'is',value:'gridfinity'},{field:'material',op:'is',value:'PLA'}] },
+  { id:'s2', name:'Work in progress', match:'any', rules:[{field:'sidecar',op:'is',value:'no'},{field:'tag',op:'is',value:'wip'}] },
+  { id:'s3', name:'Supports needed', match:'all', rules:[{field:'supports',op:'is',value:'yes'}] },
+];
+const FOLDERS = [
+  { root:'r1', label:'D:\\3D Models', children:[
+    { label:'Projects', path:'Projects', children:[ {label:'Gridfinity', path:'Projects/Gridfinity'}, {label:'Robotics', path:'Projects/Robotics'}, {label:'Desk', path:'Projects/Desk'}, {label:'Decor', path:'Projects/Decor'}, {label:'Mechanical', path:'Projects/Mechanical'} ] },
+    { label:'_Inbox', path:'_Inbox' } ] },
+  { root:'r2', label:'\\\\nas\\models', children:[ {label:'Props', path:'Props'} ] },
+];
+const LOG = [
+  ['14:02:11','INFO','watcher','D:\\3D Models: 2 events (created Projects/Desk/Cable Clips/clip_10mm.stl, modified project.yaml)'],
+  ['14:02:12','INFO','engine','Indexed project "Cable Clips" (3 files, 1.2 MB), thumbnail queued'],
+  ['14:01:40','WARN','engine','Sidecar Projects/Decor/Planter/project.yaml not found, using derived metadata'],
+  ['13:58:03','ERROR','watcher','\\\\nas\\models unreachable (ENOENT). Root marked offline; 12 projects kept.'],
+  ['13:57:59','INFO','engine','Poll \\\\nas\\models scheduled, interval 15 min'],
+  ['13:40:21','INFO','thumbs','Rendered 117 thumbnails in 4m 12s (avg 2.1 s), 3 remaining'],
+  ['13:35:00','INFO','ui','Tag "organizer" added to "Gridfinity Baseplates", project.yaml written (atomic rename)'],
+  ['13:30:12','INFO','engine','Full scan D:\\3D Models complete: 4,219 projects, 31,402 files, 141.2 GB, 1,204 ignored by pattern'],
+  ['13:29:50','INFO','engine','Hash queue paused (user is active), 2,110 files pending'],
+  ['13:12:04','WARN','import','thing-4567890.zip: no license file found, left empty for review'],
+];
+
+/* ================= state ================= */
+const state = { filter:{kind:'all'}, q:'', tags:[], sort:'added', view:'grid', zoom:230, selected:new Set(), current:'p1', tab:'overview', smart:'s1', logLevel:'all', importDone:false };
+try { const s = JSON.parse(localStorage.getItem('mm-dummy')||'{}'); Object.assign(state, {view:s.view||state.view, zoom:s.zoom||state.zoom}); } catch(e){}
+state.selected = new Set();
+const persist = () => { try { localStorage.setItem('mm-dummy', JSON.stringify({view:state.view, zoom:state.zoom})); } catch(e){} };
+const $ = (s, el=document) => el.querySelector(s); const $$ = (s, el=document) => [...el.querySelectorAll(s)];
+const byId = id => PROJECTS.find(p => p.id===id);
+const rootOf = p => ROOTS.find(r => r.id===p.root);
+const esc = s => String(s??'').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const initials = n => n ? n.split(/\s+/).map(w=>w[0]).join('').slice(0,2).toUpperCase() : '?';
+const fmtDate = d => { const dt = new Date(d); const now = new Date('2026-10-17'); const diff = (now-dt)/864e5; if (diff<1) return 'today'; if (diff<2) return 'yesterday'; return dt.toLocaleDateString('en-GB',{day:'numeric',month:'short'}) + (dt.getFullYear()!==2026? ' '+dt.getFullYear():''); };
+const sizeNum = s => { const m = /([\d.]+)\s*(KB|MB|GB)/.exec(s||''); if(!m) return 0; return parseFloat(m[1]) * ({KB:1e-3,MB:1,GB:1e3}[m[2]]); };
+
+/* ================= smart collection evaluation ================= */
+function matchRule(p, r) {
+  const v = (r.value||'').toLowerCase();
+  const has = (a) => a.some(x => x.toLowerCase()===v);
+  let hit;
+  switch (r.field) {
+    case 'tag': hit = has(p.tags); break;
+    case 'creator': hit = (p.creator||'').toLowerCase().includes(v); break;
+    case 'license': hit = (p.license||'').toLowerCase().includes(v); break;
+    case 'material': hit = (p.material||'').toLowerCase().split(' ')[0]===v; break;
+    case 'filetype': hit = p.files.some(x => x.kind===v); break;
+    case 'sidecar': hit = p.sidecar === (v==='yes'); break;
+    case 'supports': hit = p.supports === (v==='yes'); break;
+    case 'added': hit = r.op==='after' ? p.added > r.value : p.added < r.value; return hit;
+    default: hit = false;
+  }
+  if (r.op==='is not' || r.op==='does not contain') hit = !hit;
+  return hit;
+}
+const smartMatches = s => PROJECTS.filter(p => !p.inbox && (s.match==='all' ? s.rules.every(r=>matchRule(p,r)) : s.rules.some(r=>matchRule(p,r))));
+
+/* ================= filtering ================= */
+function visibleProjects() {
+  let list = PROJECTS.slice();
+  const fl = state.filter;
+  if (fl.kind==='all') list = list.filter(p=>!p.inbox);
+  if (fl.kind==='recent') list = list.filter(p=>p.recent);
+  if (fl.kind==='favorites') list = list.filter(p=>p.fav);
+  if (fl.kind==='inbox') list = list.filter(p=>p.inbox);
+  if (fl.kind==='smart') { const s = SMART.find(x=>x.id===fl.id); list = s ? smartMatches(s) : []; }
+  if (fl.kind==='collection') { const c = COLLECTIONS.find(x=>x.id===fl.id); list = c ? c.projects.map(byId).filter(Boolean) : []; }
+  if (fl.kind==='folder') list = list.filter(p => p.root===fl.root && (fl.path==='' || p.folder===fl.path || p.folder.startsWith(fl.path+'/')));
+  if (state.q) { const q = state.q.toLowerCase(); list = list.filter(p => [p.title,p.creator,p.description,...p.tags,...p.files.map(x=>x.name)].join(' ').toLowerCase().includes(q)); }
+  for (const t of state.tags) list = list.filter(p => p.tags.includes(t));
+  const cmp = { added:(a,b)=>b.added.localeCompare(a.added), title:(a,b)=>a.title.localeCompare(b.title), size:(a,b)=>sizeNum(b.size)-sizeNum(a.size), creator:(a,b)=>(a.creator||'~').localeCompare(b.creator||'~') }[state.sort];
+  return list.sort(cmp);
+}
+const filterTitle = () => { const fl = state.filter; return ({all:'All projects', recent:'Recent imports', favorites:'Favorites', inbox:'Inbox'})[fl.kind] || (fl.kind==='smart' ? SMART.find(s=>s.id===fl.id)?.name : fl.kind==='collection' ? COLLECTIONS.find(c=>c.id===fl.id)?.name : fl.kind==='folder' ? (fl.path||ROOTS.find(r=>r.id===fl.root).path) : ''); };
+
+/* ================= ui primitives ================= */
+function toast(msg, icon='check') { const t = document.createElement('div'); t.className='toast'; t.innerHTML = ic(icon)+`<span>${msg}</span><button aria-label="Dismiss">${ic('x')}</button>`; t.querySelector('button').onclick=()=>t.remove(); $('#toasts').appendChild(t); setTimeout(()=>t.remove(), 4200); }
+function dialog({title, body='', confirm='OK', cancel='Cancel', danger=false, input=null, onConfirm}) {
+  const o = document.createElement('div'); o.className='overlay';
+  o.innerHTML = `<div class="dialog" role="dialog" aria-modal="true" aria-labelledby="dlgT"><h3 id="dlgT">${title}</h3>${body?`<p>${body}</p>`:''}${input!==null?`<input class="input" id="dlgIn" value="${esc(input)}">`:''}<div class="row"><button class="btn ghost" data-c>${cancel}</button><button class="btn ${danger?'danger':'primary'}" data-ok>${confirm}</button></div></div>`;
+  const close = () => o.remove();
+  o.addEventListener('click', e => { if (e.target===o) close(); });
+  o.querySelector('[data-c]').onclick = close;
+  o.querySelector('[data-ok]').onclick = () => { const v = o.querySelector('#dlgIn')?.value; close(); onConfirm && onConfirm(v); };
+  document.body.appendChild(o);
+  const inp = o.querySelector('#dlgIn'); if (inp) { inp.focus(); inp.select(); inp.addEventListener('keydown', e => { if (e.key==='Enter') o.querySelector('[data-ok]').click(); }); } else o.querySelector('[data-ok]').focus();
+  o.addEventListener('keydown', e => { if (e.key==='Escape') close(); });
+}
+let menuEl = null;
+function menu(x, y, items) {
+  closeMenu(); menuEl = document.createElement('div'); menuEl.className='menu'; menuEl.setAttribute('role','menu');
+  menuEl.innerHTML = items.map(it => it==='-' ? '<hr>' : `<button role="menuitem" class="${it.danger?'danger':''}" ${it.disabled?'disabled':''}>${ic(it.icon)}<span>${it.label}</span></button>`).join('');
+  let i = 0; $$('button', menuEl).forEach(b => { const it = items.filter(x=>x!=='-')[i++]; b.onclick = () => { closeMenu(); it.run && it.run(); }; });
+  document.body.appendChild(menuEl);
+  const r = menuEl.getBoundingClientRect(); menuEl.style.left = Math.min(x, innerWidth - r.width - 8) + 'px'; menuEl.style.top = Math.min(y, innerHeight - r.height - 8) + 'px';
+}
+function closeMenu(){ if (menuEl) { menuEl.remove(); menuEl=null; } }
+document.addEventListener('click', e => { if (menuEl && !menuEl.contains(e.target)) closeMenu(); });
+
+/* ================= actions ================= */
+function openProject(id) { state.current = id; state.tab='overview'; location.hash = 'project'; }
+function toggleFav(id) { const p = byId(id); p.fav = !p.fav; toast(p.fav ? `Added "${esc(p.title)}" to favorites` : `Removed "${esc(p.title)}" from favorites`, 'star'); render(); }
+function renameProject(id) { const p = byId(id); dialog({ title:'Rename project', body:'The folder on disk is renamed as well. Open files in other apps may need to be reopened.', input:p.title, confirm:'Rename', onConfirm: v => { if (!v || v===p.title) return; const old = p.folder; p.title = v; p.folder = old.split('/').slice(0,-1).concat(v).join('/'); toast(`Renamed folder to "${esc(v)}"`, 'pencil'); render(); } }); }
+function deleteProjects(ids) { if (!ids.length) return; const n = ids.length; dialog({ title: n===1 ? `Move "${esc(byId(ids[0]).title)}" to the Recycle Bin?` : `Move ${n} projects to the Recycle Bin?`, body:'Files are moved to the Windows Recycle Bin and can be restored from there. Collections referencing them are updated.', confirm:'Move to Recycle Bin', danger:true, onConfirm: () => { PROJECTS = PROJECTS.filter(p => !ids.includes(p.id)); COLLECTIONS.forEach(c => c.projects = c.projects.filter(x=>!ids.includes(x))); state.selected.clear(); if (ids.includes(state.current)) state.current = PROJECTS[0]?.id; toast(`Moved ${n} project${n>1?'s':''} to the Recycle Bin`, 'trash'); if (location.hash==='#project') location.hash='library'; else render(); } }); }
+function addTag(id, tag) { const p = byId(id); tag = (tag||'').trim().toLowerCase(); if (!tag || p.tags.includes(tag)) return; p.tags.push(tag); const created = !p.sidecar; p.sidecar = true; toast(created ? 'project.yaml created and tag saved' : 'project.yaml updated', 'tag'); render(); }
+function removeTag(id, tag) { const p = byId(id); p.tags = p.tags.filter(t=>t!==tag); toast('project.yaml updated', 'tag'); render(); }
+function addToCollection(ids) { menuFromCenter(COLLECTIONS.map(c => ({ icon:'collection', label:c.name, run:()=>{ ids.forEach(id => { if(!c.projects.includes(id)) c.projects.push(id); }); toast(`Added ${ids.length} to "${esc(c.name)}"`, 'collection'); render(); } })).concat(['-', { icon:'plus', label:'New collection…', run:()=> dialog({title:'New collection', input:'', confirm:'Create', onConfirm:v=>{ if(!v) return; COLLECTIONS.push({id:'c'+Date.now(), name:v, projects:[...ids]}); toast(`Created "${esc(v)}"`,'collection'); render(); }}) }])); }
+function menuFromCenter(items){ menu(innerWidth/2-100, innerHeight/2-80, items); }
+function projectMenu(e, id) { e.preventDefault(); const p = byId(id); const ids = state.selected.has(id) && state.selected.size>1 ? [...state.selected] : [id]; menu(e.clientX, e.clientY, [
+  { icon:'eye', label:'Open', run:()=>openProject(id) },
+  { icon:'open', label:'Show in Explorer', run:()=>toast(`Opened ${esc(rootOf(p).path)}\\${esc(p.folder.replace(/\//g,'\\'))}`, 'open'), disabled:p.offline },
+  { icon:'external', label:'Open in slicer', run:()=>toast(`Opened ${esc(p.files[0].name)} in Bambu Studio`, 'external'), disabled:p.offline },
+  '-',
+  { icon: p.fav?'starf':'star', label: p.fav?'Remove from favorites':'Add to favorites', run:()=>toggleFav(id) },
+  { icon:'collection', label: ids.length>1 ? `Add ${ids.length} to collection…` : 'Add to collection…', run:()=>addToCollection(ids) },
+  { icon:'pencil', label:'Rename…', run:()=>renameProject(id), disabled:p.offline },
+  { icon:'camera', label:'Regenerate thumbnail', run:()=>{ p.generating=true; render(); setTimeout(()=>{ p.generating=false; render(); toast('Thumbnail updated','camera'); }, 1800); } },
+  '-',
+  { icon:'trash', label: ids.length>1 ? `Move ${ids.length} to Recycle Bin` : 'Move to Recycle Bin', danger:true, run:()=>deleteProjects(ids), disabled:p.offline },
+]); }
+
+/* ================= render: shared ================= */
+function cardHTML(p) {
+  const sel = state.selected.has(p.id);
+  return `<article class="card ${sel?'selected':''} ${p.offline?'offline':''}" tabindex="0" data-id="${p.id}" aria-selected="${sel}">
+    <div class="thumb ${p.generating?'generating':''}">${th(p.thumb)}
+      <span class="check">${ic('check')}</span>
+      <div class="tr">${p.fav?`<span class="badge fav">${ic('starf')}</span>`:''}${p.offline?`<span class="badge off">${ic('cloudoff')} Offline</span>`:''}${p.files.some(x=>x.kind==='3mf')?'<span class="badge">3MF</span>':''}${p.files.length>1?`<span class="badge">${p.files.length} files</span>`:''}</div>
+      ${p.generating?`<div class="gen"><span class="dot busy"></span>Rendering preview…</div>`:''}
+    </div>
+    <div class="meta"><h4 title="${esc(p.title)}">${esc(p.title)}</h4>
+      <div class="by">${p.creator?`<span class="avatar">${initials(p.creator)}</span>${esc(p.creator)}`:'<span class="muted">Unknown creator</span>'}</div>
+      <div class="tags">${p.tags.slice(0,3).map(t=>`<button class="tag" data-tag="${esc(t)}">${esc(t)}</button>`).join('')}${p.tags.length>3?`<span class="tag">+${p.tags.length-3}</span>`:''}${!p.tags.length?'<span class="tag add" data-addtag>+ tag</span>':''}</div>
+      <div class="row"><span>${p.size}</span><span>${fmtDate(p.added)}</span></div></div>
+  </article>`;
+}
+function sidebarHTML() {
+  const fl = state.filter; const on = (k,id) => fl.kind===k && (id===undefined || fl.id===id) ? 'active' : '';
+  const cnt = fn => PROJECTS.filter(fn).length;
+  const folderBtn = (root, node, depth) => `<button class="d${depth} ${fl.kind==='folder'&&fl.root===root&&fl.path===(node.path||'')?'active':''}" data-folder="${root}|${node.path||''}"><span class="chev">${node.children?'▾':'▸'}</span>${depth===0?`<span class="dot ${ROOTS.find(r=>r.id===root).status==='offline'?'off':''}"></span>`:ic('folder')}<span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(node.label)}</span>${depth===0?`<span class="count">${ROOTS.find(r=>r.id===root).status==='offline'?'offline':'watched'}</span>`:''}</button>` + (node.children||[]).map(c=>folderBtn(root,c,depth+1)).join('');
+  return `<aside class="sidebar">
+    <div class="sec nav"><h3>Library</h3>
+      <button class="${on('all')}" data-filter="all">${ic('grid')}All projects<span class="count">${cnt(p=>!p.inbox).toLocaleString()}</span></button>
+      <button class="${on('recent')}" data-filter="recent">${ic('clock')}Recent imports<span class="count">${cnt(p=>p.recent)}</span></button>
+      <button class="${on('favorites')}" data-filter="favorites">${ic('star')}Favorites<span class="count">${cnt(p=>p.fav)}</span></button>
+      <button class="${on('inbox')}" data-filter="inbox">${ic('inbox')}Inbox<span class="count">${cnt(p=>p.inbox)}</span></button>
+    </div>
+    <div class="sec nav"><h3>Smart collections<a class="ibtn sm" href="#collections" title="Manage">${ic('plus')}</a></h3>
+      ${SMART.map(s=>`<button class="${on('smart',s.id)}" data-filter="smart:${s.id}">${ic('sparkle')}${esc(s.name)}<span class="count">${smartMatches(s).length}</span></button>`).join('')}
+    </div>
+    <div class="sec nav"><h3>Collections<a class="ibtn sm" href="#collections" title="Manage">${ic('plus')}</a></h3>
+      ${COLLECTIONS.map(c=>`<button class="${on('collection',c.id)}" data-filter="collection:${c.id}">${ic('collection')}${esc(c.name)}<span class="count">${c.projects.length}</span></button>`).join('')}
+    </div>
+    <div class="sec nav tree"><h3>Folders<a class="ibtn sm" href="#settings" title="Manage library roots">${ic('plus')}</a></h3>
+      ${FOLDERS.map(r => folderBtn(r.root, {label:r.label, path:'', children:r.children}, 0)).join('')}
+    </div>
+  </aside>`;
+}
+function inspectorHTML(list) {
+  const sel = [...state.selected].map(byId).filter(Boolean);
+  if (sel.length>1) return `<aside class="inspector"><div class="eyebrow">Selection</div><h2>${sel.length} projects</h2><div class="sub">${sel.reduce((a,p)=>a+sizeNum(p.size),0).toFixed(1)} MB · ${sel.reduce((a,p)=>a+p.files.length,0)} files</div>
+    <div class="actions"><button class="btn" data-act="addtag-sel">${ic('tag')}Add tag to all</button><button class="btn" data-act="coll-sel">${ic('collection')}Add to collection</button><button class="btn danger" data-act="del-sel">${ic('trash')}Recycle Bin</button></div>
+    <h3>Common tags</h3><div class="tags" style="display:flex;gap:6px;flex-wrap:wrap">${[...new Set(sel.flatMap(p=>p.tags))].filter(t=>sel.every(p=>p.tags.includes(t))).map(t=>`<span class="tag">${esc(t)}</span>`).join('')||'<span class="muted">none</span>'}</div>
+    <div class="hint">Batch edits write one project.yaml per project in the background. The list updates immediately and rolls back if a write fails.</div></aside>`;
+  const p = sel[0];
+  if (!p) return `<aside class="inspector"><div class="eyebrow">${esc(filterTitle())}</div><h2>${list.length} project${list.length===1?'':'s'}</h2><div class="sub">${list.reduce((a,p)=>a+sizeNum(p.size),0).toLocaleString(undefined,{maximumFractionDigits:0})} MB in view</div>
+    <h3>Top tags</h3><div style="display:flex;gap:6px;flex-wrap:wrap">${Object.entries(list.flatMap(p=>p.tags).reduce((m,t)=>(m[t]=(m[t]||0)+1,m),{})).sort((a,b)=>b[1]-a[1]).slice(0,8).map(([t,n])=>`<button class="tag" data-tag="${esc(t)}">${esc(t)} <span class="muted">${n}</span></button>`).join('')||'<span class="muted">none</span>'}</div>
+    <h3>Creators</h3><div class="files">${Object.entries(list.reduce((m,p)=>(p.creator&&(m[p.creator]=(m[p.creator]||0)+1),m),{})).sort((a,b)=>b[1]-a[1]).slice(0,5).map(([c,n])=>`<div><span class="avatar">${initials(c)}</span><span class="nm">${esc(c)}</span><span class="sz">${n}</span></div>`).join('')||'<span class="muted">none</span>'}</div>
+    <div class="hint">Select a project to see its details here. Double-click opens it. <span class="kbd">Ctrl</span>+click selects several.</div></aside>`;
+  const r = rootOf(p);
+  return `<aside class="inspector">
+    <div class="insp-thumb">${th(p.thumb,'')}${p.offline?`<span class="badge off">${ic('cloudoff')} Offline</span>`:p.generating?`<span class="badge accent">Rendering…</span>`:''}</div>
+    <h2>${esc(p.title)}</h2><div class="sub">${esc(r.path)}\\${esc(p.folder.replace(/\//g,'\\'))}</div>
+    <div class="actions"><button class="btn primary" data-act="open">${ic('eye')}Open</button><button class="ibtn" data-act="reveal" title="Show in Explorer" ${p.offline?'disabled':''}>${ic('open')}</button><button class="ibtn" data-act="fav" title="Favorite">${ic(p.fav?'starf':'star')}</button><button class="ibtn" data-act="menu" title="More">${ic('more')}</button></div>
+    ${p.offline?`<div class="hint" style="background:var(--warn-soft);color:var(--warn)">${esc(r.path)} is not reachable. The project stays in the library and will come back when the drive reconnects.</div>`:''}
+    <dl class="kv" style="margin-top:14px">
+      <dt>Creator</dt><dd>${esc(p.creator)||'<span class="muted">unknown</span>'}</dd>
+      <dt>License</dt><dd>${esc(p.license)||'<span class="muted">not set</span>'}</dd>
+      <dt>Source</dt><dd>${p.source?`<a href="${esc(p.source)}" target="_blank" rel="noopener">${esc(p.source.replace(/^https?:\/\/(www\.)?/,''))}</a>`:'<span class="muted">none</span>'}</dd>
+      <dt>Material</dt><dd>${esc(p.material)||'<span class="muted">any</span>'}${p.material?` · ${p.supports?'supports':'no supports'}`:''}</dd>
+      <dt>Added</dt><dd>${new Date(p.added).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}</dd>
+      <dt>Sidecar</dt><dd>${p.sidecar?`<span class="badge ok">${ic('check')} project.yaml in sync</span>`:'<span class="badge off">none yet</span>'}</dd>
+    </dl>
+    <h3>Tags</h3><div style="display:flex;gap:6px;flex-wrap:wrap">${p.tags.map(t=>`<button class="tag" data-rmtag="${esc(t)}" title="Remove tag">${esc(t)} ${ic('x','i')}</button>`).join('')}<button class="tag add" data-addtag>${ic('plus')} tag</button></div>
+    <h3>Files · ${p.files.length} · ${p.size}</h3>
+    <div class="files">${p.files.slice(0,6).map(x=>`<div><span class="ext">${x.kind}</span><span class="nm">${esc(x.name)}</span><span class="sz">${x.kind==='zip'?'attachment':x.size}</span></div>`).join('')}${p.files.length>6?`<button class="btn ghost sm" data-act="open">Show all ${p.files.length} files</button>`:''}</div>
+    ${p.description?`<h3>Description</h3><p style="margin:0;color:var(--fg-2);font-size:13px">${esc(p.description)}</p>`:''}
+  </aside>`;
+}
+
+/* ================= pages ================= */
+function pageLibrary() {
+  const list = visibleProjects();
+  const body = $('#body'); body.className = 'body';
+  const toolbar = `<div class="toolbar">
+    <h1 class="page" style="font-size:18px;margin-right:6px">${esc(filterTitle())}</h1><span class="muted" style="font-weight:600">${list.length}</span>
+    ${state.tags.map(t=>`<span class="chip">Tag: ${esc(t)}<button data-untag="${esc(t)}" aria-label="Remove filter">${ic('x')}</button></span>`).join('')}
+    ${state.q?`<span class="chip">“${esc(state.q)}”<button data-clearq aria-label="Clear search">${ic('x')}</button></span>`:''}
+    <button class="btn ghost" data-act="filter">${ic('plus')}Filter</button>
+    <label class="select">Sort <select id="sort"><option value="added" ${state.sort==='added'?'selected':''}>Date added</option><option value="title" ${state.sort==='title'?'selected':''}>Title</option><option value="creator" ${state.sort==='creator'?'selected':''}>Creator</option><option value="size" ${state.sort==='size'?'selected':''}>Size</option></select></label>
+    <div class="seg" role="group" aria-label="View"><button class="${state.view==='grid'?'on':''}" data-view="grid">${ic('grid')}Grid</button><button class="${state.view==='list'?'on':''}" data-view="list">${ic('list')}List</button></div>
+    <label class="zoom" title="Thumbnail size">${ic('image')}<input type="range" id="zoom" min="150" max="340" step="10" value="${state.zoom}" aria-label="Thumbnail size"></label>
+    <a class="btn primary" href="#import">${ic('download')}Import…</a>
+  </div>`;
+  let content;
+  if (!list.length) content = `<div class="empty"><div class="ico">${ic('search')}</div><b>Nothing here yet</b><p>${state.q||state.tags.length?'No project matches the current search and filters.':'Add a library folder in Settings or import archives to get started.'}</p>${state.q||state.tags.length?'<button class="btn" data-act="clearfilters">Clear filters</button>':'<a class="btn primary" href="#import">Import archives</a>'}</div>`;
+  else if (state.view==='grid') content = `<div class="grid" id="grid" style="--tile:${state.zoom}px">${list.map(cardHTML).join('')}</div>`;
+  else content = `<div class="listwrap"><table class="t"><thead><tr><th style="width:56px"></th><th><button data-sort="title">Title ${state.sort==='title'?'↓':''}</button></th><th><button data-sort="creator">Creator ${state.sort==='creator'?'↓':''}</button></th><th>Tags</th><th class="num">Files</th><th class="num"><button data-sort="size">Size ${state.sort==='size'?'↓':''}</button></th><th class="num"><button data-sort="added">Added ${state.sort==='added'?'↓':''}</button></th><th></th></tr></thead><tbody>
+    ${list.map(p=>`<tr class="card ${state.selected.has(p.id)?'selected':''}" data-id="${p.id}" tabindex="0" style="display:table-row;transform:none;box-shadow:none;border:0"><td><span class="mini">${th(p.thumb,'')}</span></td><td><b>${esc(p.title)}</b>${p.offline?` <span class="badge off">Offline</span>`:''}<br><span class="muted mono" style="font-size:11px">${esc(p.folder)}</span></td><td>${esc(p.creator)||'<span class="muted">—</span>'}</td><td><div style="display:flex;gap:4px;flex-wrap:wrap">${p.tags.map(t=>`<button class="tag" data-tag="${esc(t)}">${esc(t)}</button>`).join('')}</div></td><td class="num">${p.files.length}</td><td class="num">${p.size}</td><td class="num">${fmtDate(p.added)}</td><td><button class="ibtn sm" data-menu="${p.id}" aria-label="More">${ic('more')}</button></td></tr>`).join('')}
+    </tbody></table></div>`;
+  body.innerHTML = sidebarHTML() + `<main class="main">${toolbar}${content}</main>` + inspectorHTML(list);
+  $('#selCount').textContent = `${state.selected.size} selected`;
+
+  // wiring
+  $$('[data-filter]', body).forEach(b => b.onclick = () => { const [k,id] = b.dataset.filter.split(':'); state.filter = id ? {kind:k,id} : {kind:k}; state.selected.clear(); render(); });
+  $$('[data-folder]', body).forEach(b => b.onclick = () => { const [root,path] = b.dataset.folder.split('|'); state.filter = {kind:'folder',root,path}; state.selected.clear(); render(); });
+  $$('[data-tag]', body).forEach(b => b.onclick = e => { e.stopPropagation(); const t = b.dataset.tag; if (!state.tags.includes(t)) state.tags.push(t); render(); });
+  $$('[data-untag]', body).forEach(b => b.onclick = () => { state.tags = state.tags.filter(t=>t!==b.dataset.untag); render(); });
+  $('[data-clearq]', body) && ($('[data-clearq]', body).onclick = () => { state.q=''; $('#q').value=''; render(); });
+  $('[data-act="clearfilters"]', body) && ($('[data-act="clearfilters"]', body).onclick = () => { state.q=''; $('#q').value=''; state.tags=[]; render(); });
+  $('#sort').onchange = e => { state.sort = e.target.value; render(); };
+  $$('[data-sort]', body).forEach(b => b.onclick = () => { state.sort = b.dataset.sort; render(); });
+  $$('[data-view]', body).forEach(b => b.onclick = () => { state.view = b.dataset.view; persist(); render(); });
+  $('#zoom').oninput = e => { state.zoom = +e.target.value; persist(); const g = $('#grid'); if (g) g.style.setProperty('--tile', state.zoom+'px'); };
+  $('[data-act="filter"]', body).onclick = e => menu(e.clientX, e.clientY, [
+    {icon:'tag', label:'Tag…', run:()=>menuFromCenter([...new Set(PROJECTS.flatMap(p=>p.tags))].sort().map(t=>({icon:'tag',label:t,run:()=>{state.tags.push(t);render();}})))},
+    {icon:'file', label:'File type: 3MF', run:()=>{ state.q='.3mf'; $('#q').value='.3mf'; render(); }},
+    {icon:'layers', label:'Material: PLA', run:()=>{ state.q='PLA'; $('#q').value='PLA'; render(); }},
+    {icon:'clock', label:'Added this month', run:()=>toast('Date filters come with the real filter builder','info')},
+  ]);
+  $$('.card', body).forEach(c => {
+    const id = c.dataset.id;
+    c.addEventListener('click', e => { if (e.target.closest('[data-tag],[data-addtag],[data-menu]')) return; if (e.ctrlKey||e.metaKey) { state.selected.has(id) ? state.selected.delete(id) : state.selected.add(id); } else if (e.shiftKey && state.selected.size) { const ids = list.map(p=>p.id); const a = ids.indexOf([...state.selected].pop()), b = ids.indexOf(id); ids.slice(Math.min(a,b), Math.max(a,b)+1).forEach(x=>state.selected.add(x)); } else { state.selected.clear(); state.selected.add(id); } state.current = id; render(); });
+    c.addEventListener('dblclick', () => openProject(id));
+    c.addEventListener('contextmenu', e => projectMenu(e, id));
+    c.addEventListener('keydown', e => { if (e.key==='Enter') openProject(id); if (e.key===' ') { e.preventDefault(); c.click(); } });
+  });
+  $$('[data-menu]', body).forEach(b => b.onclick = e => { e.stopPropagation(); const r = b.getBoundingClientRect(); projectMenu({preventDefault(){}, clientX:r.left, clientY:r.bottom}, b.dataset.menu); });
+  const cur = [...state.selected][0];
+  const insp = $('.inspector', body);
+  if (insp) {
+    $$('[data-act]', insp).forEach(b => b.onclick = e => { const a = b.dataset.act; if (a==='open') openProject(cur); if (a==='fav') toggleFav(cur); if (a==='reveal') toast(`Opened folder in Explorer`, 'open'); if (a==='menu') projectMenu({preventDefault(){}, clientX:e.clientX, clientY:e.clientY}, cur); if (a==='del-sel') deleteProjects([...state.selected]); if (a==='coll-sel') addToCollection([...state.selected]); if (a==='addtag-sel') dialog({title:`Add a tag to ${state.selected.size} projects`, input:'', confirm:'Add', onConfirm:v=>{ [...state.selected].forEach(id=>addTag(id,v)); }}); });
+    $$('[data-rmtag]', insp).forEach(b => b.onclick = () => removeTag(cur, b.dataset.rmtag));
+  }
+  $$('[data-addtag]', body).forEach(b => b.onclick = e => { e.stopPropagation(); const id = b.closest('.card')?.dataset.id || cur; dialog({title:'Add tag', body: byId(id).sidecar ? 'Saved to project.yaml in the background.' : 'This project has no project.yaml yet. It will be created now, next to the model files.', input:'', confirm:'Add tag', onConfirm:v=>addTag(id,v)}); });
+}
+
+function pageProject() {
+  const p = byId(state.current) || PROJECTS[0]; if (!p) { location.hash='library'; return; }
+  const r = rootOf(p); const body = $('#body'); body.className='body no-side';
+  const models = p.files.filter(x=>['stl','obj','3mf'].includes(x.kind)); const images = p.files.filter(x=>['png','jpg','jpeg','webp'].includes(x.kind)); const docs = p.files.filter(x=>!['stl','obj','3mf','png','jpg','jpeg','webp','zip'].includes(x.kind)); const zips = p.files.filter(x=>x.kind==='zip');
+  const tabs = [['overview','Overview'],['files',`Files <span class="muted">${p.files.length}</span>`],['images',`Images <span class="muted">${images.length}</span>`]];
+  const lic = ['CC-BY-4.0','CC-BY-SA-4.0','CC-BY-NC-4.0','CC-BY-NC-SA-4.0','CC0-1.0','MIT','GPL-3.0','Personal use'];
+  let content = '';
+  if (state.tab==='overview') content = `<div class="two">
+    <div class="stack">
+      <div class="viewer" id="viewer"><div class="grid-floor"></div><div class="stage"><div class="obj" id="obj"><div class="f top"></div><div class="f bottom"></div><div class="f side n"></div><div class="f side s"></div><div class="f side w"></div><div class="f side e"></div></div></div>
+        <div class="vt"><button class="btn" data-v="iso">${ic('cube')}Iso</button><button class="btn" data-v="front">Front</button><button class="btn" data-v="top">Top</button><button class="btn" data-v="reset">${ic('rotate')}Reset</button><button class="btn" data-v="thumb">${ic('camera')}Set as thumbnail</button></div>
+        <div class="legend"><span class="badge">${p.offline?'Offline, cached preview':'WebGL · 60 fps'}</span>${p.generating?'<span class="badge accent">Rendering…</span>':''}</div>
+        <div class="vb"><label class="select" style="height:32px;background:var(--panel)"><select id="modelSel">${models.map(m=>`<option>${esc(m.name)}</option>`).join('')||'<option>no model files</option>'}</select></label><span>${p.tris||'—'} triangles</span><span class="mono">${esc(p.dims||'')}</span><span style="margin-left:auto">${ic('drag')} drag to orbit · wheel to zoom</span></div>
+      </div>
+      <div class="card-panel"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><h2 class="sec-title">Printing</h2><span class="muted" style="font-size:12px">hints for the slicer, stored in project.yaml</span></div>
+        <div class="cols-2">
+          <div class="field"><label>Recommended material</label><label class="select" style="box-shadow:none"><select id="mat"><option ${!p.material?'selected':''}>any</option>${['PLA','PLA Silk','PETG','ABS','ASA','TPU','Resin'].map(m=>`<option ${p.material===m?'selected':''}>${m}</option>`).join('')}</select></label></div>
+          <div class="field"><label>Supports</label><div style="display:flex;align-items:center;gap:10px;height:38px"><button class="switch" role="switch" aria-checked="${p.supports}" id="sup"></button><span class="muted" id="supL">${p.supports?'required':'not needed'}</span></div></div>
+          <div class="field" style="grid-column:1/-1"><label>Notes</label><input class="input" id="notes" placeholder="0.2 mm layers, 15 % infill, brim on…" value="${esc(p.notes||'')}"></div>
+        </div></div>
+    </div>
+    <div class="stack">
+      <div class="card-panel"><div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><h2 class="sec-title">Metadata</h2>${p.sidecar?`<span class="badge ok">${ic('check')} project.yaml in sync</span>`:`<span class="badge off">no project.yaml yet</span>`}</div>
+        <div class="stack">
+          <div class="field"><label>Title</label><input class="input" id="fTitle" value="${esc(p.title)}"></div>
+          <div class="field"><label>Creator</label><input class="input" id="fCreator" value="${esc(p.creator)}" placeholder="Designer name"></div>
+          <div class="field"><label>License</label><label class="select" style="box-shadow:none;width:100%"><select id="fLic" style="width:100%"><option ${!p.license?'selected':''} value="">not set</option>${lic.map(l=>`<option ${p.license===l?'selected':''}>${l}</option>`).join('')}</select></label></div>
+          <div class="field"><label>Source URL</label><div style="display:flex;gap:6px"><input class="input" id="fSrc" value="${esc(p.source)}" placeholder="https://…">${p.source?`<a class="btn" href="${esc(p.source)}" target="_blank" rel="noopener" title="Open source page">${ic('external')}</a>`:''}</div></div>
+          <div class="field"><label>Tags</label><div style="display:flex;gap:6px;flex-wrap:wrap;padding:6px 0">${p.tags.map(t=>`<button class="tag" data-rmtag="${esc(t)}" title="Remove">${esc(t)} ${ic('x')}</button>`).join('')}<button class="tag add" data-addtag>${ic('plus')} tag</button></div></div>
+          <div class="field"><label>Description</label><textarea class="input" id="fDesc" rows="4" style="font-family:var(--font);font-size:13px">${esc(p.description)}</textarea></div>
+          <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap"><button class="btn primary" id="save">${ic('check')}Save to project.yaml</button>${p.source?`<button class="btn" id="enrich">${ic('wand')}Fetch details from ${/printables/.test(p.source)?'Printables':/thingiverse/.test(p.source)?'Thingiverse':/makerworld/.test(p.source)?'MakerWorld':/thangs/.test(p.source)?'Thangs':'source'}</button>`:''}</div>
+          <p class="muted" style="margin:0;font-size:12px">Saving is optimistic: the UI updates at once, the YAML is written atomically in the background. If the file changed on disk meanwhile, you will be asked to reload instead of overwriting.</p>
+        </div></div>
+      ${zips.length?`<div class="card-panel"><h2 class="sec-title" style="margin-bottom:8px">Attachments</h2><div class="files">${zips.map(z=>`<div>${ic('zip')}<span class="nm">${esc(z.name)}</span><span class="sz">${z.size}</span></div>`).join('')}</div><p class="muted" style="margin:8px 0 0;font-size:12px">Archives inside a project are kept as opaque backups. They are never extracted or browsed.</p></div>`:''}
+    </div></div>`;
+  if (state.tab==='files') content = `<div class="card-panel" style="padding:0;overflow:hidden"><table class="t"><thead><tr><th>Name</th><th>Type</th><th class="num">Size</th><th>Role</th><th></th></tr></thead><tbody>
+    ${p.files.map(x=>`<tr><td><b>${esc(x.name)}</b></td><td><span class="ext">${x.kind}</span></td><td class="num">${x.size}</td><td>${x.kind==='zip'?'<span class="badge off">attachment</span>':['stl','obj','3mf'].includes(x.kind)?'<span class="badge accent">model</span>':['png','jpg','jpeg','webp'].includes(x.kind)?'<span class="badge">image</span>':'<span class="badge">document</span>'}</td><td style="text-align:right;white-space:nowrap">${['stl','obj','3mf'].includes(x.kind)?`<button class="btn sm" data-slice="${esc(x.name)}">${ic('external')}Open in slicer</button> `:''}<button class="ibtn sm" data-reveal title="Show in Explorer">${ic('open')}</button></td></tr>`).join('')}
+    </tbody></table></div>
+    <p class="muted" style="font-size:12px">Drag any row onto a slicer window to open it there. ${docs.length?`${docs.length} document${docs.length>1?'s':''} open in the default Windows app.`:''}</p>`;
+  if (state.tab==='images') content = images.length ? `<div class="grid" style="--tile:220px;padding:0;overflow:visible">${images.map((x,i)=>`<article class="card"><div class="thumb" style="background:linear-gradient(${135+i*40}deg,var(--accent-soft),var(--border))"><div class="tr"><span class="badge">${x.kind}</span></div></div><div class="meta"><h4>${esc(x.name)}</h4><div class="row"><span>${x.size}</span><button class="btn ghost sm" data-usethumb>${ic('camera')}Use as thumbnail</button></div></div></article>`).join('')}</div>` : `<div class="empty"><div class="ico">${ic('image')}</div><b>No images yet</b><p>Drop a photo of the printed model here or pick “Set as thumbnail” in the viewer.</p></div>`;
+
+  body.innerHTML = `<main class="main scroll"><div class="page-wrap">
+    <div class="crumbs"><a href="#library">${ic('back')} Library</a><span>/</span><span>${esc(r.path)}</span>${p.folder.split('/').map(s=>`<span>/</span><span>${esc(s)}</span>`).join('')}</div>
+    <div class="page-head"><div class="grow"><h1 class="page">${esc(p.title)}</h1><div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap;color:var(--muted);font-weight:600;font-size:13px">${p.creator?`<span class="avatar">${initials(p.creator)}</span>${esc(p.creator)}`:'Unknown creator'}<span>·</span><span>${p.files.length} files · ${p.size}</span>${p.offline?`<span class="badge off">${ic('cloudoff')} Offline</span>`:''}</div></div>
+      <div class="actions"><button class="btn" data-act="fav">${ic(p.fav?'starf':'star')}${p.fav?'Favorite':'Add to favorites'}</button><button class="btn" data-act="reveal" ${p.offline?'disabled':''}>${ic('open')}Explorer</button><button class="btn primary" data-act="slice" ${p.offline?'disabled':''}>${ic('external')}Open in slicer</button><button class="ibtn" data-act="menu" aria-label="More">${ic('more')}</button></div></div>
+    <div class="tabs">${tabs.map(([k,l])=>`<button class="tab ${state.tab===k?'active':''}" data-tab="${k}">${l}</button>`).join('')}</div>
+    ${content}
+  </div></main>`;
+  $('#selCount').textContent = '1 selected';
+  $$('[data-tab]', body).forEach(b => b.onclick = () => { state.tab = b.dataset.tab; render(); });
+  $$('[data-act]', body).forEach(b => b.onclick = e => { const a=b.dataset.act; if (a==='fav') toggleFav(p.id); if (a==='reveal') toast('Opened folder in Explorer','open'); if (a==='slice') toast(`Opened ${esc(models[0]?.name||p.files[0].name)} in Bambu Studio`,'external'); if (a==='menu') projectMenu({preventDefault(){}, clientX:e.clientX, clientY:e.clientY}, p.id); });
+  $$('[data-slice]', body).forEach(b => b.onclick = () => toast(`Opened ${esc(b.dataset.slice)} in Bambu Studio`,'external'));
+  $$('[data-reveal]', body).forEach(b => b.onclick = () => toast('Shown in Explorer','open'));
+  $$('[data-usethumb]', body).forEach(b => b.onclick = () => toast('Thumbnail replaced with photo, saved in project.yaml','camera'));
+  $$('[data-rmtag]', body).forEach(b => b.onclick = () => removeTag(p.id, b.dataset.rmtag));
+  $$('[data-addtag]', body).forEach(b => b.onclick = () => dialog({title:'Add tag', input:'', confirm:'Add tag', onConfirm:v=>addTag(p.id,v)}));
+  const save = $('#save'); if (save) save.onclick = () => { const created = !p.sidecar; p.title=$('#fTitle').value||p.title; p.creator=$('#fCreator').value; p.license=$('#fLic').value; p.source=$('#fSrc').value; p.description=$('#fDesc').value; p.material=$('#mat').value==='any'?'':$('#mat').value; p.notes=$('#notes').value; p.sidecar=true; toast(created?'project.yaml created':'project.yaml saved','check'); render(); };
+  const sup = $('#sup'); if (sup) sup.onclick = () => { p.supports = !p.supports; sup.setAttribute('aria-checked', p.supports); $('#supL').textContent = p.supports?'required':'not needed'; };
+  const en = $('#enrich'); if (en) en.onclick = () => { en.disabled = true; en.innerHTML = ic('refresh')+'Fetching…'; setTimeout(()=>{ if(!p.description) p.description = 'Fetched summary: ' + p.title + ' by ' + (p.creator||'unknown') + '. Remixes welcome under the listed license.'; if (!p.tags.includes('fetched')) p.tags.push('fetched'); toast('Merged title, tags and 2 images from the source page. Review, then save.','wand'); render(); }, 1200); };
+  // viewer orbit
+  const v = $('#viewer'), obj = $('#obj'); if (v && obj) {
+    let rx=-28, ry=32, z=1, drag=null;
+    const apply = () => obj.style.transform = `scale(${z}) rotateX(${rx}deg) rotateY(${ry}deg)`;
+    v.addEventListener('pointerdown', e => { if (e.target.closest('button,select,label')) return; drag = {x:e.clientX, y:e.clientY, rx, ry}; v.setPointerCapture(e.pointerId); });
+    v.addEventListener('pointermove', e => { if (!drag) return; ry = drag.ry + (e.clientX-drag.x)*0.5; rx = Math.max(-89, Math.min(89, drag.rx - (e.clientY-drag.y)*0.5)); apply(); });
+    v.addEventListener('pointerup', () => drag=null); v.addEventListener('pointercancel', () => drag=null);
+    v.addEventListener('wheel', e => { e.preventDefault(); z = Math.max(.4, Math.min(2.5, z * (e.deltaY>0?0.92:1.08))); apply(); }, {passive:false});
+    $$('[data-v]', v).forEach(b => b.onclick = () => { const k=b.dataset.v; if (k==='iso'||k==='reset') {rx=-28;ry=32;z=1;} if (k==='front') {rx=0;ry=0;} if (k==='top') {rx=-89;ry=0;} if (k==='thumb') { toast('Current view saved as thumbnail (.cache/preview.png)','camera'); return; } apply(); });
+    apply();
+  }
+}
+
+function pageImport() {
+  const body = $('#body'); body.className='body no-side';
+  const inbox = PROJECTS.filter(p=>p.inbox);
+  const items = state.importDone ? [] : [
+    { name:'gridfinity-rugged-box_v2.zip', size:'96 MB', title:'Gridfinity Rugged Box v2', creator:'Pred', source:'Printables', url:'https://www.printables.com/model/543210', target:'Projects/Gridfinity/Rugged Box v2', files:14, skipped:3, lic:'CC-BY-NC-SA-4.0', tree:['rugged-box-v2/','  box_body.stl','  box_lid.stl','  latch_x2.stl','  hinge_x2.stl','  insert_3x3.stl','  README.txt  (source URL found)','  images/  (4 jpg)','  <skip>__MACOSX/  (ignored)</skip>'] },
+    { name:'thing-4567890.zip', size:'18 MB', title:'Cable Chain v3', creator:'', source:'Thingiverse', url:'https://www.thingiverse.com/thing:4567890', target:'Projects/Mechanical/Cable Chain v3', files:6, skipped:0, lic:'', warn:'No license file found', tree:['files/','  chain_link.stl','  chain_end_a.stl','  chain_end_b.stl','  mount.stl','images/','  render.png','LICENSE.txt  (missing)'] },
+    { name:'benchy-remix.3mf', size:'4 MB', title:'benchy-remix', creator:'', source:'', url:'', target:'_Inbox', files:1, skipped:0, lic:'', loose:true, tree:['benchy-remix.3mf  (single file, no project folder)'] },
+  ];
+  body.innerHTML = `<main class="main scroll"><div class="page-wrap">
+    <div class="page-head"><div class="grow"><div class="eyebrow">Staging area</div><h1 class="page">Import</h1><p class="muted" style="margin:0">Review what the app proposes before anything is written to your library. Archives are extracted into new project folders; single files go to the Inbox.</p></div></div>
+    <div class="drop" id="drop">${ic('download','i')}<b>Drop archives or folders here</b><span>ZIP, 7z, 3MF, STL, OBJ · or <button class="btn sm" id="pick" style="display:inline-flex;vertical-align:middle">Choose files…</button></span></div>
+    ${items.length ? `<div class="stack" id="stage">${items.map((it,i)=>`<div class="stage-item" data-i="${i}">
+      <div class="ico">${ic(it.loose?'file':'zip')}</div>
+      <div style="min-width:0">
+        <h4>${esc(it.title)}</h4>
+        <div class="src"><span class="mono">${esc(it.name)} · ${it.size}</span>${it.source?`<span class="badge accent">${ic('wand')} ${it.source} detected</span>`:''}${it.warn?`<span class="badge warn">${ic('warn')} ${it.warn}</span>`:''}${it.loose?'<span class="badge">loose file</span>':''}</div>
+        <div class="form">
+          <div class="field"><label>Import as</label><div class="seg" style="box-shadow:none"><button class="${!it.loose?'on':''}" data-mode="project">New project</button><button class="${it.loose?'on':''}" data-mode="inbox">Inbox</button></div></div>
+          <div class="field"><label>Library root</label><label class="select" style="box-shadow:none"><select><option>D:\\3D Models</option><option disabled>\\\\nas\\models (offline)</option></select></label></div>
+          <div class="field" style="grid-column:span 2"><label>Target folder</label><input class="input" value="${esc(it.target)}"></div>
+          <div class="field"><label>Creator</label><input class="input" value="${esc(it.creator)}" placeholder="${it.source?'fetch from '+it.source:'unknown'}"></div>
+          <div class="field"><label>License</label><input class="input" value="${esc(it.lic)}" placeholder="not found"></div>
+          <div class="field" style="grid-column:span 2"><label>Original archive</label><label class="select" style="box-shadow:none"><select><option>Keep as attachment in the project</option><option>Move to D:\\3D Models\\_Originals</option><option>Move to Recycle Bin</option></select></label></div>
+        </div>
+        <details><summary>${it.files} files${it.skipped?`, ${it.skipped} ignored by pattern`:''}</summary><pre class="filetree">${it.tree.map(l=>l.replace(/<skip>(.*)<\/skip>/,'<span class="skip">$1</span>').replace(/^(\s*\S+\/)$/,'<span class="d">$1</span>')).join('\n')}</pre></details>
+      </div>
+      <div style="display:grid;gap:6px;justify-items:end">${it.source?`<button class="btn sm" data-fetch="${i}">${ic('wand')}Fetch details</button>`:''}<button class="ibtn sm" data-rm="${i}" title="Remove from staging">${ic('x')}</button></div>
+    </div>`).join('')}</div>
+    <div class="card-panel" style="display:flex;gap:14px;align-items:center;flex-wrap:wrap;position:sticky;bottom:0"><div><b>${items.length} items</b><span class="muted"> · ${items.filter(i=>!i.loose).length} new projects · ${items.filter(i=>i.loose).length} to Inbox · 118 MB</span></div><div style="margin-left:auto;display:flex;gap:8px"><button class="btn ghost" id="clearStage">Clear</button><button class="btn primary" id="doImport">${ic('download')}Import ${items.length} items</button></div></div>`
+    : `<div class="empty"><div class="ico">${ic('check')}</div><b>Staging area is empty</b><p>Drop something above. The last import added 2 projects and 1 inbox item.</p><a class="btn" href="#library" onclick="state.filter={kind:'recent'}">Show recent imports</a></div>`}
+    <div><div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><h2 class="sec-title">Inbox</h2><span class="muted" style="font-size:12px">${inbox.length} loose items waiting to become projects</span></div>
+      <div class="card-panel" style="padding:0;overflow:hidden"><table class="t"><thead><tr><th style="width:56px"></th><th>File</th><th class="num">Size</th><th class="num">Added</th><th></th></tr></thead><tbody>${inbox.map(p=>`<tr><td><span class="mini">${th(p.thumb,'')}</span></td><td><b>${esc(p.title)}</b></td><td class="num">${p.size}</td><td class="num">${fmtDate(p.added)}</td><td style="text-align:right"><button class="btn sm" data-promote="${p.id}">${ic('sparkle')}Promote to project</button></td></tr>`).join('')||'<tr><td colspan="5" class="muted" style="text-align:center;padding:20px">Inbox is empty</td></tr>'}</tbody></table></div></div>
+  </div></main>`;
+  $('#selCount').textContent = '';
+  const drop = $('#drop'); ['dragenter','dragover'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.add('over'); })); ['dragleave','drop'].forEach(ev => drop.addEventListener(ev, e => { e.preventDefault(); drop.classList.remove('over'); if (ev==='drop') toast('In the real app the dropped files would appear in the staging list','download'); }));
+  $('#pick').onclick = () => toast('Native file picker opens here','folder');
+  $$('[data-mode]', body).forEach(b => b.onclick = () => { const seg = b.parentNode; $$('button', seg).forEach(x=>x.classList.toggle('on', x===b)); const row = b.closest('.stage-item'); const inp = $('input.input', row); if (b.dataset.mode==='inbox') inp.value = '_Inbox'; });
+  $$('[data-fetch]', body).forEach(b => b.onclick = () => { b.disabled = true; b.innerHTML = ic('refresh')+'Fetching…'; setTimeout(()=>{ const row = b.closest('.stage-item'); const inputs = $$('input.input', row); if (!inputs[1].value) inputs[1].value = 'Pred'; if (!inputs[2].value) inputs[2].value = 'CC-BY-NC-SA-4.0'; b.innerHTML = ic('check')+'Fetched'; toast('Title, creator, license and 4 images merged from the source page','wand'); }, 1100); });
+  $$('[data-rm]', body).forEach(b => b.onclick = () => { b.closest('.stage-item').remove(); toast('Removed from staging. Nothing was written.','x'); });
+  $('#clearStage') && ($('#clearStage').onclick = () => { state.importDone = true; render(); });
+  $('#doImport') && ($('#doImport').onclick = () => { const btn = $('#doImport'); btn.disabled = true; let n = 0; const steps = ['Extracting gridfinity-rugged-box_v2.zip…','Writing project.yaml…','Extracting thing-4567890.zip…','Moving benchy-remix.3mf to Inbox…','Indexing 3 items…']; const tick = () => { if (n<steps.length) { btn.innerHTML = `<span class="dot busy" style="background:var(--accent-fg)"></span>${steps[n++]}`; setTimeout(tick, 650); } else { state.importDone = true; const nid = 'p'+Date.now(); PROJECTS.unshift({ id:nid, title:'Cable Chain v3', creator:'', tags:['mechanical'], folder:'Projects/Mechanical/Cable Chain v3', root:'r1', thumb:'clip', size:'18 MB', added:'2026-10-17', license:'', source:'https://www.thingiverse.com/thing:4567890', material:'', supports:false, sidecar:true, recent:true, generating:true, description:'', files:[f('chain_link.stl','4 MB'),f('chain_end_a.stl','2 MB'),f('chain_end_b.stl','2 MB'),f('mount.stl','3 MB'),f('render.png','1 MB'),f('thing-4567890.zip','18 MB','zip')], tris:'80,000', dims:'30 × 20 × 15 mm' }); PROJECTS.push({ id:nid+'b', title:'benchy-remix.3mf', creator:'', tags:[], folder:'_Inbox', root:'r1', thumb:'benchy', size:'4 MB', added:'2026-10-17', license:'', source:'', material:'', supports:false, sidecar:false, inbox:true, description:'', files:[f('benchy-remix.3mf','4 MB')], tris:'', dims:'' }); state.filter = {kind:'recent'}; toast('Imported 2 projects and 1 inbox item. Thumbnails are rendering.','check'); location.hash = 'library'; setTimeout(()=>{ const q = byId(nid); if (q) { q.generating=false; render(); } }, 4000); } }; tick(); });
+  $$('[data-promote]', body).forEach(b => b.onclick = () => { const p = byId(b.dataset.promote); dialog({title:'Promote to project', body:'A new folder is created in the library root, the file is moved into it and a project.yaml is written.', input:p.title.replace(/\.[^.]+$/,'').replace(/[_-]+/g,' '), confirm:'Create project', onConfirm:v=>{ if(!v) return; p.title=v; p.inbox=false; p.recent=true; p.sidecar=true; p.folder='Projects/'+v; toast(`Created project "${esc(v)}"`,'sparkle'); render(); }}); });
+}
+
+function pageCollections() {
+  const body = $('#body'); body.className='body no-side';
+  const s = SMART.find(x=>x.id===state.smart) || SMART[0]; const matches = s ? smartMatches(s) : [];
+  const fields = [['tag','Tag'],['creator','Creator'],['license','License'],['material','Material'],['filetype','File type'],['sidecar','Has project.yaml'],['supports','Needs supports'],['added','Date added']];
+  const ops = f => f==='added' ? ['after','before'] : ['sidecar','supports'].includes(f) ? ['is'] : ['is','is not','contains'];
+  body.innerHTML = `<main class="main scroll"><div class="page-wrap">
+    <div class="page-head"><div class="grow"><h1 class="page">Collections</h1><p class="muted" style="margin:0">Manual collections are lists you curate. Smart collections are saved searches that update themselves. Both live in collections.json, independent of the index.</p></div><div class="actions"><button class="btn" id="newColl">${ic('plus')}Collection</button><button class="btn primary" id="newSmart">${ic('sparkle')}Smart collection</button></div></div>
+    <div class="two" style="grid-template-columns:minmax(280px,1fr) minmax(0,1.6fr)">
+      <div class="stack">
+        <div class="eyebrow">Smart collections</div>
+        ${SMART.map(x=>`<div class="coll-card ${x.id===s?.id?'on':''}" data-smart="${x.id}" tabindex="0"><div class="stackthumb"><i></i><i></i><i>${ic('sparkle')}</i></div><div><h4>${esc(x.name)}</h4><p>${x.rules.map(r=>`${fields.find(f=>f[0]===r.field)?.[1]} ${r.op} ${esc(r.value)}`).join(x.match==='all'?' and ':' or ')}</p></div><span class="badge accent">${smartMatches(x).length}</span></div>`).join('')}
+        <div class="eyebrow" style="margin-top:8px">Collections</div>
+        ${COLLECTIONS.map(c=>`<div class="coll-card" data-coll="${c.id}" tabindex="0"><div class="stackthumb"><i></i><i></i><i>${th(byId(c.projects[0])?.thumb||'box','')}</i></div><div><h4>${esc(c.name)}</h4><p>${c.projects.slice(0,3).map(id=>esc(byId(id)?.title)).filter(Boolean).join(', ')}${c.projects.length>3?` +${c.projects.length-3}`:''}</p></div><span class="badge">${c.projects.length}</span></div>`).join('')}
+      </div>
+      ${s ? `<div class="card-panel stack" id="editor">
+        <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><div class="eyebrow">Smart collection</div><span class="badge accent" style="margin-left:auto">${matches.length} matches now</span></div>
+        <div class="field"><label>Name</label><input class="input" id="sName" value="${esc(s.name)}"></div>
+        <div class="field"><label>Match</label><div class="seg" style="justify-self:start;box-shadow:none"><button class="${s.match==='all'?'on':''}" data-match="all">all rules</button><button class="${s.match==='any'?'on':''}" data-match="any">any rule</button></div></div>
+        <div class="stack" id="rules">${s.rules.map((r,i)=>`<div class="rule" data-r="${i}">
+          <label class="select"><select data-f>${fields.map(([k,l])=>`<option value="${k}" ${r.field===k?'selected':''}>${l}</option>`).join('')}</select></label>
+          <label class="select"><select data-o>${ops(r.field).map(o=>`<option ${r.op===o?'selected':''}>${o}</option>`).join('')}</select></label>
+          ${['sidecar','supports'].includes(r.field)?`<label class="select"><select data-v><option ${r.value==='yes'?'selected':''}>yes</option><option ${r.value==='no'?'selected':''}>no</option></select></label>`:`<input class="input" data-v type="${r.field==='added'?'date':'text'}" value="${esc(r.value)}" placeholder="${r.field==='tag'?'e.g. gridfinity':r.field==='filetype'?'stl, obj, 3mf':'value'}">`}
+          <button class="ibtn sm" data-del="${i}" aria-label="Remove rule">${ic('x')}</button></div>`).join('')}</div>
+        <div><button class="btn ghost sm" id="addRule">${ic('plus')}Add rule</button></div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn primary" id="saveSmart">${ic('check')}Save</button><button class="btn" id="showSmart">${ic('grid')}Show in library</button><button class="btn ghost danger" id="delSmart">${ic('trash')}Delete</button></div>
+        <div class="eyebrow">Preview</div>
+        <div class="grid" style="--tile:150px;padding:0;overflow:visible;gap:12px">${matches.slice(0,8).map(p=>`<article class="card" data-id="${p.id}" tabindex="0"><div class="thumb">${th(p.thumb)}</div><div class="meta" style="padding:8px 10px 10px"><h4 style="font-size:13px">${esc(p.title)}</h4></div></article>`).join('')||'<p class="muted">No project matches these rules yet.</p>'}</div>
+      </div>` : '<div class="empty"><b>No smart collection selected</b></div>'}
+    </div></div></main>`;
+  $('#selCount').textContent = '';
+  $$('[data-smart]', body).forEach(c => c.onclick = () => { state.smart = c.dataset.smart; render(); });
+  $$('[data-coll]', body).forEach(c => c.onclick = () => { state.filter = {kind:'collection', id:c.dataset.coll}; location.hash='library'; });
+  $$('[data-id]', body).forEach(c => c.ondblclick = () => openProject(c.dataset.id));
+  if (!s) return;
+  const sync = () => { s.name = $('#sName').value || s.name; s.rules = $$('.rule', body).map(row => ({ field: $('[data-f]',row).value, op: $('[data-o]',row).value, value: $('[data-v]',row).value })); };
+  $$('[data-match]', body).forEach(b => b.onclick = () => { sync(); s.match = b.dataset.match; render(); });
+  $$('.rule select, .rule input', body).forEach(el => el.addEventListener('change', () => { sync(); const row = el.closest('.rule'); const i = +row.dataset.r; if (el.hasAttribute('data-f')) { s.rules[i].op = ops(s.rules[i].field)[0]; s.rules[i].value = ['sidecar','supports'].includes(s.rules[i].field)?'yes':''; } render(); }));
+  $$('[data-del]', body).forEach(b => b.onclick = () => { sync(); s.rules.splice(+b.dataset.del,1); render(); });
+  $('#addRule').onclick = () => { sync(); s.rules.push({field:'tag',op:'is',value:''}); render(); };
+  $('#saveSmart').onclick = () => { sync(); toast('collections.json saved','check'); render(); };
+  $('#showSmart').onclick = () => { sync(); state.filter={kind:'smart',id:s.id}; location.hash='library'; };
+  $('#delSmart').onclick = () => dialog({title:`Delete "${esc(s.name)}"?`, body:'Only the saved search is removed. Projects are not touched.', confirm:'Delete', danger:true, onConfirm:()=>{ SMART = SMART.filter(x=>x!==s); state.smart = SMART[0]?.id; toast('Smart collection deleted','trash'); render(); }});
+  $('#newSmart').onclick = () => { const n = {id:'s'+Date.now(), name:'New smart collection', match:'all', rules:[{field:'tag',op:'is',value:''}]}; SMART.push(n); state.smart = n.id; render(); setTimeout(()=>{ const i=$('#sName'); i && i.select(); }); };
+  $('#newColl').onclick = () => dialog({title:'New collection', input:'', confirm:'Create', onConfirm:v=>{ if(!v) return; COLLECTIONS.push({id:'c'+Date.now(), name:v, projects:[]}); toast(`Created "${esc(v)}". Add projects from the library via right-click.`,'collection'); render(); }});
+}
+
+function pageActivity() {
+  const body = $('#body'); body.className='body no-side';
+  const rows = LOG.filter(l => state.logLevel==='all' || l[1]===state.logLevel);
+  body.innerHTML = `<main class="main scroll"><div class="page-wrap">
+    <div class="page-head"><div class="grow"><h1 class="page">Activity</h1><p class="muted" style="margin:0">What the engine is doing right now, per library root, and the log behind it. Everything stays on this machine.</p></div><div class="actions"><button class="btn" id="rescanAll">${ic('scan')}Rescan all</button><button class="btn" id="exportLog">${ic('download')}Export log…</button></div></div>
+    <div class="cols-2">
+      ${ROOTS.map(r=>`<div class="card-panel"><div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><span class="dot ${r.status==='offline'?'off':''}"></span><h2 class="sec-title" style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(r.path)}</h2>${r.status==='offline'?`<span class="badge warn">${ic('cloudoff')} offline</span>`:`<span class="badge ok">${ic('check')} in sync</span>`}</div>
+        <dl class="kv"><dt>Mode</dt><dd>${{watch:'Watching file events',poll:'Polling every 15 min',manual:'Manual rescan'}[r.mode]}</dd><dt>Last sync</dt><dd>${r.lastSync}</dd><dt>Content</dt><dd>${r.projects.toLocaleString()} projects · ${r.size}</dd><dt>Next</dt><dd>${r.status==='offline'?'retry in 4 min':'idle, waiting for events'}</dd></dl>
+        <div class="actions"><button class="btn sm" data-rescan="${r.id}">${ic('refresh')}Rescan</button>${r.status==='offline'?`<button class="btn sm" data-retry="${r.id}">${ic('play')}Retry now</button>`:''}</div></div>`).join('')}
+    </div>
+    <div class="card-panel"><h2 class="sec-title" style="margin-bottom:6px">Background jobs</h2>
+      <div class="job"><div class="ico">${ic('camera')}</div><div><b>Rendering thumbnails</b><span>D:\\3D Models · 117 of 120 done · avg 2.1 s each · 3 remaining</span></div><div class="progress"><i style="width:97%"></i></div><button class="btn sm" id="pauseThumbs">${ic('pause')}Pause</button></div>
+      <div class="job"><div class="ico">${ic('hash')}</div><div><b>Hashing files for duplicate detection</b><span>paused while you work · 2,110 of 31,402 files pending · resumes after 5 min idle</span></div><div class="progress"><i style="width:93%"></i></div><button class="btn sm">${ic('play')}Run now</button></div>
+      <div class="job"><div class="ico">${ic('scan')}</div><div><b>Full scan</b><span>completed 13:30 · 4,219 projects · 31,402 files · 1,204 ignored by pattern · 48 s</span></div><div class="progress"><i style="width:100%"></i></div><span class="badge ok">${ic('check')} done</span></div>
+    </div>
+    <div class="card-panel"><div style="display:flex;align-items:center;gap:10px;margin-bottom:10px;flex-wrap:wrap"><h2 class="sec-title">Log</h2><div class="seg" style="margin-left:auto">${['all','INFO','WARN','ERROR'].map(l=>`<button class="${state.logLevel===l?'on':''}" data-lvl="${l}">${l==='all'?'All':l.charAt(0)+l.slice(1).toLowerCase()}</button>`).join('')}</div></div>
+      <div class="log">${rows.map(([t,l,s,m])=>`<div><span class="ts">${t}</span> <span class="lvl ${l}">${l}</span> <span class="ts">${s.padEnd(7)}</span> ${esc(m)}</div>`).join('')}</div>
+      <p class="muted" style="margin:10px 0 0;font-size:12px">Log files rotate daily in %APPDATA%\\My Meshes\\logs. Exporting bundles the last 3 days plus a system summary for a bug report, without file contents.</p></div>
+  </div></main>`;
+  $('#selCount').textContent='';
+  $$('[data-lvl]', body).forEach(b => b.onclick = () => { state.logLevel = b.dataset.lvl; render(); });
+  $$('[data-rescan]', body).forEach(b => b.onclick = () => { b.disabled=true; b.innerHTML = ic('refresh')+'Scanning…'; setTimeout(()=>{ b.disabled=false; b.innerHTML=ic('refresh')+'Rescan'; toast('Rescan finished: no changes','check'); }, 1500); });
+  $$('[data-retry]', body).forEach(b => b.onclick = () => toast('\\\\nas\\models still unreachable. Will retry in 4 min.','cloudoff'));
+  $('#rescanAll').onclick = () => toast('Rescan queued for 2 roots','scan');
+  $('#exportLog').onclick = () => toast('Saved my-meshes-log-2026-10-17.zip to Downloads','download');
+  $('#pauseThumbs').onclick = () => { const b=$('#pauseThumbs'); const paused = b.dataset.p==='1'; b.dataset.p = paused?'0':'1'; b.innerHTML = paused ? ic('pause')+'Pause' : ic('play')+'Resume'; toast(paused?'Thumbnail rendering resumed':'Thumbnail rendering paused','camera'); };
+}
+
+function pageSettings() {
+  const body = $('#body'); body.className='body no-side';
+  const theme = document.documentElement.getAttribute('data-theme') || 'system';
+  const patterns = ['.git','__MACOSX','.DS_Store','Thumbs.db','*.gcode','*.bgcode','node_modules'];
+  body.innerHTML = `<main class="main scroll"><div class="page-wrap" style="grid-template-columns:180px minmax(0,1fr);gap:28px;align-items:start">
+    <nav class="settings-nav"><a href="#settings">Library roots</a><a href="#settings">Ignore patterns</a><a href="#settings">Thumbnails</a><a href="#settings">Appearance</a><a href="#settings">Updates</a><a href="#settings">Privacy</a><a href="#settings">About</a></nav>
+    <div class="stack" style="gap:20px">
+      <h1 class="page">Settings</h1>
+      <section class="card-panel"><div style="display:flex;align-items:center;gap:10px;margin-bottom:6px"><h2 class="sec-title">Library roots</h2><span class="muted" style="font-size:12px">folders the app indexes and may write to</span><button class="btn sm primary" id="addRoot" style="margin-left:auto">${ic('plus')}Add folder…</button></div>
+        ${ROOTS.map(r=>`<div class="root-row"><div class="path">${ic('folder')}<span>${esc(r.path)}<small>${r.projects.toLocaleString()} projects · ${r.size} · last sync ${r.lastSync}</small></span></div>
+          <label class="select" style="box-shadow:none"><select data-mode="${r.id}"><option value="watch" ${r.mode==='watch'?'selected':''}>Watch events</option><option value="poll" ${r.mode==='poll'?'selected':''}>Poll (15 min)</option><option value="manual" ${r.mode==='manual'?'selected':''}>Manual only</option></select></label>
+          <div>${r.status==='offline'?`<span class="badge warn">${ic('cloudoff')} offline, kept</span>`:`<span class="badge ok">${ic('check')} online</span>`}</div>
+          <div style="display:flex;gap:4px"><button class="ibtn sm" title="Rescan" data-rescan>${ic('refresh')}</button><button class="ibtn sm" title="Remove root" data-rmroot="${r.id}">${ic('trash')}</button></div></div>`).join('')}
+        <p class="muted" style="margin:10px 0 0;font-size:12px">Network shares usually cannot deliver file events. Use polling there. Removing a root forgets its index; files on disk are never touched.</p></section>
+      <section class="card-panel"><h2 class="sec-title" style="margin-bottom:6px">Ignore patterns</h2><p class="muted" style="margin:0 0 10px;font-size:12px">Glob patterns excluded from scans. Changes apply on the next scan.</p>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center" id="pats">${patterns.map(p=>`<button class="tag" data-pat="${esc(p)}" title="Remove">${esc(p)} ${ic('x')}</button>`).join('')}<input class="input" id="newPat" placeholder="add pattern, Enter" style="width:180px;height:30px"></div></section>
+      <section class="card-panel"><h2 class="sec-title" style="margin-bottom:10px">Thumbnails</h2>
+        <div class="radio-cards" id="thumbLoc"><label class="radio-card on"><b>Inside each project</b><span>&lt;project&gt;\\.cache\\preview.png · travels with the project, regenerated if deleted</span></label><label class="radio-card"><b>App data</b><span>%LOCALAPPDATA%\\My Meshes\\thumbs · keeps project folders clean, lost on reinstall</span></label><label class="radio-card"><b>Library root</b><span>&lt;root&gt;\\.mymeshes\\thumbs · one cache folder per root</span></label></div>
+        <div class="setting" style="margin-top:8px"><div><b>Render size</b><span>Larger thumbnails look better at high zoom and cost disk space.</span></div><label class="select" style="box-shadow:none"><select><option>512 px (default)</option><option>256 px</option><option>1024 px</option></select></label></div>
+        <div class="setting"><div><b>Render while I work</b><span>Off: thumbnails render only when the app is idle.</span></div><button class="switch" role="switch" aria-checked="true" data-sw></button></div></section>
+      <section class="card-panel"><h2 class="sec-title" style="margin-bottom:6px">Appearance</h2>
+        <div class="setting"><div><b>Theme</b><span>Follows Windows by default.</span></div><div class="seg" style="box-shadow:none">${[['light','sun','Light'],['dark','moon','Dark'],['system','monitor','System']].map(([k,i,l])=>`<button class="${theme===k?'on':''}" data-theme-set="${k}">${ic(i)}${l}</button>`).join('')}</div></div>
+        <div class="setting"><div><b>Language</b><span>English and German ship first; all strings are translatable.</span></div><label class="select" style="box-shadow:none"><select id="lang"><option>English</option><option>Deutsch</option></select></label></div>
+        <div class="setting"><div><b>Default view</b><span>How a folder or collection opens.</span></div><div class="seg" style="box-shadow:none"><button class="${state.view==='grid'?'on':''}" data-view="grid">Grid</button><button class="${state.view==='list'?'on':''}" data-view="list">List</button></div></div>
+        <div class="setting"><div><b>Show first-run screen</b><span>Opens the welcome page again.</span></div><a class="btn sm" href="#welcome">Open</a></div></section>
+      <section class="card-panel"><h2 class="sec-title" style="margin-bottom:6px">Updates</h2>
+        <div class="setting"><div><b>Channel</b><span>Beta gets new features weeks earlier and may have rough edges.</span></div><label class="select" style="box-shadow:none"><select><option>Stable</option><option>Beta</option></select></label></div>
+        <div class="setting"><div><b>Version 0.1.0-dev</b><span>Installed from a private build. Store installs are updated by the Microsoft Store and hide this section.</span></div><button class="btn sm" id="chk">${ic('refresh')}Check for updates</button></div></section>
+      <section class="card-panel"><h2 class="sec-title" style="margin-bottom:6px">Privacy</h2>
+        <div class="setting"><div><b>Fetch details from model sites when I ask</b><span>Only on your explicit click, only the source URL is requested. Nothing is ever uploaded.</span></div><button class="switch" role="switch" aria-checked="true" data-sw></button></div>
+        <div class="setting"><div><b>Telemetry</b><span>There is none. Diagnostics stay in the local log you can export yourself.</span></div><span class="badge ok">${ic('shield')} offline by design</span></div></section>
+      <section class="card-panel"><h2 class="sec-title" style="margin-bottom:6px">About</h2>
+        <dl class="kv"><dt>Data folder</dt><dd class="mono">%APPDATA%\\My Meshes</dd><dt>Index</dt><dd>index.sqlite · 86 MB · rebuildable</dd><dt>Collections</dt><dd>collections.json · 2 collections · ${SMART.length} smart</dd><dt>Engine</dt><dd>Tauri 2 · Rust engine 0.1.0</dd></dl>
+        <div class="actions"><button class="btn sm" id="openLogs">${ic('open')}Open logs folder</button><button class="btn sm" id="rebuild">${ic('refresh')}Rebuild index</button></div></section>
+    </div></div></main>`;
+  $('#selCount').textContent='';
+  $$('[data-theme-set]', body).forEach(b => b.onclick = () => { setTheme(b.dataset.themeSet); render(); });
+  $$('[data-view]', body).forEach(b => b.onclick = () => { state.view = b.dataset.view; persist(); render(); });
+  $$('[data-sw]', body).forEach(b => b.onclick = () => b.setAttribute('aria-checked', b.getAttribute('aria-checked')!=='true'));
+  $$('.radio-card', body).forEach(c => c.onclick = () => { $$('.radio-card', body).forEach(x=>x.classList.toggle('on', x===c)); toast('Existing thumbnails are moved on next idle','camera'); });
+  $$('[data-mode]', body).forEach(s => s.onchange = () => { ROOTS.find(r=>r.id===s.dataset.mode).mode = s.value; toast('Sync mode changed','check'); });
+  $$('[data-rescan]', body).forEach(b => b.onclick = () => toast('Rescan queued','scan'));
+  $$('[data-rmroot]', body).forEach(b => b.onclick = () => { const r = ROOTS.find(x=>x.id===b.dataset.rmroot); dialog({title:`Remove ${esc(r.path)} from the library?`, body:`${r.projects.toLocaleString()} projects disappear from the app. Nothing on disk is deleted. project.yaml files stay where they are.`, confirm:'Remove root', danger:true, onConfirm:()=>toast('Root removed (demo: it comes back on reload)','trash')}); });
+  $('#addRoot').onclick = () => toast('Native folder picker opens here. On macOS this is also how sandbox access is granted.','folder');
+  $('#newPat').addEventListener('keydown', e => { if (e.key==='Enter' && e.target.value.trim()) { const v = e.target.value.trim(); e.target.insertAdjacentHTML('beforebegin', `<button class="tag">${esc(v)} ${ic('x')}</button>`); e.target.value=''; toast('Pattern added, applies on next scan','check'); } });
+  $$('[data-pat]', body).forEach(b => b.onclick = () => { b.remove(); toast('Pattern removed','check'); });
+  $('#lang').onchange = () => toast('Language switching is wired in the real app (i18n keys everywhere)','info');
+  $('#chk').onclick = () => { const b=$('#chk'); b.disabled=true; b.innerHTML=ic('refresh')+'Checking…'; setTimeout(()=>{ b.disabled=false; b.innerHTML=ic('refresh')+'Check for updates'; toast('You are up to date (0.1.0-dev)','check'); }, 1000); };
+  $('#openLogs').onclick = () => toast('Opened %APPDATA%\\My Meshes\\logs','open');
+  $('#rebuild').onclick = () => dialog({title:'Rebuild the index?', body:'The SQLite cache is deleted and rebuilt from disk. Takes about a minute for this library. No metadata is lost because everything lives in the files.', confirm:'Rebuild', onConfirm:()=>toast('Rebuilding index in the background','refresh')});
+}
+
+function pageWelcome() {
+  const body = $('#body'); body.className='body no-side';
+  body.innerHTML = `<main class="main scroll"><div class="welcome"><div class="box">
+    <div class="ico">${ic('cube')}</div>
+    <h1>Your 3D models, organized like a photo library</h1>
+    <p>My Meshes indexes the STL, OBJ and 3MF files already on your disks. Nothing is uploaded, nothing is moved without asking, and your metadata lives next to your files.</p>
+    <div class="opts">
+      <button class="opt" id="w1"><span class="ico2">${ic('folder')}</span><span><b>Add a library folder</b><span>Pick the folder where your models live. Subfolders are scanned as projects.</span></span>${ic('chev')}</button>
+      <a class="opt" href="#import"><span class="ico2">${ic('download')}</span><span><b>Import downloaded archives</b><span>Drop ZIPs from Printables, Thingiverse or MakerWorld. They become tidy project folders.</span></span>${ic('chev')}</a>
+      <a class="opt" href="#library"><span class="ico2">${ic('sparkle')}</span><span><b>Look around with a sample library</b><span>Explore the app with example projects first.</span></span>${ic('chev')}</a>
+    </div>
+    <p class="muted" style="font-size:12px">Offline by design. You can add more folders later in Settings.</p>
+  </div></div></main>`;
+  $('#selCount').textContent='';
+  $('#w1').onclick = () => { toast('Native folder picker opens here. Scanning starts right after, thumbnails render in the background.','folder'); setTimeout(()=>location.hash='library', 900); };
+}
+
+/* ================= router & global wiring ================= */
+const PAGES = { library:pageLibrary, project:pageProject, import:pageImport, collections:pageCollections, activity:pageActivity, settings:pageSettings, welcome:pageWelcome };
+function route() { const h = location.hash.replace('#','') || 'library'; return PAGES[h] ? h : 'library'; }
+function render() {
+  closeMenu(); const r = route();
+  $$('#mainnav a').forEach(a => a.classList.toggle('active', a.dataset.nav===r || (r==='project' && a.dataset.nav==='library')));
+  PAGES[r]();
+  const sb = $('#statusbar'); sb.style.display = r==='welcome' ? 'none' : '';
+  $('#themeBtn').setAttribute('aria-pressed', document.documentElement.getAttribute('data-theme')==='dark');
+}
+window.addEventListener('hashchange', render);
+$('#q').addEventListener('input', e => { state.q = e.target.value; if (route()!=='library') location.hash='library'; else render(); });
+document.addEventListener('keydown', e => {
+  const typing = /INPUT|TEXTAREA|SELECT/.test(document.activeElement?.tagName);
+  if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='k') { e.preventDefault(); $('#q').focus(); $('#q').select(); return; }
+  if (e.key==='Escape') { closeMenu(); if (document.activeElement===$('#q')) { $('#q').blur(); } else if (state.selected.size) { state.selected.clear(); render(); } return; }
+  if (typing) return;
+  if (route()==='library' && state.selected.size) {
+    if (e.key==='Delete') { e.preventDefault(); deleteProjects([...state.selected]); }
+    if (e.key==='F2') { e.preventDefault(); renameProject([...state.selected][0]); }
+    if ((e.ctrlKey||e.metaKey) && e.key.toLowerCase()==='a') { e.preventDefault(); visibleProjects().forEach(p=>state.selected.add(p.id)); render(); }
+  }
+  if (route()==='project' && e.key==='F2') { e.preventDefault(); renameProject(state.current); }
+});
+function setTheme(t) { const root = document.documentElement; if (t==='system') root.removeAttribute('data-theme'); else root.setAttribute('data-theme', t); try { localStorage.setItem('mm-theme', t); } catch(e){} }
+$('#themeBtn').onclick = () => { const cur = document.documentElement.getAttribute('data-theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'); setTheme(cur==='dark' ? 'light' : 'dark'); render(); };
+try { const t = localStorage.getItem('mm-theme'); if (t && t!=='system') document.documentElement.setAttribute('data-theme', t); } catch(e){}
+if (!location.hash) location.hash = 'welcome';
+render();
+</script>
+</body>
+</html>

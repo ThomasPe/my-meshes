@@ -1,6 +1,6 @@
 # ADR-0002: UI framework and visual direction
 
-- Status: **proposed**, waiting for a pick among the mockups
+- Status: **accepted** 2026-10-17: **D Gallery** as the visual direction. Component library to be confirmed against the click dummy (Mantine is the default candidate; see Decision).
 - Date: 2026-10-17
 - Related: ADR-0001 (shell). Every option below works in Electron and Tauri.
 
@@ -90,6 +90,24 @@ will run, it is the look they expect, and the Store listing will sit next to nat
 apps. The neutral options (A, C) remain the safer choice for the macOS stretch goal,
 where Fluent looks foreign. Practical compromise if B is chosen: build on tokens so
 that a quieter macOS theme is a token swap, not a redesign.
+
+## Decision (2026-10-17)
+
+**Direction D "Gallery"** is chosen: light-first with a full dark theme, image-led
+square thumbnails, 14 px radii, soft shadows, pill chips, teal accent, Manrope.
+
+Before any framework code is written, a **multi-page HTML click dummy** in this style
+validates the direction across all MVP screens: `docs/clickdummy/index.html` (welcome,
+library grid and list, project detail with viewer, import staging and inbox,
+collections with smart collection editor, activity, settings). It is plain HTML, CSS
+and vanilla JavaScript with hash routing; its tokens (`:root` block) are the seed for
+the real design system.
+
+Component library: **Mantine** is the default candidate for D (rich component set
+including tree, tabs, combobox, notifications and modals; token-based theming; React).
+Confirm or replace it during the scaffold once the dummy has been reviewed; shadcn/ui
+with a 14 px radius token remains the fallback if Mantine's styling model fights the
+dummy's look.
 
 ## Consequences
 

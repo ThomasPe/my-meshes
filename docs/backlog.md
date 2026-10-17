@@ -2,7 +2,7 @@
 
 Derived from the specification in `docs/spec/`. Items reference requirement IDs (LIB-1,
 META-2, …). The application shell is decided: **Tauri 2 with a Rust engine**
-(ADR-0001). The UI framework is still open (ADR-0002); items that depend on it say so.
+(ADR-0001). The visual direction is D Gallery (ADR-0002); the component library is confirmed during the scaffold.
 
 Legend: every item is done only when its acceptance criteria are verified by an
 automated end-to-end check against the real desktop app (see `spec/04-quality.md`).
@@ -20,7 +20,8 @@ automated end-to-end check against the real desktop app (see `spec/04-quality.md
       one `tauri-driver` WebDriver test in GitHub Actions on `windows-latest`, (d) builds
       an MSIX with `MakeAppx` that side-loads. Any hard failure means fall back to
       Electron per ADR-0001.
-- [ ] Decide UI framework and visual direction (ADR-0002) from the HTML mockups.
+- [x] Decide visual direction: D Gallery (ADR-0002 accepted).
+- [ ] **0.5 Click dummy review.** Walk through `docs/clickdummy/index.html` on all screens; collect changes to layout, wording and flows before the spike. Confirm the component library (Mantine default) during the scaffold.
 - [ ] Answer the remaining items in `docs/open-questions.md` (Q4, Q5, Q10 before
       Epic 2; Q15 before the Store listing).
 
@@ -48,9 +49,9 @@ automated end-to-end check against the real desktop app (see `spec/04-quality.md
 - [ ] **Agent workflow.** `AGENTS.md` with the rules from the spec, the test loop
       (change, run targeted tests, inspect artifacts, fix, rerun) and the Rust/TS
       conventions; thin per-tool wrappers (Copilot, Claude Code) pointing at it.
-- [ ] **UI foundation.** Blocked on ADR-0002. Design tokens (light/dark/system), base
-      components, app shell layout (sidebar, main, inspector, status bar), i18n wiring
-      with en + de.
+- [ ] **UI foundation.** Port the click dummy's tokens and shell (sidebar, main,
+      inspector, status bar) to the chosen component library; light/dark/system; i18n
+      wiring with en + de.
 - [ ] **Logging.** Structured logging from engine and frontend to a rotating file in
       app-data (`tauri-plugin-log` or `tracing` + file appender).
 - [ ] **CI.** GitHub Actions on `windows-latest`: `cargo clippy`/`cargo test`, lint,
