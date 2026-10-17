@@ -10,13 +10,7 @@ Collected while consolidating the specification. Each is referenced from the spe
 | Q1 | Platform priority | **Windows first.** macOS is a stretch goal. Linux is out of scope for v1. | `spec/01-vision.md`, `spec/03-features.md` APP-1, `spec/04-quality.md` |
 | Q2 | Audience and distribution | **Private use first**, then a public **Windows release via the Microsoft Store**; a **Mac App Store** release is a stretch goal. | `spec/03-features.md` APP-9/APP-11, `spec/04-quality.md` Platform & distribution |
 | Q20 | Drag-out to slicer | **Nice to have, very low priority.** Not an MVP requirement. | `spec/03-features.md` IMP-6 moved to Later |
-
-## Still open for the tech-stack decision
-
-- **[Q21] Rust in the stack?** With Q1/Q2/Q20 answered, Tauri 2 has become a serious
-  option (see ADR-0001). It means a Rust backend next to the TypeScript frontend. Are
-  you comfortable owning Rust code (reading, reviewing, occasionally debugging agent
-  output), or should the stack stay TypeScript-only?
+| Q21 | Rust in the stack? | **Yes.** Tauri 2 with a Rust engine is accepted. | `decisions/0001-tech-stack.md` (accepted) |
 
 - **[Q3] Library scale.** Roughly how many projects and files, and how large is the
   biggest single model you expect? (Drives indexing design and streaming requirements.)

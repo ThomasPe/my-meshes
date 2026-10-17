@@ -1,6 +1,6 @@
 # ADR-0001: Application shell and tech stack
 
-- Status: **proposed**, revised after Q1/Q2/Q20 were answered; waiting on Q21 (Rust yes/no)
+- Status: **accepted** 2026-10-17: **Tauri 2 with a Rust engine** (Q21 answered: Rust is welcome). Electron stays the documented fallback if the spike in the backlog fails.
 - Date: 2026-10-17
 - Supersedes: the Electron/Forge/React stack of `archive/electron-v1`
 
@@ -210,3 +210,25 @@ shell-agnostic package, and the UI framework decision in ADR-0002 is unaffected.
 - Tauri App Store distribution guide: `v2.tauri.app/distribute/app-store/`
 - Microsoft MSIX Packaging Tool overview: `learn.microsoft.com/windows/msix/mpt-overview`
 - Avalonia OpenGL controls: `docs.avaloniaui.net/api/avalonia/opengl/controls`
+
+## Decision (2026-10-17)
+
+**Tauri 2, Rust backend, TypeScript frontend.** Concretely:
+
+- **Shell:** Tauri 2.x (current 2.11 line), Windows first; macOS build added when the
+  stretch goal is picked up.
+- **Engine:** a shell-agnostic Rust library crate (`crates/engine`) holding scanner,
+  watcher, index, sidecar I/O, hashing and archive handling. `src-tauri` is a thin
+  layer of commands and events over it, so the engine can be unit-tested with
+  `cargo test` and reused outside Tauri.
+- **Frontend:** Vite + TypeScript + Three.js; component framework per ADR-0002 (React
+  unless that decision says otherwise). Frontend talks to the engine only through a
+  typed command/event API with explicit Tauri capabilities.
+- **Testing:** `cargo test` for the engine; Vitest for frontend logic; Playwright
+  against the UI in a browser with a mocked backend API for fast agent loops;
+  WebdriverIO + `tauri-driver` against the real Windows app for smoke tests and
+  disk-side-effect assertions.
+- **Distribution:** NSIS installer plus `tauri-plugin-updater` for private builds;
+  MSIX via a scripted `MakeAppx` step for the Store; updater disabled in Store builds.
+- **First task:** the two-day spike described above, as backlog item 0.4. If it fails
+  outright, switch to Electron and keep everything else in this document.

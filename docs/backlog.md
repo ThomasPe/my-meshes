@@ -1,8 +1,8 @@
 # Product Backlog
 
-Derived from the specification in `docs/spec/`. Technology-neutral: items reference
-requirement IDs (LIB-1, META-2, …) rather than libraries. Concrete tooling is decided in
-`docs/decisions/` and fills in the "Scaffold" epic once chosen.
+Derived from the specification in `docs/spec/`. Items reference requirement IDs (LIB-1,
+META-2, …). The application shell is decided: **Tauri 2 with a Rust engine**
+(ADR-0001). The UI framework is still open (ADR-0002); items that depend on it say so.
 
 Legend: every item is done only when its acceptance criteria are verified by an
 automated end-to-end check against the real desktop app (see `spec/04-quality.md`).
@@ -11,29 +11,54 @@ automated end-to-end check against the real desktop app (see `spec/04-quality.md
 
 - [x] Archive the previous implementation (`archive/electron-v1`).
 - [x] Consolidate the specification into `docs/spec/`.
-- [x] Answer Q1, Q2, Q20 (Windows first, Store release, drag-out low priority).
-- [ ] Answer Q21 (Rust in the stack?) and the remaining items in `docs/open-questions.md`.
-- [ ] Decide the application shell (ADR-0001), including a short de-risking spike if
-      Tauri is chosen.
+- [x] Answer Q1, Q2, Q20, Q21 (Windows first, Store release, drag-out low priority,
+      Rust welcome).
+- [x] Decide the application shell: Tauri 2 + Rust engine (ADR-0001 accepted).
+- [ ] **0.4 De-risking spike (2 days, Windows):** Tauri 2 app that (a) loads a 50 MB STL
+      in Three.js inside WebView2 with orbit controls, (b) renders 20 thumbnails via
+      OffscreenCanvas in a Web Worker and writes PNGs through a Rust command, (c) runs
+      one `tauri-driver` WebDriver test in GitHub Actions on `windows-latest`, (d) builds
+      an MSIX with `MakeAppx` that side-loads. Any hard failure means fall back to
+      Electron per ADR-0001.
 - [ ] Decide UI framework and visual direction (ADR-0002) from the HTML mockups.
+- [ ] Answer the remaining items in `docs/open-questions.md` (Q4, Q5, Q10 before
+      Epic 2; Q15 before the Store listing).
 
 ## Phase 1: MVP, a local library manager with read, write and preview
 
-### Epic 1: Scaffold & foundation
-- [ ] **Project scaffold.** Dev server with hot reload, production build, packaged
-      installer for every target platform.
-- [ ] **Test harness.** Unit test runner; E2E runner that launches the real app in
-      deterministic test mode with fixture libraries; artifacts (screenshots, traces,
-      logs) on failure; smoke test "window becomes interactive".
-- [ ] **Agent workflow.** Documented loop: change, run targeted E2E, inspect artifacts,
-      fix, rerun. `AGENTS.md` with the rules from the spec.
-- [ ] **UI foundation.** Design tokens (light/dark), base components, app layout shell
-      (sidebar, main, detail panel, status bar), i18n wiring with en + de.
-- [ ] **Data foundation.** Embedded index database with full-text search; typed API
-      between UI and backend with explicit capabilities; structured logging to file.
-- [ ] **CI.** Lint, unit and E2E on push; installers built for all platforms on tag.
-- [ ] **Auto-update** (APP-9) for private builds; disabled in Store builds.
-- [ ] **MSIX packaging** (APP-11) with a Store-compatible manifest; Partner Center identity.
+### Epic 1: Scaffold & foundation (Tauri 2 + Rust)
+- [ ] **Repository layout.** Cargo workspace with `crates/engine` (shell-agnostic
+      library) and `src-tauri` (commands, events, capabilities); `src/` Vite +
+      TypeScript frontend; `pnpm` or `npm` decided in Q17. `tauri dev` gives hot
+      reload; `tauri build` produces the NSIS installer.
+- [ ] **Engine skeleton.** Crate with modules for roots, scan, watch, index, sidecar,
+      hash, archive; `cargo test` with fixture libraries under `fixtures/`. Candidate
+      crates, to be verified at scaffold time: `notify` (+ polling backend), `rusqlite`
+      with `bundled` and FTS5, `sha2` + `rayon`, `zip`, a maintained serde YAML crate,
+      `walkdir`/`ignore` for scanning with glob ignores, `trash` for safe delete.
+- [ ] **Typed API.** Commands and events defined once (Rust structs with `serde`,
+      TypeScript types generated, e.g. via `specta`/`tauri-specta`); every command
+      covered by a Tauri capability; no `fs` plugin exposure to the frontend beyond
+      what registered roots need.
+- [ ] **Test harness.** Vitest for frontend logic; Playwright against the UI in a
+      browser with a mocked API; WebdriverIO + `tauri-driver` launching the real app in
+      a deterministic test mode (`--test-mode` flag: temp app-data, fixture roots,
+      updater off); failure artifacts (screenshots, logs, engine trace) kept; smoke
+      test "window becomes interactive".
+- [ ] **Agent workflow.** `AGENTS.md` with the rules from the spec, the test loop
+      (change, run targeted tests, inspect artifacts, fix, rerun) and the Rust/TS
+      conventions; thin per-tool wrappers (Copilot, Claude Code) pointing at it.
+- [ ] **UI foundation.** Blocked on ADR-0002. Design tokens (light/dark/system), base
+      components, app shell layout (sidebar, main, inspector, status bar), i18n wiring
+      with en + de.
+- [ ] **Logging.** Structured logging from engine and frontend to a rotating file in
+      app-data (`tauri-plugin-log` or `tracing` + file appender).
+- [ ] **CI.** GitHub Actions on `windows-latest`: `cargo clippy`/`cargo test`, lint,
+      Vitest, Playwright (browser), WebDriver smoke; NSIS installer artifact on tag.
+- [ ] **Auto-update** (APP-9) via `tauri-plugin-updater` with signed manifests for
+      private builds; compiled out of Store builds.
+- [ ] **MSIX packaging** (APP-11): scripted `MakeAppx` + `AppxManifest.xml` in CI with
+      a Partner-Center-matching identity; side-load test on a clean VM.
 
 ### Epic 2: Library engine
 - [ ] **Library roots** (LIB-1).
