@@ -20,6 +20,13 @@ to a local, offline library.
 4. **Hand off to printing tools.** Preview a model, then get it into a slicer with one
    drag.
 
+## Platforms & distribution
+
+1. **Windows** is the primary platform. Private builds first, then a public release
+   through the **Microsoft Store** (MSIX).
+2. **macOS** is a stretch goal, distributed through the **Mac App Store** (sandboxed).
+3. **Linux** is out of scope for v1. Nothing in the design should preclude it later.
+
 ## Non-goals (for now)
 
 - Slicing, G-code generation or printer control.

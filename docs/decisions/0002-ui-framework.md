@@ -82,6 +82,15 @@ considered and rejected for now because the gain (smaller bundles, simpler react
 does not outweigh the loss of ecosystem depth for virtualized lists, Three.js bindings
 and agent familiarity.
 
+## Update 2026-10-17 after Q1
+
+Windows is the primary platform and macOS a stretch goal. That raises **B (Fluent)**
+from "only if Windows first" to a serious contender: on the platform nearly all users
+will run, it is the look they expect, and the Store listing will sit next to native
+apps. The neutral options (A, C) remain the safer choice for the macOS stretch goal,
+where Fluent looks foreign. Practical compromise if B is chosen: build on tokens so
+that a quieter macOS theme is a token swap, not a redesign.
+
 ## Consequences
 
 - The chosen mockup becomes the reference for the "UI foundation" scaffold item: tokens,

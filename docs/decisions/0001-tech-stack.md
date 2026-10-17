@@ -1,6 +1,6 @@
 # ADR-0001: Application shell and tech stack
 
-- Status: **proposed**, awaiting answers to Q1, Q2, Q20 in `docs/open-questions.md`
+- Status: **proposed**, revised after Q1/Q2/Q20 were answered; waiting on Q21 (Rust yes/no)
 - Date: 2026-10-17
 - Supersedes: the Electron/Forge/React stack of `archive/electron-v1`
 
@@ -131,3 +131,82 @@ Measure, then decide.
 - Electron offscreen rendering tutorial (`electronjs.org/docs/latest/tutorial/offscreen-rendering`)
 - Playwright `class-electron` API docs (`playwright.dev/docs/api/class-electron`)
 - Release state: Electron 44.x stable / 45 scheduled 2026-10-20; Tauri 2.11.x; Wails v3 beta
+
+
+---
+
+## Revision 2026-10-17: Windows first, Store distribution, drag-out deprioritized
+
+Answers received: Windows is the primary platform; private builds first, then a
+Microsoft Store release; a Mac App Store release is a stretch goal; Linux is out of
+scope; drag-out is a low-priority nice-to-have.
+
+### What changes in the Electron vs. Tauri table
+
+| Req | Before | Now |
+|---|---|---|
+| R1 WebGL everywhere | Electron, strongly | **Even.** WebView2 *is* Chromium, so Tauri's WebGL story on the primary platform equals Electron's. WKWebView on macOS is adequate. The WebKitGTK problem is gone with Linux. |
+| R2 Offscreen thumbnails | Electron | **Nearly even.** Hidden WebView2 windows and OffscreenCanvas in a worker both work in Chromium. macOS stays a mild Tauri risk (WKWebView throttling of hidden windows). |
+| R3 Drag-out | Electron | **Irrelevant** for the MVP; `tauri-plugin-drag` covers Windows and macOS if it is ever wanted. |
+| R7 E2E automation | Electron, strongly | **Electron, moderately.** `tauri-driver` works on Windows via Edge WebDriver, so the primary platform is covered. macOS needs the WebdriverIO embedded-driver route later. Playwright against the real app remains the smoother agent loop. |
+| New: Store packaging | n/a | **Electron, slightly.** Electron Forge ships `@electron-forge/maker-msix` (experimental, Forge ≥ 7.10) and the older `maker-appx`; electron-builder has an MSIX target (beta). Tauri has no native MSIX output; Store shippers wrap the build with `MakeAppx.exe` and a hand-written `AppxManifest.xml`, which is a small script but one you own. Mac App Store: both have documented sandbox/entitlement paths; Electron's MAS build is older and better trodden. |
+| New: runtime update burden | n/a | **Tauri.** A Store app must keep its embedded engine patched. Electron means shipping a new Chromium every ~8 weeks forever; Tauri's WebView2 is patched by Windows itself. |
+
+Net effect: the four requirements that made Electron the clear default are now neutral
+or irrelevant. What remains is a trade between **agent/test ergonomics and a
+one-language stack (Electron)** and **footprint, backend speed, no native-module
+churn, and no runtime update treadmill (Tauri)**.
+
+### Other stacks examined for a Windows-first, Store-bound, 3D-centric app
+
+| Stack | Verdict | Why |
+|---|---|---|
+| **WinUI 3 (Windows App SDK, C#)** | Reject unless macOS is dropped | Best possible Store integration and native Fluent (matches mockup B for free). 3D needs a custom DirectX/Win2D path or a WebView2 island for Three.js. Windows only, so the macOS stretch goal dies. |
+| **Avalonia (C#, cross-platform XAML)** | Strongest non-web candidate; reject for this project | Windows + macOS from one codebase, MSIX and Mac App Store feasible, .NET backend is excellent for the engine (FileSystemWatcher, SQLite FTS5, threads). Costs: no Three.js, so a custom OpenGL viewer (OpenTK on `OpenGlControlBase`) or a commercial 3D control; 3MF via lib3mf bindings; offscreen thumbnails via GL framebuffers (robust, but all hand-built). Smaller UI ecosystem than the web; agents are slower in XAML. Choose it only if you would rather write C# than TypeScript and accept building the 3D layer yourself. |
+| **Uno Platform** | Reject | WinUI API on macOS via Skia; same 3D gap as Avalonia with more moving parts. |
+| **.NET MAUI / Blazor Hybrid** | Reject | Web UI in WebView2 with a .NET backend is attractive on paper, but MAUI desktop quality and macOS-via-Catalyst are weak, and the sandbox story is poorly documented. |
+| **Photino.NET ("Tauri with C#")** | Reject | Right idea, tiny community: no updater, no plugin ecosystem, no Store tooling. You would rebuild what Tauri already has. |
+| **Flutter desktop** | Reject | Good Windows/macOS shells and an `msix` package, but 3D is immature (no maintained Three.js equivalent). Wrong fit for an app whose core is a mesh viewer. |
+| **Qt 6 / Qt Quick 3D (C++ or PySide6)** | Technically excellent, reject on velocity | Built-in mesh loading, offscreen rendering and a mature 3D scene graph; Store distribution possible. But C++/QML or Python packaging, LGPL discipline, and far slower agent iteration than web stacks. None of the four mockups maps onto it. |
+| **Compose Multiplatform (Kotlin)** | Reject | JVM footprint, no 3D story, Store packaging via jpackage only. |
+| **Wails v3 (Go)** | Wait | Still beta; no MSIX; Go backend is pleasant but the ecosystem around updates and Store is thin. Revisit if Tauri disappoints and Rust is unwanted. |
+| **PWA + File System Access API** | Reject (fails spec) | Zero-install and Store-publishable via PWABuilder, Chromium's directory handles persist across sessions. But no file watching (polling only), no OS trash, no background work when closed. Breaks LIB-3 and IMP-5. |
+
+### Revised recommendation
+
+**Tauri 2 is now the recommended default**, conditional on Q21 (Rust is acceptable in
+the stack). The reasons the previous revision gave for Electron no longer apply to a
+Windows-first, Store-distributed app, and Tauri's advantages matter more for a Store
+app: a 10–15 MB package, a system webview that Windows keeps patched, a Rust engine
+that makes hashing, extraction and SQLite FTS5 trivial to ship, and a capability model
+that maps cleanly onto the Mac App Store sandbox later.
+
+Mitigations for Tauri's remaining weak points, to be built into the scaffold:
+
+1. **Testing:** keep the UI testable in a plain browser with a mocked backend API
+   (Playwright, fast, what agents know), and add a thin layer of `tauri-driver`
+   WebDriver tests against the real Windows app for smoke and disk side effects.
+2. **MSIX:** a scripted `MakeAppx` step in CI from day one, so the Store path is
+   exercised long before the first submission.
+3. **Thumbnails:** OffscreenCanvas in a Web Worker inside the main webview first; a
+   hidden window only as fallback; a Rust renderer only if measurements demand it.
+4. **Spike before committing (2 days, on your Windows machine):** 50 MB STL in Three.js
+   inside WebView2, 20 thumbnails via OffscreenCanvas, `tauri-driver` test in GitHub
+   Actions on `windows-latest`, MSIX built and side-loaded. If any of these fails
+   outright, fall back to Electron without changing anything else in the plan.
+
+**Electron remains the safe alternative** if Rust is unwelcome: Forge + Vite,
+`maker-msix`, Playwright Electron, and a TypeScript engine package, exactly as in the
+first revision. It is a known quantity with no open risk for this profile; its costs are
+size, memory and the Chromium update cadence.
+
+In both cases the engine (scanner, watcher, index, sidecar I/O) is written as a
+shell-agnostic package, and the UI framework decision in ADR-0002 is unaffected.
+
+### Additional sources for this revision
+
+- Electron Forge makers: `electronforge.io/config/makers/msix`, `electronforge.io/config/makers/appx`
+- electron-builder MSIX target: `electron.build/docs/msix/`
+- Tauri App Store distribution guide: `v2.tauri.app/distribute/app-store/`
+- Microsoft MSIX Packaging Tool overview: `learn.microsoft.com/windows/msix/mpt-overview`
+- Avalonia OpenGL controls: `docs.avaloniaui.net/api/avalonia/opengl/controls`

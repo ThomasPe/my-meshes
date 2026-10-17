@@ -11,7 +11,8 @@ automated end-to-end check against the real desktop app (see `spec/04-quality.md
 
 - [x] Archive the previous implementation (`archive/electron-v1`).
 - [x] Consolidate the specification into `docs/spec/`.
-- [ ] Answer `docs/open-questions.md` (at least Q1, Q2, Q20 before scaffolding).
+- [x] Answer Q1, Q2, Q20 (Windows first, Store release, drag-out low priority).
+- [ ] Answer Q21 (Rust in the stack?) and the remaining items in `docs/open-questions.md`.
 - [ ] Decide the application shell (ADR-0001), including a short de-risking spike if
       Tauri is chosen.
 - [ ] Decide UI framework and visual direction (ADR-0002) from the HTML mockups.
@@ -31,7 +32,8 @@ automated end-to-end check against the real desktop app (see `spec/04-quality.md
 - [ ] **Data foundation.** Embedded index database with full-text search; typed API
       between UI and backend with explicit capabilities; structured logging to file.
 - [ ] **CI.** Lint, unit and E2E on push; installers built for all platforms on tag.
-- [ ] **Auto-update** (APP-9) with manual check; beta channel opt-in.
+- [ ] **Auto-update** (APP-9) for private builds; disabled in Store builds.
+- [ ] **MSIX packaging** (APP-11) with a Store-compatible manifest; Partner Center identity.
 
 ### Epic 2: Library engine
 - [ ] **Library roots** (LIB-1).

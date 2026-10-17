@@ -30,12 +30,19 @@
   loss.
 - Every write to the library is logged.
 
-## Platform
+## Platform & distribution
 
-- Windows 10+, macOS 13+, mainstream Linux distributions (AppImage/deb/rpm or Flatpak).
-  **[Q1]**
+- **Windows 10 (1809+) / Windows 11, x64 and arm64** is the primary target. Public
+  distribution through the Microsoft Store as an MSIX package; private builds as a
+  signed installer or portable build with a self-updater.
+- **macOS 13+** is a stretch goal, distributed through the Mac App Store. This implies
+  the App Sandbox: file access only to user-picked folders persisted via security-scoped
+  bookmarks, outbound network only with the client entitlement, upload as a signed `.pkg`.
+- **Linux** is out of scope for v1; the architecture must not preclude it.
 - GPU acceleration required for 3D preview; graceful fallback without it.
-- Code-signed, auto-updating installers for public releases. **[Q2]**
+- Store builds must not ship their own updater; Store policy also expects the embedded
+  runtime (browser engine, if any) to receive security updates, so the release cadence
+  must keep up with the runtime's.
 
 ## Accessibility & i18n
 
@@ -58,7 +65,7 @@ automated end-to-end check passes against the real desktop application.
   disk (sidecars, renamed directories, trash) and in the index.
 - **Failure evidence.** Failed runs keep screenshots, traces and application logs.
 - **Smoke test.** A test proves the app launches and the first window becomes interactive
-  on every supported platform in CI.
+  on every supported platform in CI (Windows from day one; macOS when it becomes a target).
 - **Narrow test seams.** Where OS dialogs or external applications cannot be automated,
   test mode exposes a seam (e.g. a preselected path) rather than skipping the check.
 

@@ -3,23 +3,23 @@
 Collected while consolidating the specification. Each is referenced from the spec as
 **[Q#]**. Answers should be folded back into the spec and the question removed.
 
-## Blocking for the tech-stack decision
+## Answered
 
-- **[Q1] Platform priority.** Which OS is primary for you and for the target users?
-  The reference mockup is Windows 11. This matters most for the Tauri question: Tauri
-  renders through the system webview (WebView2/Chromium on Windows, WKWebView on macOS,
-  WebKitGTK on Linux), and WebGL behaviour on WebKitGTK is the weakest link for the 3D
-  preview. Electron ships one Chromium everywhere. Is Linux a must-have, nice-to-have or
-  out of scope for v1?
-- **[Q2] Audience and distribution.** Personal tool, small circle, or public release
-  with installers and auto-update from day one? Public release implies code signing
-  (Windows cert, Apple Developer ID + notarization), a release pipeline and update
-  channels in the MVP; a personal tool can defer all of that.
+| # | Question | Answer (2026-10-17) | Folded into |
+|---|---|---|---|
+| Q1 | Platform priority | **Windows first.** macOS is a stretch goal. Linux is out of scope for v1. | `spec/01-vision.md`, `spec/03-features.md` APP-1, `spec/04-quality.md` |
+| Q2 | Audience and distribution | **Private use first**, then a public **Windows release via the Microsoft Store**; a **Mac App Store** release is a stretch goal. | `spec/03-features.md` APP-9/APP-11, `spec/04-quality.md` Platform & distribution |
+| Q20 | Drag-out to slicer | **Nice to have, very low priority.** Not an MVP requirement. | `spec/03-features.md` IMP-6 moved to Later |
+
+## Still open for the tech-stack decision
+
+- **[Q21] Rust in the stack?** With Q1/Q2/Q20 answered, Tauri 2 has become a serious
+  option (see ADR-0001). It means a Rust backend next to the TypeScript frontend. Are
+  you comfortable owning Rust code (reading, reviewing, occasionally debugging agent
+  output), or should the stack stay TypeScript-only?
+
 - **[Q3] Library scale.** Roughly how many projects and files, and how large is the
   biggest single model you expect? (Drives indexing design and streaming requirements.)
-- **[Q20] Drag-out to slicer.** Is native drag-and-drop *out of the app* a must for the
-  MVP? Electron supports it natively; in Tauri it depends on a third-party plugin with
-  Linux limitations.
 
 ## Data model
 

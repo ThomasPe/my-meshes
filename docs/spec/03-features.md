@@ -7,7 +7,7 @@
 
 | ID | Requirement | Priority |
 |---|---|---|
-| LIB-1 | Add and remove library roots. Invalid or unreadable paths are reported, not silently ignored. | MVP |
+| LIB-1 | Add and remove library roots via the native folder picker (typed paths as a secondary option). Invalid or unreadable paths are reported, not silently ignored. | MVP |
 | LIB-2 | Recursive scan of each root finds model, image, document and attachment files, honoring the global ignore list. Scanning never writes to the library. | MVP |
 | LIB-3 | Real-time file watching keeps the index in sync with external changes (files added, removed, renamed, sidecar edited). The UI reflects changes without a manual refresh. | MVP |
 | LIB-4 | Fallback sync modes for volumes that cannot be watched (network shares): polled refresh with a configurable interval, and manual rescan. | MVP |
@@ -64,7 +64,7 @@
 | IMP-3 | Loose files can be routed to the inbox. | MVP |
 | IMP-4 | Files that appear in a root via the OS (not through the app) are picked up by sync; archives found this way are attachments and are not extracted. | MVP |
 | IMP-5 | Safe delete: deletions go to the OS trash after confirmation. | MVP |
-| IMP-6 | Drag a model or project out of the app into another application (slicer, Blender, file manager) as native files. **[Q20]** | MVP |
+| IMP-6 | Drag a model or project out of the app into another application (slicer, Blender, file manager) as native files. Low priority (Q20). | Later |
 | IMP-7 | Organizational rules: default folder layouts (by creator, source platform or tag) applied by import and move flows. | Later |
 | IMP-8 | Maintenance tools to reorganize, rename and clean up projects according to the rules, never creating nested projects. | Later |
 
@@ -72,7 +72,7 @@
 
 | ID | Requirement | Priority |
 |---|---|---|
-| APP-1 | Runs on Windows, macOS and Linux. **[Q1]** defines priority between them. | MVP |
+| APP-1 | Runs on Windows (primary). macOS support is a stretch goal; Linux is out of scope for v1 (Q1). | MVP |
 | APP-2 | Light, dark and system theme. | MVP |
 | APP-3 | All user-facing text is localizable; English and German at launch. **[Q13]** | MVP |
 | APP-4 | Settings: library roots, ignore patterns, thumbnail location, sync intervals, theme, language, notifications. | MVP |
@@ -80,5 +80,6 @@
 | APP-6 | Undo/redo for disk operations (rename, move, tag) via inverse operations. | Later |
 | APP-7 | Notifications for import errors, sync failures and completed background jobs. | MVP |
 | APP-8 | Log viewer: browse, filter and export application logs for bug reports. | Later |
-| APP-9 | Auto-update with manual check and optional beta channel. **[Q2]** | MVP |
+| APP-9 | Updates: private builds update themselves (manual check, optional beta channel); Store builds leave updating to the Store and hide the updater (Q2). | MVP |
 | APP-10 | Custom (frameless) title bar for a consistent look across platforms. **[Q14]** | Later |
+| APP-11 | Store readiness: Windows build packaged as MSIX with a Partner-Center-matching identity; macOS build runs in the App Sandbox, so library roots are chosen through the native folder picker and access is persisted with security-scoped bookmarks. No feature may rely on unrestricted file-system access outside registered roots. | MVP (Win), Later (Mac) |
