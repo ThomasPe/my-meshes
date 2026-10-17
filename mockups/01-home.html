@@ -1,0 +1,106 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>My Meshes — Home</title>
+<link rel="stylesheet" href="shared/mockup.css">
+<style>
+  .home .content { gap: 24px; }
+  .continue { --col: 1fr; grid-template-columns: repeat(3, 1fr); grid-auto-flow: row; }
+  .designers { display: flex; gap: 10px; flex-wrap: wrap; }
+  .dchip { display: flex; align-items: center; gap: 9px; padding: 6px 12px 6px 6px; border-radius: 999px; background: var(--surface); border: 1px solid var(--border); }
+  .dchip .n { font-weight: 500; }
+  .dchip .c { color: var(--muted); font-size: 12px; }
+  .two { display: grid; grid-template-columns: 1fr 340px; gap: 24px; align-items: start; }
+  .activity { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); padding: 16px 18px; display: flex; flex-direction: column; gap: 12px; }
+  .activity .item { display: flex; gap: 10px; align-items: flex-start; font-size: 12.5px; color: var(--text-2); }
+  .activity .item b { color: var(--text); font-weight: 500; }
+  .activity .item .ic { width: 26px; height: 26px; border-radius: 7px; background: var(--surface-2); display: grid; place-items: center; color: var(--text-2); flex: none; }
+  .activity .item .when { color: var(--muted); font-size: 11px; margin-top: 2px; }
+  .quick-actions { display: flex; gap: 10px; }
+</style>
+</head>
+<body>
+<div class="window home" id="app"></div>
+<script src="shared/data.js"></script>
+<script src="shared/ui.js"></script>
+<script>
+const { icon, card, board, avatar, titlebar, topnav, statusbar, designerName } = UI;
+const L = LIB;
+const recentOpened = ['gridfinity-baseplate', 'ripple-vase', 'headphone-stand'].map(id => L.byId[id]);
+const recentImported = ['gridfinity-baseplate', 'headphone-stand', 'ripple-vase', 'gears', 'storage-box', 'phone-stand'].map(id => L.byId[id]);
+const topDesigners = ['TinyLegion', 'voidstar', 'You', 'NordicPrints', 'k3rn3l', 'MakerMia', 'FlexiFab'];
+
+document.getElementById('app').innerHTML = `
+${titlebar()}
+${topnav('home')}
+<div class="page"><div class="content">
+  <section class="hero">
+    <div>
+      <h1>Good evening, Thomas</h1>
+      <p>Your library is in sync. 3 projects were imported today, 14 downloads are waiting in the Inbox.</p>
+      <div class="quick-actions" style="margin-top:16px">
+        <button class="btn">${icon('upload')} Import ZIPs</button>
+        <button class="btn">${icon('scan')} Scan folder</button>
+        <button class="btn">${icon('inbox')} Review Inbox <span class="badge accent">14</span></button>
+      </div>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="v">4,231</div><div class="l">models</div></div>
+      <div class="stat"><div class="v">1,208</div><div class="l">printed</div></div>
+      <div class="stat"><div class="v">312</div><div class="l">designers</div></div>
+      <div class="stat"><div class="v">87</div><div class="l">collections</div></div>
+      <div class="stat"><div class="v">145.6 GB</div><div class="l">on D:\\3D Models</div></div>
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>Continue where you left off</h2><a class="more" href="#">History ${icon('chevronRight', 'sm')}</a></div>
+    <div class="row continue">
+      ${recentOpened.map((m, i) => `
+        <article class="card wide">
+          <div class="thumb"><img src="${m.img}" alt=""></div>
+          <div class="body">
+            <div class="title">${m.title}</div>
+            <div class="by">${avatar(m.designer)}<span class="name">${designerName(m.designer)}</span>${UI.src(m.source)}</div>
+            <div class="desc">${['Opened 2 hours ago · Files tab', 'Opened yesterday · Sliced 1 of 3 files', 'Opened 2 days ago · Not printed yet'][i]}</div>
+            <div style="display:flex;gap:6px;margin-top:2px"><button class="btn sm">${icon('cube', 'sm')} Open in slicer</button><button class="btn sm ghost">${icon('folder', 'sm')} Folder</button></div>
+          </div>
+        </article>`).join('')}
+    </div>
+  </section>
+
+  <section>
+    <div class="section-head"><h2>Recently imported</h2><span class="count">this week</span><a class="more" href="#">Browse all ${icon('chevronRight', 'sm')}</a></div>
+    <div class="row" style="--col: 1fr; grid-template-columns: repeat(6, 1fr); grid-auto-flow: row;">
+      ${recentImported.map(m => card(m)).join('')}
+    </div>
+  </section>
+
+  <div class="two">
+    <section>
+      <div class="section-head"><h2>Pinned collections</h2><a class="more" href="#">All 87 ${icon('chevronRight', 'sm')}</a></div>
+      <div class="grid" style="--cols:3">
+        ${L.collections.filter(c => c.pinned).map(c => board(c)).join('')}
+      </div>
+    </section>
+    <section>
+      <div class="section-head"><h2>Designers you collect</h2><a class="more" href="#">All 312 ${icon('chevronRight', 'sm')}</a></div>
+      <div class="designers">
+        ${topDesigners.map(k => `<span class="dchip">${avatar(k)}<span class="n">${designerName(k)}</span><span class="c">${L.designers[k].models}</span></span>`).join('')}
+      </div>
+      <div class="section-head" style="margin-top:22px"><h2>Activity</h2></div>
+      <div class="activity">
+        <div class="item"><span class="ic">${icon('upload', 'sm')}</span><div><b>Imported</b> Gridfinity Baseplate 4×3 from gridfinity_baseplate_v3.zip<div class="when">2 hours ago · metadata fetched from Printables</div></div></div>
+        <div class="item"><span class="ic">${icon('check', 'sm')}</span><div><b>Marked as printed</b> Ripple Spiral Vase · 1 photo added<div class="when">yesterday</div></div></div>
+        <div class="item"><span class="ic">${icon('tag', 'sm')}</span><div><b>Tagged</b> 12 models with <span class="tag">workshop</span><div class="when">2 days ago · batch edit</div></div></div>
+        <div class="item"><span class="ic">${icon('copy', 'sm')}</span><div><b>Duplicate found</b> benchy.stl exists in 2 projects<div class="when">3 days ago · review</div></div></div>
+      </div>
+    </section>
+  </div>
+</div></div>
+${statusbar(`${icon('check', 'sm')} Watching 2 library roots · last scan 2 min ago`, '<span>Thumbnails: 3 queued</span><span>4,231 models · 145.6 GB</span>')}
+`;
+</script>
+</body>
+</html>

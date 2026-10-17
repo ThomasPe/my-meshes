@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>My Meshes — Browse</title>
+<link rel="stylesheet" href="shared/mockup.css">
+<style>
+  .catbar { height: 48px; display: flex; align-items: center; gap: 8px; padding: 0 28px; border-bottom: 1px solid var(--border); overflow: hidden; }
+  .browse { display: grid; grid-template-columns: 250px 1fr; flex: 1; min-height: 0; }
+  .filters { border-right: 1px solid var(--border); padding: 18px 20px; display: flex; flex-direction: column; gap: 20px; overflow: hidden; }
+  .filters h3 { margin: 0 0 8px; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+  .f { display: flex; align-items: center; gap: 9px; padding: 5px 0; color: var(--text-2); font-size: 12.5px; }
+  .f .box { width: 15px; height: 15px; border-radius: 4px; border: 1.5px solid var(--border-strong); display: grid; place-items: center; flex: none; }
+  .f.on { color: var(--text); }
+  .f.on .box { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+  .f .n { margin-left: auto; color: var(--muted); font-size: 11.5px; }
+  .filters .head { display: flex; align-items: center; justify-content: space-between; }
+  .filters .head a { color: var(--accent); font-size: 12px; }
+  .results { padding: 18px 28px; display: flex; flex-direction: column; gap: 14px; overflow: hidden; }
+  .results .count { font-size: 14px; }
+  .results .count b { font-weight: 600; }
+  .range { height: 4px; background: var(--surface-3); border-radius: 2px; position: relative; margin: 10px 6px 4px; }
+  .range::before { content: ""; position: absolute; left: 30%; right: 10%; top: 0; bottom: 0; background: var(--accent); border-radius: 2px; }
+  .range .k { position: absolute; top: -5px; width: 14px; height: 14px; border-radius: 50%; background: #fff; border: 2px solid var(--accent); }
+</style>
+</head>
+<body>
+<div class="window" id="app"></div>
+<script src="shared/data.js"></script>
+<script src="shared/ui.js"></script>
+<script>
+const { icon, card, titlebar, topnav, statusbar, src } = UI;
+const L = LIB;
+const cats = ['All models', 'Organization', 'Household', 'Tools', 'Desk', 'Toys & Games', 'Tabletop', 'Decor', 'Cosplay', 'Electronics', 'Printer parts', 'Calibration', 'Gifts'];
+const order = ['gridfinity-baseplate', 'hex-bit-holder', 'storage-box', 'wall-hook', 'spool-holder', 'knob', 'pi-case', 'cable-clip', 'gears', 'phone-stand', 'headphone-stand', 'planter'];
+const items = order.map(id => L.byId[id]);
+const f = (label, n, on) => `<div class="f${on ? ' on' : ''}"><span class="box">${on ? icon('check', 'sm') : ''}</span>${label}<span class="n">${n}</span></div>`;
+
+document.getElementById('app').innerHTML = `
+${titlebar()}
+${topnav('browse', { search: '<span style="color:var(--text)">organizer</span>' })}
+<div class="page">
+  <div class="catbar">
+    ${cats.map((c, i) => `<span class="chip${i === 0 ? ' active' : ''}">${c}</span>`).join('')}
+  </div>
+  <div class="browse">
+    <aside class="filters">
+      <div class="head"><h3 style="margin:0">Filters</h3><a href="#">Clear all (2)</a></div>
+      <div><h3>Print status</h3>
+        ${f('Printed', '1,208', true)}${f('Not printed yet', '3,023', false)}${f('Favorites', '96', false)}${f('Has print photos', '412', false)}
+      </div>
+      <div><h3>Source</h3>
+        ${f(src('printables') + ' Printables', '1,944', false)}${f(src('makerworld') + ' MakerWorld', '1,102', false)}${f(src('thingiverse') + ' Thingiverse', '690', false)}${f(src('thangs') + ' Thangs', '318', false)}${f(src('own') + ' Own designs', '177', false)}
+      </div>
+      <div><h3>License</h3>
+        ${f('CC BY', '1,310', false)}${f('CC BY-NC', '1,870', true)}${f('CC0 / Public domain', '402', false)}${f('Standard Digital File', '213', false)}${f('Private / no license', '436', false)}
+      </div>
+      <div><h3>Material</h3>
+        <div class="chips"><span class="chip">PLA</span><span class="chip">PETG</span><span class="chip">TPU</span><span class="chip">Resin</span><span class="chip">ASA</span></div>
+      </div>
+      <div><h3>Files</h3>
+        ${f('Has 3MF project', '2,610', false)}${f('Has print profile', '1,480', false)}${f('Has source (SCAD/STEP)', '388', false)}
+      </div>
+      <div><h3>Added</h3><div class="range"><span class="k" style="left:calc(30% - 7px)"></span><span class="k" style="left:calc(90% - 7px)"></span></div>
+        <div style="display:flex;justify-content:space-between;color:var(--muted);font-size:11px"><span>2021</span><span>today</span></div>
+      </div>
+    </aside>
+    <main class="results">
+      <div class="toolbar">
+        <div class="count"><b>2,184 models</b> <span style="color:var(--muted)">in All models matching “organizer”</span></div>
+        <div class="spacer"></div>
+        <div class="select">Sort <b>Recently added</b> ${icon('chevronDown', 'sm')}</div>
+        <div class="seg"><button class="active">${icon('grid')}</button><button>${icon('gridSm')}</button><button>${icon('list')}</button></div>
+        <button class="iconbtn bordered">${icon('sliders')}</button>
+      </div>
+      <div class="chips">
+        <span class="chip accent">${icon('check', 'sm')} Printed <span class="x">✕</span></span>
+        <span class="chip accent">License: CC BY-NC <span class="x">✕</span></span>
+        <span class="chip accent">“organizer” <span class="x">✕</span></span>
+        <span class="chip" style="border-style:dashed">${icon('bolt', 'sm')} Save as smart collection</span>
+      </div>
+      <div class="grid" style="--cols:4">
+        ${items.map((m, i) => card(m, { hover: i === 1, selected: false })).join('')}
+      </div>
+    </main>
+  </div>
+</div>
+${statusbar(`${icon('check', 'sm')} 2,184 results · 0.04 s · FTS index up to date`, '<span>Selected: 0</span><span>Thumbnail size ◦──●──◦</span>')}
+`;
+</script>
+</body>
+</html>

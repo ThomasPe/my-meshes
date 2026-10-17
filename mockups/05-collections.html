@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>My Meshes — Collections</title>
+<link rel="stylesheet" href="shared/mockup.css">
+<style>
+  .head { display: flex; align-items: center; gap: 14px; }
+  .board.hover { transform: translateY(-2px); box-shadow: var(--shadow); border-color: var(--border-strong); position: relative; }
+  .board.hover .cover::after { content: ""; position: absolute; inset: 0; background: linear-gradient(to top, rgba(0,0,0,0.6), transparent 55%); }
+  .board.hover .acts { position: absolute; left: 10px; right: 10px; top: calc(62.5% - 44px); display: flex; gap: 6px; z-index: 2; }
+  .board.hover .acts .btn { flex: 1; justify-content: center; height: 30px; background: rgba(255,255,255,0.92); color: #111; border-color: transparent; font-size: 12px; }
+  .board.hover .acts .btn.dark { flex: none; width: 30px; padding: 0; background: rgba(0,0,0,0.6); color: #fff; }
+  .auto { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .autocard { display: flex; align-items: center; gap: 12px; padding: 12px 14px; border-radius: 12px; background: var(--surface); border: 1px solid var(--border); }
+  .autocard .ic { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--surface-2); color: var(--text-2); }
+  .autocard .t { font-weight: 600; font-size: 13px; }
+  .autocard .s { color: var(--muted); font-size: 11.5px; }
+</style>
+</head>
+<body>
+<div class="window" id="app"></div>
+<script src="shared/data.js"></script>
+<script src="shared/ui.js"></script>
+<script>
+const { icon, board, titlebar, topnav, statusbar } = UI;
+const L = LIB;
+const pinned = L.collections.filter(c => c.pinned);
+const rest = L.collections.filter(c => !c.pinned);
+document.getElementById('app').innerHTML = `
+${titlebar()}
+${topnav('collections')}
+<div class="page"><div class="content" style="gap:22px">
+  <div class="head">
+    <div><h1 class="page-title">Collections</h1><div class="subtitle">87 collections · 23 smart · boards are stored in collections.json, independent of your folder structure</div></div>
+    <div class="spacer" style="flex:1"></div>
+    <div class="tabs" style="border:0"><a class="active" href="#">All <span class="n">87</span></a><a href="#">Manual <span class="n">64</span></a><a href="#">${icon('bolt','sm')} Smart <span class="n">23</span></a><a href="#">Shared folders <span class="n">3</span></a></div>
+    <div class="select">Sort <b>Recently updated</b> ${icon('chevronDown','sm')}</div>
+    <button class="btn primary">${icon('plus')} New collection</button>
+  </div>
+  <section>
+    <div class="section-head"><h2>Browse by</h2></div>
+    <div class="auto">
+      <div class="autocard"><span class="ic">${icon('users')}</span><div><div class="t">Designers</div><div class="s">312 · auto-grouped</div></div></div>
+      <div class="autocard"><span class="ic">${icon('tag')}</span><div><div class="t">Tags</div><div class="s">1,204 · from project.yaml</div></div></div>
+      <div class="autocard"><span class="ic">${icon('external')}</span><div><div class="t">Source platform</div><div class="s">Printables, MakerWorld, Thingiverse, Thangs</div></div></div>
+      <div class="autocard"><span class="ic">${icon('folder')}</span><div><div class="t">Folders on disk</div><div class="s">D:\\3D Models · 2 roots</div></div></div>
+    </div>
+  </section>
+  <section>
+    <div class="section-head"><h2>${icon('pin','sm')} Pinned</h2></div>
+    <div class="grid" style="--cols:4">
+      ${pinned.map((c, i) => board(c)).join('')}
+      <article class="board new"><div class="inner"><span class="plus">${icon('plus')}</span>New collection<span style="color:var(--muted);font-size:11.5px;font-weight:400">or drop models here</span></div></article>
+    </div>
+  </section>
+  <section>
+    <div class="section-head"><h2>All collections</h2><span class="count">84 more</span></div>
+    <div class="grid" style="--cols:4">
+      ${rest.map((c, i) => i === 0 ? board(c, { cls: 'hover' }).replace('</article>', `<div class="acts"><button class="btn">${icon('bolt','sm')} Edit rules</button><button class="btn dark">${icon('pin','sm')}</button><button class="btn dark">${icon('more','sm')}</button></div></article>`) : board(c)).join('')}
+    </div>
+  </section>
+</div></div>
+${statusbar(`${icon('check','sm')} collections.json saved · 87 collections`, '<span>Smart collections re-evaluated 2 min ago</span>')}
+`;
+</script>
+</body>
+</html>

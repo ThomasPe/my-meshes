@@ -1,0 +1,105 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>Thumbnail renderer</title>
+<style>html,body{margin:0;background:#111}canvas{display:block}</style>
+<script type="importmap">{"imports":{"three":"./node_modules/three/build/three.module.js"}}</script>
+</head>
+<body>
+<canvas id="c"></canvas>
+<script type="module">
+import * as THREE from 'three';
+import { MODELS } from './models.js';
+
+const canvas = document.getElementById('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+renderer.outputColorSpace = THREE.SRGBColorSpace;
+
+const STYLES = {
+  // "render": the look of an app-generated preview (dark studio, neutral light)
+  render: { bg: 0x1b1e25, ground: 0x1b1e25, key: 0xffffff, keyI: 2.6, fill: 0x9db4ff, fillI: 0.9, hemiSky: 0x8899bb, hemiGround: 0x222426, hemiI: 0.9, fov: 30, elevate: 1.0 },
+  // "photo": a photo of the physical print on a desk
+  photo: { bg: 0xcdb79a, ground: 0xc8b08f, key: 0xfff0d6, keyI: 3.0, fill: 0xbcd3ff, fillI: 0.8, hemiSky: 0xffe9cf, hemiGround: 0x6b5a45, hemiI: 1.0, fov: 34, elevate: 0.75 },
+  // "bed": model sitting on a textured print bed (used for the "printed" state)
+  bed: { bg: 0x23262d, ground: 0x2c2f36, key: 0xffffff, keyI: 2.4, fill: 0xffd6a0, fillI: 0.7, hemiSky: 0x667088, hemiGround: 0x1a1b1f, hemiI: 0.9, fov: 30, elevate: 0.9 },
+};
+
+function makeScene(style) {
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(style.bg);
+  scene.fog = new THREE.Fog(style.bg, 260, 700);
+  const hemi = new THREE.HemisphereLight(style.hemiSky, style.hemiGround, style.hemiI); scene.add(hemi);
+  const key = new THREE.DirectionalLight(style.key, style.keyI);
+  key.position.set(90, 160, 110); key.castShadow = true;
+  key.shadow.mapSize.set(2048, 2048); key.shadow.camera.left = -120; key.shadow.camera.right = 120;
+  key.shadow.camera.top = 120; key.shadow.camera.bottom = -120; key.shadow.camera.near = 10; key.shadow.camera.far = 500;
+  key.shadow.bias = -0.0005; key.shadow.radius = 4;
+  scene.add(key);
+  const fill = new THREE.DirectionalLight(style.fill, style.fillI); fill.position.set(-140, 60, -40); scene.add(fill);
+  const rim = new THREE.DirectionalLight(0xffffff, 1.2); rim.position.set(-40, 120, -160); scene.add(rim);
+  const ground = new THREE.Mesh(new THREE.PlaneGeometry(2000, 2000), new THREE.MeshStandardMaterial({ color: style.ground, roughness: 0.95 }));
+  ground.rotation.x = -Math.PI / 2; ground.receiveShadow = true; scene.add(ground);
+  if (style === STYLES.bed) {
+    const grid = new THREE.GridHelper(600, 60, 0x3a3e47, 0x33363e); grid.position.y = 0.05; scene.add(grid);
+  }
+  return scene;
+}
+
+function render(job) {
+  const style = STYLES[job.style];
+  const { w, h } = job;
+  renderer.setSize(w, h, false);
+  const scene = makeScene(style);
+  const group = job.model.build();
+  group.traverse(o => { if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; } });
+  scene.add(group);
+  const box = new THREE.Box3().setFromObject(group);
+  const sphere = box.getBoundingSphere(new THREE.Sphere());
+  const camera = new THREE.PerspectiveCamera(style.fov, w / h, 1, 2000);
+  const dir = new THREE.Vector3(...job.model.cam).normalize();
+  dir.y *= style.elevate;
+  dir.normalize();
+  const dist = (sphere.radius / Math.sin(THREE.MathUtils.degToRad(style.fov / 2))) * 1.08 / (job.model.zoom || 1);
+  camera.position.copy(sphere.center).addScaledVector(dir, dist);
+  const target = sphere.center.clone(); target.y -= sphere.radius * 0.08;
+  camera.lookAt(target);
+  renderer.render(scene, camera);
+  return canvas.toDataURL('image/jpeg', 0.9);
+}
+
+const params = new URLSearchParams(location.search);
+const only = params.get('only');
+const jobs = [];
+for (const model of MODELS) {
+  if (only && model.id !== only) continue;
+  jobs.push({ name: `${model.id}.jpg`, model, style: 'render', w: 640, h: 480 });
+}
+const photoSet = ['gridfinity-baseplate', 'benchy', 'ripple-vase', 'planter', 'hex-bit-holder', 'articulated-snake', 'phone-stand', 'headphone-stand', 'dice', 'pi-case'];
+for (const id of photoSet) {
+  const model = MODELS.find(m => m.id === id);
+  if (!model || (only && id !== only)) continue;
+  jobs.push({ name: `${id}-photo.jpg`, model, style: 'photo', w: 640, h: 480 });
+}
+for (const id of ['gridfinity-baseplate', 'hex-bit-holder']) {
+  const model = MODELS.find(m => m.id === id);
+  if (only && id !== only) continue;
+  jobs.push({ name: `${id}-hero.jpg`, model, style: 'render', w: 1280, h: 960 });
+  jobs.push({ name: `${id}-bed.jpg`, model, style: 'bed', w: 1280, h: 960 });
+  jobs.push({ name: `${id}-photo-hero.jpg`, model, style: 'photo', w: 1280, h: 960 });
+}
+
+const results = [];
+for (const job of jobs) {
+  try { results.push({ name: job.name, data: render(job) }); }
+  catch (e) { results.push({ name: job.name, error: String(e && e.stack || e) }); }
+}
+window.__results = results;
+window.__done = true;
+</script>
+</body>
+</html>

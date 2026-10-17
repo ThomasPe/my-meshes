@@ -1,0 +1,14 @@
+{
+  "name": "my-meshes-mockup-tools",
+  "private": true,
+  "description": "Renders procedural model thumbnails and screenshots the HTML mockups.",
+  "scripts": {
+    "thumbs": "node render-thumbs.js",
+    "shots": "node render-mockups.js",
+    "all": "node render-thumbs.js && node render-mockups.js"
+  },
+  "dependencies": {
+    "playwright-core": "^1.52.0",
+    "three": "^0.160.0"
+  }
+}

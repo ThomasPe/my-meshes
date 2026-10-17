@@ -1,0 +1,139 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>My Meshes — Model</title>
+<link rel="stylesheet" href="shared/mockup.css">
+<style>
+  .crumbs { display: flex; align-items: center; gap: 6px; color: var(--muted); font-size: 12.5px; padding: 14px 28px 0; }
+  .crumbs b { color: var(--text); font-weight: 500; }
+  .detail { display: grid; grid-template-columns: 1fr 420px; gap: 28px; padding: 14px 28px 0; flex: 1; min-height: 0; }
+  .gallery .main { aspect-ratio: 4 / 3; max-height: 400px; width: 100%; border-radius: 16px; overflow: hidden; position: relative; background: #1b1e25; border: 1px solid var(--border); }
+  .gallery .main img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .gallery .main .ctl { position: absolute; right: 12px; top: 12px; display: flex; gap: 6px; }
+  .gallery .main .ctl .iconbtn { background: rgba(0,0,0,0.5); color: #fff; backdrop-filter: blur(6px); }
+  .gallery .main .label { position: absolute; left: 12px; bottom: 12px; }
+  .strip { display: flex; gap: 8px; margin-top: 10px; }
+  .strip .t { width: 96px; aspect-ratio: 4/3; border-radius: 9px; overflow: hidden; border: 2px solid transparent; position: relative; background: var(--surface); }
+  .strip .t img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .strip .t.on { border-color: var(--accent); }
+  .strip .t .lbl { position: absolute; left: 0; right: 0; bottom: 0; font-size: 10px; padding: 2px 6px; background: rgba(0,0,0,0.55); color: #fff; }
+  .strip .t.add { display: grid; place-items: center; color: var(--text-2); border: 1.5px dashed var(--border-strong); font-size: 11px; text-align: center; }
+  .files { display: flex; flex-direction: column; }
+  .frow { display: grid; grid-template-columns: 44px 1fr 90px 70px 150px; align-items: center; gap: 12px; padding: 7px 8px; border-radius: 9px; font-size: 12.5px; color: var(--text-2); }
+  .frow:hover, .frow.hl { background: var(--surface); }
+  .frow .fi { width: 44px; height: 33px; border-radius: 6px; overflow: hidden; background: var(--surface-2); display: grid; place-items: center; color: var(--muted); }
+  .frow .fi img { width: 100%; height: 100%; object-fit: cover; }
+  .frow .fn { color: var(--text); font-weight: 500; display: flex; align-items: center; gap: 8px; min-width: 0; }
+  .frow .fn span { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .frow .acts { display: flex; gap: 4px; justify-content: flex-end; }
+  .frow .acts .btn { height: 26px; padding: 0 9px; font-size: 11.5px; }
+  .side { display: flex; flex-direction: column; gap: 16px; overflow: hidden; }
+  .side h1 { margin: 0; font-size: 22px; letter-spacing: -0.02em; line-height: 1.2; }
+  .drow { display: flex; align-items: center; gap: 10px; }
+  .drow .dn { font-weight: 600; }
+  .drow .ds { color: var(--muted); font-size: 12px; }
+  .actions { display: flex; gap: 8px; }
+  .panel { background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 14px 16px; }
+  .panel h4 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em; color: var(--muted); font-weight: 600; display: flex; align-items: center; gap: 6px; }
+  .panel h4 .r { margin-left: auto; text-transform: none; letter-spacing: 0; color: var(--accent); font-weight: 500; }
+  .kv { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px 14px; }
+  .kv .k { color: var(--muted); font-size: 11px; }
+  .kv .v { font-weight: 600; font-size: 13px; }
+  .desc { color: var(--text-2); font-size: 12.5px; line-height: 1.55; }
+  .desc p { margin: 0 0 8px; }
+  .makes { display: flex; gap: 8px; }
+  .makes .mk { width: 86px; aspect-ratio: 1; border-radius: 9px; overflow: hidden; position: relative; }
+  .makes .mk img { width: 100%; height: 100%; object-fit: cover; }
+  .makes .mk .d { position: absolute; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.55); color: #fff; font-size: 10px; padding: 2px 6px; }
+  .makes .mk.add { border: 1.5px dashed var(--border-strong); display: grid; place-items: center; color: var(--text-2); font-size: 11px; }
+  .incol { display: flex; gap: 6px; flex-wrap: wrap; }
+</style>
+</head>
+<body>
+<div class="window" id="app"></div>
+<script src="shared/data.js"></script>
+<script src="shared/ui.js"></script>
+<script>
+const { icon, titlebar, topnav, statusbar, avatar, src, srcName, designerName } = UI;
+const L = LIB; const m = L.byId['gridfinity-baseplate'];
+const T = 'assets/thumbs/';
+const files = [
+  ['img', 'Baseplate_4x3_screwdown.3mf', 'Project', '4.8 MB', ['Open in slicer']],
+  ['img', 'Baseplate_4x3_screwdown.stl', 'Model', '12.1 MB', ['Open in slicer', 'Preview']],
+  ['img', 'Baseplate_2x2_corner.stl', 'Model', '3.4 MB', ['Open in slicer', 'Preview']],
+  ['img', 'Baseplate_1x1_filler.stl', 'Model', '0.9 MB', ['Open in slicer', 'Preview']],
+  ['file', 'Baseplate_4x3.step', 'Source', '2.2 MB', ['Open']],
+  ['file', 'gridfinity_baseplate.scad', 'Source', '18 KB', ['Open']],
+  ['file', 'README.md', 'Docs', '3 KB', ['Open']],
+  ['package', 'gridfinity_baseplate_v3.zip', 'Attachment', '19.6 MB', ['Show']],
+];
+document.getElementById('app').innerHTML = `
+${titlebar()}
+${topnav('browse')}
+<div class="page">
+  <div class="crumbs">${icon('chevronLeft', 'sm')} <span>Browse</span> › <span>Organization</span> › <span>k3rn3l</span> › <b>${m.title}</b>
+    <span style="margin-left:auto;display:flex;gap:6px;align-items:center;color:var(--muted)">${icon('folder','sm')} D:\\3D Models\\Organization\\k3rn3l\\Gridfinity Baseplate 4x3 <button class="btn sm ghost">Show in folder</button></span></div>
+  <div class="detail">
+    <section class="gallery">
+      <div class="main"><img src="${T}gridfinity-baseplate-hero.jpg" alt="">
+        <div class="ctl"><button class="iconbtn" title="Rotate in 3D">${icon('cube')}</button><button class="iconbtn" title="Set as thumbnail">${icon('camera')}</button><button class="iconbtn">${icon('more')}</button></div>
+        <span class="label badge dark">${icon('layers','sm')} Generated preview · 3D view available</span>
+      </div>
+      <div class="strip">
+        <div class="t on"><img src="${T}gridfinity-baseplate.jpg"><span class="lbl">Preview</span></div>
+        <div class="t"><img src="${T}gridfinity-baseplate-bed.jpg"><span class="lbl">Plate layout</span></div>
+        <div class="t"><img src="${T}gridfinity-baseplate-photo.jpg"><span class="lbl">My print · Jan 12</span></div>
+        <div class="t"><img src="${T}hex-bit-holder-photo.jpg"><span class="lbl">My print · Feb 3</span></div>
+        <div class="t"><img src="${T}storage-box.jpg"><span class="lbl">From Printables</span></div>
+        <div class="t add">${icon('plus','sm')}<br>Add photo</div>
+      </div>
+      <div class="tabs" style="margin-top:16px">
+        <a class="active" href="#">Files <span class="n">14</span></a><a href="#">My makes <span class="n">3</span></a><a href="#">Notes</a><a href="#">History</a><a href="#">Related <span class="n">6</span></a>
+      </div>
+      <div class="files" style="margin-top:8px">
+        ${files.map(([ic, name, type, size, acts], i) => `<div class="frow${i === 0 ? ' hl' : ''}">
+          <span class="fi">${ic === 'img' ? `<img src="${T}${['gridfinity-baseplate', 'gridfinity-baseplate', 'storage-box', 'knob'][i] || 'gridfinity-baseplate'}.jpg">` : icon(ic)}</span>
+          <span class="fn"><span>${name}</span>${i === 0 ? '<span class="badge accent">Print profile</span>' : ''}${i === 1 ? '<span class="badge neutral">Duplicate in 1 project</span>' : ''}</span>
+          <span><span class="tag">${type}</span></span><span>${size}</span>
+          <span class="acts">${acts.map((a, j) => `<button class="btn sm${j === 0 && i < 4 ? '' : ' ghost'}">${a}</button>`).join('')}<button class="iconbtn" style="width:26px;height:26px">${icon('more','sm')}</button></span>
+        </div>`).join('')}
+      </div>
+    </section>
+    <aside class="side">
+      <div>
+        <div style="display:flex;gap:6px;margin-bottom:10px"><span class="badge ok">${icon('check','sm')} Printed ×3</span><span class="badge neutral">${src('printables')} ${srcName('printables')}</span><span class="badge neutral">CC BY-NC-SA 4.0</span><span class="badge neutral">Added 2 h ago</span></div>
+        <h1>${m.title}</h1>
+      </div>
+      <div class="drow">${avatar(m.designer, 'lg')}<div><div class="dn">${designerName(m.designer)}</div><div class="ds">12 models in your library · 8 printed</div></div>
+        <button class="btn sm" style="margin-left:auto">${icon('user','sm')} Designer page</button><button class="btn sm ghost">${icon('external','sm')} Source</button></div>
+      <div class="actions">
+        <button class="btn primary lg" style="flex:1;justify-content:center">${icon('cube')} Open in slicer</button>
+        <button class="btn lg">${icon('printer')} Log a print</button>
+        <button class="btn lg" title="Add to collection">${icon('plus')}</button>
+        <button class="btn lg" title="Favorite" style="color:var(--accent)">${icon('heart')}</button>
+        <button class="btn lg">${icon('more')}</button>
+      </div>
+      <div class="panel"><h4>${icon('printer','sm')} Print profile <span class="r">from Baseplate_4x3_screwdown.3mf</span></h4>
+        <div class="kv">
+          <div><div class="k">Material</div><div class="v">PLA · Matte</div></div>
+          <div><div class="k">Nozzle / layer</div><div class="v">0.4 / 0.2 mm</div></div>
+          <div><div class="k">Infill</div><div class="v">15 % gyroid</div></div>
+          <div><div class="k">Supports</div><div class="v">None</div></div>
+          <div><div class="k">Est. time</div><div class="v">2 h 40 min</div></div>
+          <div><div class="k">Filament</div><div class="v">86 g</div></div>
+        </div></div>
+      <div class="panel"><h4>${icon('tag','sm')} Tags <span class="r">Edit</span></h4>
+        <div class="chips">${m.tags.map(t => `<span class="chip">${t}</span>`).join('')}<span class="chip">M3 screws</span><span class="chip">4×3</span><span class="chip" style="border-style:dashed">${icon('plus','sm')}</span></div></div>
+      <div class="panel"><h4>${icon('info','sm')} About <span class="r">Fetched from Printables</span></h4>
+        <div class="desc"><p>Screw-down Gridfinity baseplate, 4×3 units, with magnet pockets and countersunk M3 holes. Includes 2×2 corner and 1×1 filler plates for odd drawer sizes.</p><p>Remix of the original Gridfinity baseplate; adds a 1 mm skirt so the plate sits flush in IKEA Alex drawers.</p></div></div>
+      <div class="panel"><h4>${icon('layers','sm')} In collections</h4>
+        <div class="incol"><span class="chip">${icon('pin','sm')} Workshop organisation</span><span class="chip">${icon('bolt','sm')} Gridfinity</span><span class="chip" style="border-style:dashed">${icon('plus','sm')} Add</span></div></div>
+    </aside>
+  </div>
+</div>
+${statusbar(`${icon('check','sm')} project.yaml in sync · last edited 2 h ago`, '<span>14 files · 43.1 MB</span><span>SHA-256 verified</span>')}
+`;
+</script>
+</body>
+</html>

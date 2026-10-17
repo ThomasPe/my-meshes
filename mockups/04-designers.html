@@ -1,0 +1,82 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>My Meshes — Designers</title>
+<link rel="stylesheet" href="shared/mockup.css">
+<style>
+  .split { display: grid; grid-template-columns: 300px 1fr; flex: 1; min-height: 0; }
+  .list { border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+  .list .head { padding: 16px 18px 10px; display: flex; flex-direction: column; gap: 10px; }
+  .list .head .search { height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 10px; background: var(--surface); border: 1px solid var(--border); border-radius: 9px; color: var(--muted); font-size: 12.5px; }
+  .drow { display: flex; align-items: center; gap: 11px; padding: 9px 18px; color: var(--text-2); }
+  .drow.on { background: var(--surface-2); color: var(--text); }
+  .drow .n { font-weight: 500; color: var(--text); font-size: 13px; }
+  .drow .s { font-size: 11.5px; color: var(--muted); display: flex; gap: 6px; align-items: center; }
+  .drow .c { margin-left: auto; color: var(--muted); font-size: 12px; }
+  .letter { padding: 10px 18px 4px; font-size: 11px; color: var(--muted); font-weight: 600; letter-spacing: 0.08em; }
+  .profile { display: flex; flex-direction: column; overflow: hidden; }
+  .cover { height: 96px; background: linear-gradient(120deg, rgba(245,165,36,0.35), rgba(255,122,69,0.15) 40%, rgba(91,156,255,0.2)), var(--surface); border-bottom: 1px solid var(--border); }
+  .phead { display: flex; align-items: flex-end; gap: 18px; padding: 0 28px; margin-top: -36px; position: relative; z-index: 1; }
+  .phead .info { padding-bottom: 6px; flex: 1; }
+  .phead h1 { margin: 0; font-size: 24px; letter-spacing: -0.02em; }
+  .phead .sub { color: var(--text-2); font-size: 13px; margin-top: 3px; display: flex; gap: 12px; align-items: center; }
+  .phead .pacts { display: flex; gap: 8px; padding-bottom: 8px; }
+  .pstats { display: flex; gap: 26px; padding: 16px 28px 0; }
+  .pbody { padding: 0 28px 0; display: flex; flex-direction: column; gap: 14px; flex: 1; min-height: 0; }
+  .note { display: flex; gap: 10px; align-items: center; padding: 10px 14px; border-radius: 10px; background: var(--surface); border: 1px solid var(--border); color: var(--text-2); font-size: 12.5px; }
+  .note b { color: var(--text); font-weight: 500; }
+</style>
+</head>
+<body>
+<div class="window" id="app"></div>
+<script src="shared/data.js"></script>
+<script src="shared/ui.js"></script>
+<script>
+const { icon, card, titlebar, topnav, statusbar, avatar, src, srcName, designerName } = UI;
+const L = LIB;
+const listOrder = [['#', ['You']], ['B', ['BoatWorksLab']], ['F', ['FlexiFab']], ['K', ['k3rn3l']], ['L', ['LumenLab']], ['M', ['MakerMia']], ['N', ['NordicPrints']], ['P', ['PropForge']], ['T', ['TinyLegion']], ['V', ['voidstar']]];
+const dk = 'k3rn3l'; const d = L.designers[dk];
+const theirs = L.models.filter(m => m.designer === dk);
+const extra = ['storage-box', 'knob', 'cable-clip', 'wall-hook', 'spool-holder'].map(id => ({ ...L.byId[id], designer: dk }));
+const grid = [...theirs, ...extra];
+document.getElementById('app').innerHTML = `
+${titlebar()}
+${topnav('designers')}
+<div class="page"><div class="split">
+  <aside class="list">
+    <div class="head">
+      <div style="display:flex;align-items:baseline;gap:8px"><h1 class="page-title" style="font-size:18px">Designers</h1><span class="subtitle">312</span></div>
+      <div class="search">${icon('search','sm')} Filter designers</div>
+      <div class="chips"><span class="chip active" style="height:24px;font-size:11.5px">A–Z</span><span class="chip" style="height:24px;font-size:11.5px">Most models</span><span class="chip" style="height:24px;font-size:11.5px">Recently added</span></div>
+    </div>
+    ${listOrder.map(([letter, keys]) => `<div class="letter">${letter}</div>` + keys.map(k => `<div class="drow${k === dk ? ' on' : ''}">${avatar(k, 'lg')}<div><div class="n">${designerName(k)}</div><div class="s">${L.designers[k].platforms.map(p => src(p)).join('')} ${L.designers[k].printed} printed</div></div><span class="c">${L.designers[k].models}</span></div>`).join('')).join('')}
+  </aside>
+  <main class="profile">
+    <div class="cover"></div>
+    <div class="phead">
+      ${avatar(dk, 'xl')}
+      <div class="info"><h1>${d.name}</h1>
+        <div class="sub"><span>Designer</span>·<span style="display:flex;gap:6px;align-items:center">${src('printables')} printables.com/@k3rn3l ${icon('external','sm')}</span>·<span style="display:flex;gap:6px;align-items:center">${src('makerworld')} makerworld.com/k3rn3l ${icon('external','sm')}</span></div></div>
+      <div class="pacts"><button class="btn">${icon('star')} Favorite designer</button><button class="btn">${icon('bolt')} Smart collection</button><button class="btn">${icon('edit')} Edit</button></div>
+    </div>
+    <div class="pstats">
+      <div class="stat"><div class="v">12</div><div class="l">models in library</div></div>
+      <div class="stat"><div class="v">8</div><div class="l">printed</div></div>
+      <div class="stat"><div class="v">31</div><div class="l">prints logged</div></div>
+      <div class="stat"><div class="v">CC BY-NC-SA</div><div class="l">usual license</div></div>
+      <div class="stat"><div class="v">2 h ago</div><div class="l">last import</div></div>
+    </div>
+    <div class="pbody">
+      <div class="note">${icon('info')}<span><b>Designer page is built from your local files.</b> Name, avatar and links were taken from project.yaml and the imported Printables metadata. Nothing is fetched while browsing.</span><button class="btn sm ghost" style="margin-left:auto">Merge duplicates</button></div>
+      <div class="tabs"><a class="active" href="#">Models <span class="n">12</span></a><a href="#">Printed <span class="n">8</span></a><a href="#">In collections <span class="n">4</span></a><a href="#">Notes</a></div>
+      <div class="toolbar"><div class="chips"><span class="chip">${icon('tag','sm')} gridfinity · 7</span><span class="chip">${icon('tag','sm')} workshop · 5</span><span class="chip">${icon('tag','sm')} electronics · 2</span></div><div class="spacer"></div><div class="select">Sort <b>Recently added</b> ${icon('chevronDown','sm')}</div><div class="seg"><button class="active">${icon('grid')}</button><button>${icon('list')}</button></div></div>
+      <div class="grid" style="--cols:4">${grid.slice(0, 8).map(m => card(m)).join('')}</div>
+    </div>
+  </main>
+</div></div>
+${statusbar(`${icon('users','sm')} 312 designers · 177 models are your own designs`, '<span>k3rn3l · 12 models · 1.9 GB</span>')}
+`;
+</script>
+</body>
+</html>

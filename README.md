@@ -17,6 +17,10 @@ This application is designed to help users organize, preview, and prepare local 
 - **Plex**: For media file organization and streaming.
 - **3D Model Repositories**: Thingiverse, MyMiniFactory, Makerworld, Thangs
 
+**UI mockups:**
+- [`mockup.png`](mockup.png) — Lightroom-style direction (folder tree, dense grid, project tabs).
+- [`mockups/`](mockups/README.md) — five mockups exploring the "private MakerWorld / Thingiverse / Thangs" direction (home, browse with facets, model page, designers, collection boards).
+
 ## 2. Technical Decisions
 
 ### 2.1 Technology Stack
