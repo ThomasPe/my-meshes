@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en" data-default-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Meshes · Mockup C · Workbench (dense pro-tool direction)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+
+/* Direction C "Workbench": dense professional tool in the spirit of Blender, Lightroom and VS Code.
+   12px type, 3px radii, graphite panels with uppercase headers, mono for data, amber accent.
+   Framework fit: custom design system on headless primitives (Radix Primitives / Base UI / Ark UI)
+   or Radix Themes with a compact scale; shadcn would need heavy re-tokenising. */
+:root{
+  --bg:#1a1a1a; --panel:#202020; --panel-2:#262626; --card:#2a2a2a; --card-hover:#303030; --border:#0d0d0d; --border-2:#3a3a3a;
+  --fg:#e6e6e6; --fg-2:#c8c8c8; --muted:#9a9a9a; --faint:#6a6a6a;
+  --accent:#f0a640; --accent-fg:#1a1a1a; --ring:#f0a640; --thumb:#d8d8d8; --thumb-fill:rgba(240,166,64,.12);
+  --ok:#8bc34a; --warn:#f0a640; --off:#6a6a6a;
+  --font:"IBM Plex Sans",system-ui,sans-serif; --mono:"IBM Plex Mono",ui-monospace,Menlo,monospace;
+  --r:3px; color-scheme:dark;
+}
+:root[data-theme="light"]{
+  --bg:#dcdcdc; --panel:#e8e8e8; --panel-2:#f0f0f0; --card:#f6f6f6; --card-hover:#ffffff; --border:#b8b8b8; --border-2:#c8c8c8;
+  --fg:#1a1a1a; --fg-2:#333; --muted:#5a5a5a; --faint:#8a8a8a;
+  --accent:#c77a12; --accent-fg:#fff; --ring:#c77a12; --thumb:#3a3a3a; --thumb-fill:rgba(199,122,18,.1);
+  --off:#9a9a9a; color-scheme:light;
+}
+*{box-sizing:border-box} html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font:12px/1.4 var(--font);overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.win{display:grid;grid-template-rows:30px 1fr 22px;height:100%;min-width:1100px}
+.titlebar{display:flex;align-items:center;gap:10px;padding:0 8px;background:var(--panel);border-bottom:1px solid var(--border);-webkit-app-region:drag}
+.brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:12px;letter-spacing:.02em}
+.brand .logo{width:14px;height:14px;border-radius:2px;background:var(--accent)}
+.menu{display:flex;color:var(--muted)} .menu button{padding:3px 7px;border-radius:var(--r)} .menu button:hover{background:var(--card);color:var(--fg)}
+.search{margin-left:auto;display:flex;align-items:center;gap:8px;width:280px;height:22px;padding:0 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--bg);color:var(--muted);font-family:var(--mono);font-size:11px}
+.search kbd{margin-left:auto;font:10px/1 var(--mono);color:var(--faint)}
+.caption{display:flex;margin-left:6px} .caption button{width:30px;height:22px;border-radius:var(--r);color:var(--muted);font-size:11px} .caption button:hover{background:var(--card)} .caption .close:hover{background:#b3261e;color:#fff}
+.body{display:grid;grid-template-columns:220px 1fr 280px;min-height:0;gap:1px;background:var(--border)}
+.sidebar,.inspector,.main{background:var(--panel)} .sidebar,.inspector{overflow:auto;padding:0}
+.section{border-bottom:1px solid var(--border);padding:4px 4px 6px} .section h3{margin:4px 6px 2px;font-size:10px;font-weight:600;color:var(--faint);text-transform:uppercase;letter-spacing:.08em}
+.nav button{display:flex;align-items:center;gap:7px;width:100%;height:22px;padding:0 6px;border-radius:var(--r);color:var(--fg-2);text-align:left}
+.nav button:hover{background:var(--card)} .nav button.active{background:var(--card);color:var(--fg);box-shadow:inset 2px 0 0 var(--accent)}
+.nav .count{margin-left:auto;font:10px/1 var(--mono);color:var(--faint)}
+.nav .ico{width:12px;height:12px;border:1px solid currentColor;border-radius:2px;opacity:.6}
+.tree button{height:21px} .tree .d1{padding-left:18px} .tree .d2{padding-left:30px} .tree .chev{width:9px;color:var(--faint);font-size:9px}
+.dot{width:6px;height:6px;border-radius:50%;background:var(--ok)} .dot.off{background:var(--off)}
+.main{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto 1fr;min-width:0}
+.tabs{display:flex;background:var(--bg);border-bottom:1px solid var(--border)}
+.tab{display:flex;align-items:center;gap:8px;height:28px;padding:0 12px;color:var(--muted);border-right:1px solid var(--border);font-size:11px}
+.tab.active{background:var(--panel);color:var(--fg);box-shadow:inset 0 2px 0 var(--accent)} .tab .x{color:var(--faint);font-size:10px} .tab:hover{color:var(--fg)}
+.toolbar{display:flex;align-items:center;gap:6px;padding:5px 8px;border-bottom:1px solid var(--border);background:var(--panel-2)} .toolbar>*{flex:none;white-space:nowrap}
+.btn{display:inline-flex;align-items:center;gap:6px;height:22px;padding:0 8px;border:1px solid var(--border);border-radius:var(--r);background:var(--card);color:var(--fg-2);font-size:11px}
+.btn:hover{background:var(--card-hover)} .btn.primary{background:var(--accent);color:var(--accent-fg);border-color:transparent;font-weight:600} .btn.ghost{background:transparent;border-color:transparent}
+.chip{display:inline-flex;align-items:center;gap:6px;height:20px;padding:0 6px;border-radius:var(--r);background:var(--bg);border:1px solid var(--border-2);color:var(--fg-2);font:11px var(--mono)} .chip .x{color:var(--faint)}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:var(--r);overflow:hidden;background:var(--bg)} .seg button{height:20px;padding:0 8px;color:var(--muted);font-size:11px} .seg button.on{background:var(--card);color:var(--fg)}
+.zoom{display:flex;align-items:center;gap:6px;color:var(--faint);margin-left:auto;font:10px var(--mono);text-transform:uppercase}
+.zoom .track{width:90px;height:2px;background:var(--border-2);position:relative} .zoom .knob{position:absolute;left:55%;top:-4px;width:10px;height:10px;border-radius:1px;background:var(--accent)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(176px,1fr));grid-auto-rows:max-content;gap:6px;padding:8px;overflow:auto;align-content:start;background:var(--bg)}
+.card{display:flex;flex-direction:column;background:var(--card);border:1px solid var(--border);border-radius:var(--r);overflow:hidden;outline:0}
+.card:hover{background:var(--card-hover);border-color:var(--border-2)} .card.selected{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.thumb{flex:none;height:0;padding-top:100%;display:grid;place-items:center;background:
+  linear-gradient(var(--border-2) 1px,transparent 1px) 0 0/16px 16px,linear-gradient(90deg,var(--border-2) 1px,transparent 1px) 0 0/16px 16px,var(--panel);color:var(--thumb);position:relative;opacity:.95}
+.thumb svg{position:absolute;inset:0;margin:auto;width:64%;height:64%} .thumb .badge{position:absolute;top:4px;right:4px;font:9px/1.6 var(--mono);padding:0 5px;border-radius:2px;background:var(--bg);color:var(--muted);border:1px solid var(--border-2)}
+.thumb .badge.off{color:var(--warn);border-color:var(--warn)} .thumb.generating svg{opacity:.25}
+.thumb .gen{position:absolute;bottom:4px;left:4px;right:4px;font:9px/1.4 var(--mono);color:var(--muted);display:flex;align-items:center;gap:6px;text-transform:uppercase}
+.thumb .gen i{flex:1;height:2px;background:var(--border-2);display:block} .thumb .gen i::after{content:"";display:block;width:60%;height:100%;background:var(--accent)}
+.meta{padding:5px 7px 6px;display:grid;gap:2px;border-top:1px solid var(--border)} .meta h4{margin:0;font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .meta .by{color:var(--muted);font-size:11px}
+.tags{display:flex;gap:3px;flex-wrap:wrap} .tag{font:10px/1.5 var(--mono);padding:0 4px;border-radius:2px;background:var(--bg);color:var(--muted)}
+.meta .row{display:flex;justify-content:space-between;color:var(--faint);font:10px var(--mono)}
+.inspector{padding:0} .inspector > *{padding-left:10px;padding-right:10px}
+.inspector h2{margin:0;padding:8px 10px 2px;font-size:13px;font-weight:600} .inspector .sub{color:var(--faint);font:10px var(--mono);margin-bottom:8px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kv{display:grid;grid-template-columns:76px 1fr;gap:0;font-size:11px;margin:0 0 8px;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.kv dt,.kv dd{padding:4px 6px;border-bottom:1px solid var(--border)} .kv dt{color:var(--faint);background:var(--panel-2)} .kv dd{margin:0;color:var(--fg-2);font-family:var(--mono);overflow:hidden;text-overflow:ellipsis;white-space:nowrap} .kv a{color:var(--accent);text-decoration:none}
+.inspector h3{margin:8px 0 4px;font-size:10px;color:var(--faint);text-transform:uppercase;letter-spacing:.08em}
+.files{display:grid;font:11px var(--mono)} .files div{display:flex;gap:8px;padding:3px 6px;color:var(--fg-2)} .files div:nth-child(odd){background:var(--panel-2)} .files div:hover{background:var(--card-hover)} .files .sz{margin-left:auto;color:var(--faint)} .files .ext{color:var(--accent);width:26px}
+.actions{display:flex;gap:4px;padding:6px 10px}
+.hint{font-size:11px;color:var(--faint);padding:8px 10px}
+.statusbar{display:flex;align-items:center;gap:16px;padding:0 8px;background:var(--accent);color:var(--accent-fg);font:11px var(--mono)}
+.statusbar .right{margin-left:auto;display:flex;gap:16px} .statusbar .live{display:flex;align-items:center;gap:6px} .statusbar .dot{background:var(--accent-fg)}
+.note{position:fixed;left:10px;bottom:30px;max-width:380px;padding:8px 10px;border-radius:var(--r);background:var(--card);border:1px solid var(--border-2);color:var(--muted);font-size:11px;z-index:5}
+.note b{color:var(--fg)} .note button{float:right;color:var(--faint)}
+
+</style>
+</head>
+<body>
+<div class="win">
+  <header class="titlebar">
+    <div class="brand"><span class="logo">M</span> My Meshes</div>
+    <nav class="menu"><button>File</button><button>Edit</button><button>View</button><button>Library</button><button>Help</button></nav>
+    <div class="search">🔍 Search library… <kbd>Ctrl K</kbd></div>
+    <div class="caption"><button data-toggle-theme title="Toggle light/dark" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5a6.5 6.5 0 0 1 0 13z" fill="currentColor"/></svg></button><button>—</button><button>▢</button><button class="close">✕</button></div>
+  </header>
+
+  <div class="body">
+    <aside class="sidebar">
+      <div class="section nav"><h3>Library</h3>
+        <button class="active"><span class="ico"></span>All projects<span class="count">4,231</span></button>
+        <button><span class="ico"></span>Recent imports<span class="count">36</span></button>
+        <button><span class="ico"></span>Favorites<span class="count">58</span></button>
+        <button><span class="ico"></span>Inbox<span class="count">12</span></button>
+      </div>
+      <div class="section nav"><h3>Smart collections</h3>
+        <button><span class="ico"></span>Gridfinity &amp; PLA<span class="count">147</span></button>
+        <button><span class="ico"></span>Work in progress<span class="count">9</span></button>
+      </div>
+      <div class="section nav"><h3>Collections</h3>
+        <button><span class="ico"></span>Desk setup<span class="count">14</span></button>
+      </div>
+      <div class="section nav tree"><h3>Folders</h3>
+        <button><span class="chev">▾</span><span class="dot"></span>D:\3D Models<span class="count">watched</span></button>
+        <button class="d1"><span class="chev">▾</span>Projects</button>
+        <button class="d2"><span class="chev">▸</span>Gridfinity<span class="count">147</span></button>
+        <button class="d2"><span class="chev">▸</span>Robotics<span class="count">257</span></button>
+        <button class="d2"><span class="chev">▸</span>Props<span class="count">220</span></button>
+        <button class="d1"><span class="chev">▸</span>Personal</button>
+        <button><span class="chev">▸</span><span class="dot off"></span>\\nas\models<span class="count">offline</span></button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="tabs">
+        <div class="tab active">Library <span class="x">✕</span></div>
+        <div class="tab">Gridfinity Baseplates <span class="x">✕</span></div>
+        <div class="tab">Robotic Arm v4 <span class="x">✕</span></div>
+      </div>
+      <div class="toolbar">
+        <span class="chip">Tag: gridfinity <span class="x">✕</span></span>
+        <button class="btn ghost">+ Filter</button>
+        <button class="btn">Sort: Date added ▾</button>
+        <div class="seg"><button class="on">Grid</button><button>List</button></div>
+        <div class="zoom">Zoom <div class="track"><div class="knob"></div></div></div>
+        <button class="btn primary">Import…</button>
+      </div>
+      <div class="grid">
+        <div class="card selected" tabindex="0"><div class="thumb" data-thumb="baseplate"><span class="badge">12 files</span></div><div class="meta"><h4>Gridfinity Baseplates</h4><div class="by">by Zach Freedman</div><div class="tags"><span class="tag">gridfinity</span><span class="tag">organizer</span></div><div class="row"><span>48.2 MB</span><span>Mar 2</span></div></div></div>
+        <div class="card" tabindex="0"><div class="thumb" data-thumb="benchy"></div><div class="meta"><h4>Low-Poly Benchy</h4><div class="by">by CreativeTools</div><div class="tags"><span class="tag">benchmark</span></div><div class="row"><span>3.1 MB</span><span>Feb 27</span></div></div></div>
+        <div class="card" tabindex="0"><div class="thumb" data-thumb="arm"><span class="badge">23 files</span></div><div class="meta"><h4>Robotic Arm v4</h4><div class="by">by ExampleCreator</div><div class="tags"><span class="tag">robotics</span><span class="tag">functional</span></div><div class="row"><span>212 MB</span><span>Feb 20</span></div></div></div>
+        <div class="card" tabindex="0"><div class="thumb" data-thumb="vase"></div><div class="meta"><h4>Decorative Vase</h4><div class="by">by Lena Hofer</div><div class="tags"><span class="tag">vase</span><span class="tag">decor</span></div><div class="row"><span>9.8 MB</span><span>Feb 14</span></div></div></div>
+        <div class="card" tabindex="0"><div class="thumb" data-thumb="stand"></div><div class="meta"><h4>Phone Stand</h4><div class="by">by PrintTools</div><div class="tags"><span class="tag">desk</span><span class="tag">functional</span></div><div class="row"><span>5.5 MB</span><span>Feb 9</span></div></div></div>
+        <div class="card" tabindex="0"><div class="thumb" data-thumb="helmet"><span class="badge off">Offline</span></div><div class="meta"><h4>Cosplay Helmet</h4><div class="by">by Props Workshop</div><div class="tags"><span class="tag">cosplay</span><span class="tag">props</span></div><div class="row"><span>640 MB</span><span>Jan 30</span></div></div></div>
+        <div class="card" tabindex="0"><div class="thumb generating" data-thumb="clip"><div class="gen">Rendering preview <i></i></div></div><div class="meta"><h4>Cable Clips</h4><div class="by">by Maker Mia</div><div class="tags"><span class="tag">cable</span><span class="tag">organizer</span></div><div class="row"><span>1.2 MB</span><span>today</span></div></div></div>
+        <div class="card" tabindex="0"><div class="thumb" data-thumb="tower"><span class="badge">3MF</span></div><div class="meta"><h4>Dice Tower</h4><div class="by">by TableTop Forge</div><div class="tags"><span class="tag">tabletop</span><span class="tag">gaming</span></div><div class="row"><span>31 MB</span><span>Jan 12</span></div></div></div>
+      </div>
+    </main>
+
+    <aside class="inspector">
+      <h2>Gridfinity Baseplates</h2>
+      <div class="sub">D:\3D Models\Projects\Gridfinity\Baseplates</div>
+      <div class="actions"><button class="btn">Open in viewer</button><button class="btn ghost">Reveal</button><button class="btn ghost">⋯</button></div>
+      <dl class="kv">
+        <dt>Creator</dt><dd>Zach Freedman</dd>
+        <dt>License</dt><dd>CC-BY-NC-SA-4.0</dd>
+        <dt>Source</dt><dd><a href="#">thangs.com/designer/ZackFreedman/…</a></dd>
+        <dt>Tags</dt><dd>gridfinity, organizer</dd>
+        <dt>Material</dt><dd>PLA · no supports</dd>
+        <dt>Added</dt><dd>2 Mar 2026</dd>
+        <dt>Sidecar</dt><dd>project.yaml · in sync</dd>
+      </dl>
+      <h3 style="margin:0 0 6px;font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.04em">Files · 12 · 48.2 MB</h3>
+      <div class="files">
+        <div><span class="ext">stl</span>Baseplate_2x2.stl<span class="sz">6.1 MB</span></div>
+        <div><span class="ext">stl</span>Baseplate_3x3.stl<span class="sz">13.4 MB</span></div>
+        <div><span class="ext">stl</span>Baseplate_4x4.stl<span class="sz">23.9 MB</span></div>
+        <div><span class="ext">3mf</span>Baseplate_plate.3mf<span class="sz">4.0 MB</span></div>
+        <div><span class="ext">png</span>photo_desk.png<span class="sz">0.7 MB</span></div>
+        <div><span class="ext">zip</span>original_download.zip<span class="sz">attachment</span></div>
+      </div>
+      <p class="hint">Drag a file onto your slicer to open it there.</p>
+    </aside>
+  </div>
+
+  <footer class="statusbar">
+    <span class="live"><span class="dot"></span>WATCH D:\3D Models · sync 00:02 ago</span>
+    <span>THUMBS 3/120</span>
+    <div class="right"><span>SEL 1</span><span>4231 PRJ · 145.6 GB</span></div>
+  </footer>
+</div>
+<div class="note"><button onclick="this.parentNode.remove()">✕</button><b>Mockup C · Workbench.</b> Dense pro-tool direction (Blender / Lightroom / VS Code): 12 px type, 3 px radii, graphite panels, mono data, amber accent. Toggle the theme with the half-circle button in the title bar. Static HTML, no framework.</div>
+<script src="shared/mock.js"></script>
+</body>
+</html>

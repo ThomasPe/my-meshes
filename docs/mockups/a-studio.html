@@ -1,0 +1,185 @@
+<!doctype html>
+<html lang="en" data-default-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Meshes · Mockup A · Studio (shadcn/ui direction)</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap">
+<style>
+/* Direction A "Studio": the shadcn/ui + Tailwind look. Zinc neutrals, 6px radius,
+   1px borders, no shadows, neutral primary. Framework fit: shadcn/ui (React) or shadcn-svelte. */
+:root{
+  --bg:#09090b; --panel:#0f0f11; --card:#18181b; --card-hover:#1f1f23; --border:#27272a; --border-strong:#3f3f46;
+  --fg:#fafafa; --fg-2:#d4d4d8; --muted:#a1a1aa; --faint:#71717a;
+  --primary:#fafafa; --primary-fg:#09090b; --ring:#60a5fa; --thumb:#e4e4e7; --thumb-fill:rgba(228,228,231,.12);
+  --ok:#22c55e; --warn:#f59e0b; --off:#71717a;
+  --font:"Inter",system-ui,-apple-system,"Segoe UI",sans-serif; --mono:ui-monospace,"SFMono-Regular",Menlo,monospace;
+  --r:6px; color-scheme:dark;
+}
+:root[data-theme="light"]{
+  --bg:#ffffff; --panel:#fafafa; --card:#ffffff; --card-hover:#f4f4f5; --border:#e4e4e7; --border-strong:#d4d4d8;
+  --fg:#09090b; --fg-2:#27272a; --muted:#71717a; --faint:#a1a1aa;
+  --primary:#18181b; --primary-fg:#fafafa; --ring:#3b82f6; --thumb:#3f3f46; --thumb-fill:rgba(63,63,70,.1);
+  --off:#a1a1aa; color-scheme:light;
+}
+*{box-sizing:border-box} html,body{height:100%;margin:0}
+body{background:var(--bg);color:var(--fg);font:13px/1.45 var(--font);-webkit-font-smoothing:antialiased;overflow:hidden}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.win{display:grid;grid-template-rows:38px 1fr 26px;height:100%;min-width:1100px}
+/* title bar */
+.titlebar{display:flex;align-items:center;gap:12px;padding:0 10px;border-bottom:1px solid var(--border);background:var(--panel);-webkit-app-region:drag}
+.brand{display:flex;align-items:center;gap:8px;font-weight:600;font-size:13px}
+.brand .logo{width:18px;height:18px;border-radius:4px;background:var(--primary);color:var(--primary-fg);display:grid;place-items:center;font-size:10px;font-weight:700}
+.menu{display:flex;gap:2px;color:var(--muted)} .menu button{padding:4px 8px;border-radius:var(--r)} .menu button:hover{background:var(--card);color:var(--fg)}
+.search{margin-left:auto;display:flex;align-items:center;gap:8px;width:300px;height:28px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--bg);color:var(--muted)}
+.search kbd{margin-left:auto;font:10px/1 var(--mono);padding:2px 5px;border:1px solid var(--border);border-radius:4px;color:var(--faint)}
+.caption{display:flex;gap:2px;margin-left:8px} .caption button{width:36px;height:28px;border-radius:var(--r);color:var(--muted)} .caption button:hover{background:var(--card)} .caption .close:hover{background:#dc2626;color:#fff}
+/* layout */
+.body{display:grid;grid-template-columns:232px 1fr 300px;min-height:0}
+.sidebar,.inspector{background:var(--panel);overflow:auto;padding:10px}
+.sidebar{border-right:1px solid var(--border)} .inspector{border-left:1px solid var(--border)}
+.section{margin-bottom:14px} .section h3{margin:4px 8px 4px;font-size:11px;font-weight:500;color:var(--faint);text-transform:uppercase;letter-spacing:.04em}
+.nav button{display:flex;align-items:center;gap:8px;width:100%;height:30px;padding:0 8px;border-radius:var(--r);color:var(--fg-2);text-align:left}
+.nav button:hover{background:var(--card)} .nav button.active{background:var(--card);color:var(--fg);font-weight:500}
+.nav .count{margin-left:auto;font-size:11px;color:var(--faint);font-variant-numeric:tabular-nums}
+.nav .ico{width:16px;height:16px;border:1.5px solid currentColor;border-radius:3px;opacity:.7}
+.tree button{height:26px;color:var(--fg-2)} .tree .d1{padding-left:22px} .tree .d2{padding-left:38px} .tree .d3{padding-left:54px}
+.tree .chev{width:10px;color:var(--faint);font-size:10px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ok)} .dot.off{background:var(--off)}
+/* main */
+.main{display:grid;grid-template-columns:minmax(0,1fr);grid-template-rows:auto auto 1fr;min-width:0;background:var(--bg)}
+.tabs{display:flex;align-items:flex-end;gap:2px;padding:6px 10px 0;border-bottom:1px solid var(--border);background:var(--panel)}
+.tab{display:flex;align-items:center;gap:8px;height:32px;padding:0 12px;border:1px solid transparent;border-bottom:0;border-radius:var(--r) var(--r) 0 0;color:var(--muted)}
+.tab.active{background:var(--bg);border-color:var(--border);color:var(--fg);margin-bottom:-1px}
+.tab .x{color:var(--faint)} .tab:hover{color:var(--fg)}
+.toolbar{display:flex;align-items:center;gap:8px;padding:10px 14px;border-bottom:1px solid var(--border)} .toolbar>*{flex:none;white-space:nowrap}
+.btn{display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border:1px solid var(--border);border-radius:var(--r);background:var(--bg);color:var(--fg-2);font-weight:500}
+.btn:hover{background:var(--card)} .btn.primary{background:var(--primary);color:var(--primary-fg);border-color:var(--primary)}
+.btn.ghost{border-color:transparent}
+.chip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px;border:1px solid var(--border);border-radius:999px;background:var(--card);color:var(--fg-2);font-size:12px}
+.chip .x{color:var(--faint)}
+.seg{display:inline-flex;border:1px solid var(--border);border-radius:var(--r);overflow:hidden} .seg button{height:28px;padding:0 10px;color:var(--muted)} .seg button.on{background:var(--card);color:var(--fg)}
+.zoom{display:flex;align-items:center;gap:8px;color:var(--faint);margin-left:auto}
+.zoom .track{width:110px;height:3px;border-radius:2px;background:var(--border-strong);position:relative} .zoom .knob{position:absolute;left:55%;top:-5px;width:13px;height:13px;border-radius:50%;background:var(--fg);border:2px solid var(--bg);box-shadow:0 0 0 1px var(--border-strong)}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));grid-auto-rows:max-content;gap:14px;padding:14px;overflow:auto;align-content:start}
+.card{display:flex;flex-direction:column;border:1px solid var(--border);border-radius:var(--r);background:var(--card);overflow:hidden;cursor:default;outline:0}
+.card:hover{background:var(--card-hover);border-color:var(--border-strong)} .card.selected{box-shadow:0 0 0 2px var(--ring);border-color:var(--ring)}
+.thumb{flex:none;height:0;padding-top:75%;display:grid;place-items:center;background:linear-gradient(180deg,rgba(255,255,255,.03),rgba(0,0,0,.08));color:var(--thumb);position:relative}
+.thumb svg{position:absolute;inset:0;margin:auto;width:58%;height:58%} .thumb .badge{position:absolute;top:8px;right:8px;font-size:10px;font-weight:500;padding:2px 6px;border-radius:4px;background:var(--bg);border:1px solid var(--border);color:var(--muted)}
+.thumb .badge.off{color:var(--off)} .thumb.generating svg{opacity:.25} .thumb .gen{position:absolute;bottom:8px;left:8px;right:8px;font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
+.thumb .gen i{flex:1;height:2px;background:var(--border-strong);border-radius:1px;overflow:hidden;display:block} .thumb .gen i::after{content:"";display:block;width:60%;height:100%;background:var(--fg)}
+.meta{padding:10px 12px 12px;display:grid;gap:6px} .meta h4{margin:0;font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .meta .by{color:var(--muted);font-size:12px}
+.tags{display:flex;gap:4px;flex-wrap:wrap} .tag{font-size:11px;padding:1px 6px;border-radius:4px;background:var(--bg);border:1px solid var(--border);color:var(--muted)}
+.meta .row{display:flex;justify-content:space-between;color:var(--faint);font-size:11px;font-variant-numeric:tabular-nums}
+/* inspector */
+.inspector h2{margin:4px 0 2px;font-size:15px;font-weight:600} .inspector .sub{color:var(--muted);margin-bottom:12px}
+.kv{display:grid;grid-template-columns:90px 1fr;gap:6px 10px;font-size:12px;margin-bottom:14px} .kv dt{color:var(--faint)} .kv dd{margin:0;color:var(--fg-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kv a{color:var(--fg-2);text-decoration:underline dotted}
+.files{display:grid;gap:2px;font-size:12px} .files div{display:flex;gap:8px;padding:5px 8px;border-radius:4px;color:var(--fg-2)} .files div:hover{background:var(--card)} .files .sz{margin-left:auto;color:var(--faint);font-variant-numeric:tabular-nums} .files .ext{font:10px/1.6 var(--mono);color:var(--faint);width:30px}
+.actions{display:flex;gap:6px;margin:12px 0}
+.hint{font-size:11px;color:var(--faint);padding:8px;border:1px dashed var(--border);border-radius:var(--r)}
+/* status */
+.statusbar{display:flex;align-items:center;gap:18px;padding:0 12px;border-top:1px solid var(--border);background:var(--panel);font-size:11px;color:var(--muted);font-variant-numeric:tabular-nums}
+.statusbar .right{margin-left:auto;display:flex;gap:18px} .statusbar .live{display:flex;align-items:center;gap:6px}
+.note{position:fixed;left:12px;bottom:36px;max-width:360px;padding:10px 12px;border-radius:var(--r);background:var(--card);border:1px solid var(--border);color:var(--muted);font-size:11px;z-index:5}
+.note b{color:var(--fg)} .note button{float:right;color:var(--faint)}
+</style>
+</head>
+<body>
+<div class="win">
+  <header class="titlebar">
+    <div class="brand"><span class="logo">M</span> My Meshes</div>
+    <nav class="menu"><button>File</button><button>Edit</button><button>View</button><button>Library</button><button>Help</button></nav>
+    <div class="search">🔍 Search library… <kbd>Ctrl K</kbd></div>
+    <div class="caption"><button data-toggle-theme title="Toggle light/dark" aria-pressed="false"><svg width="14" height="14" viewBox="0 0 16 16" aria-hidden="true"><circle cx="8" cy="8" r="6.5" fill="none" stroke="currentColor" stroke-width="1.5"/><path d="M8 1.5a6.5 6.5 0 0 1 0 13z" fill="currentColor"/></svg></button><button>—</button><button>▢</button><button class="close">✕</button></div>
+  </header>
+
+  <div class="body">
+    <aside class="sidebar">
+      <div class="section nav"><h3>Library</h3>
+        <button class="active"><span class="ico"></span>All projects<span class="count">4,231</span></button>
+        <button><span class="ico"></span>Recent imports<span class="count">36</span></button>
+        <button><span class="ico"></span>Favorites<span class="count">58</span></button>
+        <button><span class="ico"></span>Inbox<span class="count">12</span></button>
+      </div>
+      <div class="section nav"><h3>Smart collections</h3>
+        <button><span class="ico"></span>Gridfinity &amp; PLA<span class="count">147</span></button>
+        <button><span class="ico"></span>Work in progress<span class="count">9</span></button>
+      </div>
+      <div class="section nav"><h3>Collections</h3>
+        <button><span class="ico"></span>Desk setup<span class="count">14</span></button>
+      </div>
+      <div class="section nav tree"><h3>Folders</h3>
+        <button><span class="chev">▾</span><span class="dot"></span>D:\3D Models<span class="count">watched</span></button>
+        <button class="d1"><span class="chev">▾</span>Projects</button>
+        <button class="d2"><span class="chev">▸</span>Gridfinity<span class="count">147</span></button>
+        <button class="d2"><span class="chev">▸</span>Robotics<span class="count">257</span></button>
+        <button class="d2"><span class="chev">▸</span>Props<span class="count">220</span></button>
+        <button class="d1"><span class="chev">▸</span>Personal</button>
+        <button><span class="chev">▸</span><span class="dot off"></span>\\nas\models<span class="count">offline</span></button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="tabs">
+        <div class="tab active">Library <span class="x">✕</span></div>
+        <div class="tab">Gridfinity Baseplates <span class="x">✕</span></div>
+        <div class="tab">Robotic Arm v4 <span class="x">✕</span></div>
+      </div>
+      <div class="toolbar">
+        <span class="chip">Tag: gridfinity <span class="x">✕</span></span>
+        <button class="btn ghost">+ Filter</button>
+        <button class="btn">Sort: Date added ▾</button>
+        <div class="seg"><button class="on">Grid</button><button>List</button></div>
+        <div class="zoom">Zoom <div class="track"><div class="knob"></div></div></div>
+        <button class="btn primary">Import…</button>
+      </div>
+      <div class="grid">
+        <div class="card selected" tabindex="0"><div class="thumb" data-thumb="baseplate"><span class="badge">12 files</span></div><div class="meta"><h4>Gridfinity Baseplates</h4><div class="by">by Zach Freedman</div><div class="tags"><span class="tag">gridfinity</span><span class="tag">organizer</span></div><div class="row"><span>48.2 MB</span><span>Mar 2</span></div></div></div>
+        <div class="card" tabindex="0"><div class="thumb" data-thumb="benchy"></div><div class="meta"><h4>Low-Poly Benchy</h4><div class="by">by CreativeTools</div><div class="tags"><span class="tag">benchmark</span></div><div class="row"><span>3.1 MB</span><span>Feb 27</span></div></div></div>
+        <div class="card" tabindex="0"><div class="thumb" data-thumb="arm"><span class="badge">23 files</span></div><div class="meta"><h4>Robotic Arm v4</h4><div class="by">by ExampleCreator</div><div class="tags"><span class="tag">robotics</span><span class="tag">functional</span></div><div class="row"><span>212 MB</span><span>Feb 20</span></div></div></div>
+        <div class="card" tabindex="0"><div class="thumb" data-thumb="vase"></div><div class="meta"><h4>Decorative Vase</h4><div class="by">by Lena Hofer</div><div class="tags"><span class="tag">vase</span><span class="tag">decor</span></div><div class="row"><span>9.8 MB</span><span>Feb 14</span></div></div></div>
+        <div class="card" tabindex="0"><div class="thumb" data-thumb="stand"></div><div class="meta"><h4>Phone Stand</h4><div class="by">by PrintTools</div><div class="tags"><span class="tag">desk</span><span class="tag">functional</span></div><div class="row"><span>5.5 MB</span><span>Feb 9</span></div></div></div>
+        <div class="card" tabindex="0"><div class="thumb" data-thumb="helmet"><span class="badge off">Offline</span></div><div class="meta"><h4>Cosplay Helmet</h4><div class="by">by Props Workshop</div><div class="tags"><span class="tag">cosplay</span><span class="tag">props</span></div><div class="row"><span>640 MB</span><span>Jan 30</span></div></div></div>
+        <div class="card" tabindex="0"><div class="thumb generating" data-thumb="clip"><div class="gen">Rendering preview <i></i></div></div><div class="meta"><h4>Cable Clips</h4><div class="by">by Maker Mia</div><div class="tags"><span class="tag">cable</span><span class="tag">organizer</span></div><div class="row"><span>1.2 MB</span><span>today</span></div></div></div>
+        <div class="card" tabindex="0"><div class="thumb" data-thumb="tower"><span class="badge">3MF</span></div><div class="meta"><h4>Dice Tower</h4><div class="by">by TableTop Forge</div><div class="tags"><span class="tag">tabletop</span><span class="tag">gaming</span></div><div class="row"><span>31 MB</span><span>Jan 12</span></div></div></div>
+      </div>
+    </main>
+
+    <aside class="inspector">
+      <h2>Gridfinity Baseplates</h2>
+      <div class="sub">D:\3D Models\Projects\Gridfinity\Baseplates</div>
+      <div class="actions"><button class="btn">Open in viewer</button><button class="btn ghost">Reveal</button><button class="btn ghost">⋯</button></div>
+      <dl class="kv">
+        <dt>Creator</dt><dd>Zach Freedman</dd>
+        <dt>License</dt><dd>CC-BY-NC-SA-4.0</dd>
+        <dt>Source</dt><dd><a href="#">thangs.com/designer/ZackFreedman/…</a></dd>
+        <dt>Tags</dt><dd>gridfinity, organizer</dd>
+        <dt>Material</dt><dd>PLA · no supports</dd>
+        <dt>Added</dt><dd>2 Mar 2026</dd>
+        <dt>Sidecar</dt><dd>project.yaml · in sync</dd>
+      </dl>
+      <h3 style="margin:0 0 6px;font-size:11px;color:var(--faint);text-transform:uppercase;letter-spacing:.04em">Files · 12 · 48.2 MB</h3>
+      <div class="files">
+        <div><span class="ext">stl</span>Baseplate_2x2.stl<span class="sz">6.1 MB</span></div>
+        <div><span class="ext">stl</span>Baseplate_3x3.stl<span class="sz">13.4 MB</span></div>
+        <div><span class="ext">stl</span>Baseplate_4x4.stl<span class="sz">23.9 MB</span></div>
+        <div><span class="ext">3mf</span>Baseplate_plate.3mf<span class="sz">4.0 MB</span></div>
+        <div><span class="ext">png</span>photo_desk.png<span class="sz">0.7 MB</span></div>
+        <div><span class="ext">zip</span>original_download.zip<span class="sz">attachment</span></div>
+      </div>
+      <p class="hint">Drag a file onto your slicer to open it there.</p>
+    </aside>
+  </div>
+
+  <footer class="statusbar">
+    <span class="live"><span class="dot"></span>Watching D:\3D Models · synced 2 min ago</span>
+    <span>Rendering thumbnails 3 / 120</span>
+    <div class="right"><span>1 selected</span><span>4,231 projects · 145.6 GB</span></div>
+  </footer>
+</div>
+<div class="note"><button onclick="this.parentNode.remove()">✕</button><b>Mockup A · Studio.</b> shadcn/ui direction: zinc neutrals, 6 px radius, hairline borders, neutral primary. Toggle the theme with the half-circle button in the title bar. Static HTML, no framework.</div>
+<script src="shared/mock.js"></script>
+</body>
+</html>

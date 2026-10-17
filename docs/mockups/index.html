@@ -1,0 +1,147 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>My Meshes UI Mockups</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Figtree:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: a single reading column; four direction cards in a 2-up grid, then one wide comparison table. */
+:root{
+  --bg:#f6f7f9; --surface:#ffffff; --line:#e3e6eb; --fg:#15181d; --fg-2:#434a55; --muted:#6c7480;
+  --accent:#0f6e73; --accent-soft:#e3f1f1;
+  --a:#18181b; --b:#4cc2ff; --c:#f0a640; --d:#0f8b8d;
+  --display:"Figtree",system-ui,-apple-system,"Segoe UI",sans-serif; --mono:"JetBrains Mono",ui-monospace,Menlo,monospace;
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){ --bg:#121418; --surface:#1a1d23; --line:#2a2f38; --fg:#eef0f3; --fg-2:#c3c8d1; --muted:#8a92a0; --accent:#5fc3c8; --accent-soft:rgba(95,195,200,.12); --a:#d4d4d8; color-scheme:dark } }
+:root[data-theme="dark"]{ --bg:#121418; --surface:#1a1d23; --line:#2a2f38; --fg:#eef0f3; --fg-2:#c3c8d1; --muted:#8a92a0; --accent:#5fc3c8; --accent-soft:rgba(95,195,200,.12); --a:#d4d4d8; color-scheme:dark }
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);font:16px/1.55 var(--display);padding-block:32px 64px;padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px))}
+.wrap{max-width:1080px;margin:0 auto;display:grid;gap:32px}
+h1{margin:0;font-size:clamp(28px,4vw,40px);line-height:1.1;letter-spacing:-.02em;text-wrap:balance}
+h2{margin:0 0 12px;font-size:22px;letter-spacing:-.01em;text-wrap:balance}
+p{margin:0;max-width:68ch;color:var(--fg-2)}
+.lede{font-size:18px}
+.eyebrow{font:500 12px/1 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:20px}
+.card{display:grid;grid-template-rows:auto auto 1fr auto;gap:12px;background:var(--surface);border:1px solid var(--line);border-radius:12px;overflow:hidden;min-width:0}
+.card img{display:block;width:100%;max-width:100%;aspect-ratio:1360/820;object-fit:cover;object-position:top left;border-bottom:1px solid var(--line);background:#000}
+.card .head{display:flex;align-items:baseline;gap:10px;padding:14px 18px 0}
+.card .head .k{font:600 13px/1 var(--mono);color:var(--surface);background:var(--fg);padding:4px 7px;border-radius:6px}
+.card .head h3{margin:0;font-size:20px;letter-spacing:-.01em}
+.card .body{padding:0 18px;display:grid;gap:10px;color:var(--fg-2);font-size:15px}
+.card .body p{font-size:15px}
+.swatches{display:flex;gap:6px;align-items:center}
+.swatches i{display:block;width:22px;height:22px;border-radius:5px;border:1px solid var(--line)}
+.swatches span{font:12px var(--mono);color:var(--muted);margin-left:4px}
+.fit{font-size:13px;color:var(--muted)} .fit b{color:var(--fg-2);font-weight:600}
+.card .foot{display:flex;gap:10px;flex-wrap:wrap;padding:4px 18px 18px}
+.btn{display:inline-flex;align-items:center;gap:6px;height:36px;padding:0 14px;border-radius:8px;font-weight:600;font-size:14px;text-decoration:none;color:var(--fg);border:1px solid var(--line);background:var(--surface)}
+.btn.primary{background:var(--accent);color:#fff;border-color:transparent}
+.btn:focus-visible,a:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:12px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:720px;font-size:15px}
+th,td{padding:12px 14px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{font:500 12px/1.2 var(--mono);letter-spacing:.06em;text-transform:uppercase;color:var(--muted);background:var(--bg)}
+tbody th{font:600 15px/1.4 var(--display);letter-spacing:0;text-transform:none;color:var(--fg);background:transparent;width:30%}
+tbody tr:last-child td,tbody tr:last-child th{border-bottom:0}
+td small{display:block;color:var(--muted);font-size:13px;margin-top:2px}
+.dots{font:14px/1 var(--mono);letter-spacing:2px;color:var(--accent);white-space:nowrap}
+.dots .o{color:var(--line)}
+.reco{display:grid;gap:12px;padding:20px 22px;border-radius:12px;background:var(--accent-soft);border:1px solid var(--line)}
+.reco ul{margin:0;padding-left:20px;color:var(--fg-2)} .reco li{margin:4px 0}
+.reco li::marker{color:var(--accent)}
+footer{color:var(--muted);font-size:14px}
+code{font:13px var(--mono);background:var(--surface);border:1px solid var(--line);padding:1px 5px;border-radius:5px}
+@media (prefers-reduced-motion:no-preference){ .card img{transition:opacity .2s} }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header style="display:grid;gap:12px">
+    <div class="eyebrow">My Meshes · ADR-0002 · UI framework and visual direction</div>
+    <h1>Four looks for the same library screen</h1>
+    <p class="lede">Each mockup renders the identical screen: sidebar with library views, smart collections and the folder tree; tabs; a filterable thumbnail grid; the project inspector; a sync status bar. Same markup, same data, only the CSS differs, so what you are comparing is treatment and the component library that produces it with the least fighting. Every mockup has a light/dark toggle (half-circle button in its title bar) and is designed for a desktop window of 1200 px or wider.</p>
+  </header>
+
+  <section class="cards" aria-label="Mockups">
+    <article class="card">
+      <img src="screenshots/a-studio.png" alt="Mockup A, Studio: dark zinc interface with hairline borders and a blue selection ring">
+      <div class="head"><span class="k">A</span><h3>Studio</h3></div>
+      <div class="body">
+        <p>The shadcn/ui look: zinc neutrals, 6 px radii, hairline borders, a neutral primary. Familiar, calm, and the closest to what the archived version already did.</p>
+        <div class="swatches"><i style="background:#09090b"></i><i style="background:#18181b"></i><i style="background:#27272a"></i><i style="background:#a1a1aa"></i><i style="background:#60a5fa"></i><span>Inter · 6 px</span></div>
+        <div class="fit"><b>Best fit:</b> shadcn/ui (React), shadcn-svelte, shadcn-vue</div>
+      </div>
+      <div class="foot"><a class="btn primary" href="a-studio.html" target="_blank" rel="noopener">Open mockup A</a></div>
+    </article>
+    <article class="card">
+      <img src="screenshots/b-fluent.png" alt="Mockup B, Fluent: Windows 11 style with translucent layered panels and a light blue accent">
+      <div class="head"><span class="k">B</span><h3>Fluent</h3></div>
+      <div class="body">
+        <p>Windows 11: Mica-like layered surfaces, 8 px cards, the system accent, an Explorer-style navigation pane. Closest to the original reference image.</p>
+        <div class="swatches"><i style="background:#202020"></i><i style="background:#2b2f36"></i><i style="background:#3a3f47"></i><i style="background:#9aa0a6"></i><i style="background:#4cc2ff"></i><span>Segoe UI · 8 px</span></div>
+        <div class="fit"><b>Best fit:</b> Fluent UI React v9; Fluent Web Components</div>
+      </div>
+      <div class="foot"><a class="btn primary" href="b-fluent.html" target="_blank" rel="noopener">Open mockup B</a></div>
+    </article>
+    <article class="card">
+      <img src="screenshots/c-workbench.png" alt="Mockup C, Workbench: dense graphite interface with grid-paper thumbnails and an amber status bar">
+      <div class="head"><span class="k">C</span><h3>Workbench</h3></div>
+      <div class="body">
+        <p>A dense professional tool in the spirit of Blender, Lightroom and VS Code: 12 px type, 3 px radii, graphite panels, monospaced data, an amber accent.</p>
+        <div class="swatches"><i style="background:#1a1a1a"></i><i style="background:#262626"></i><i style="background:#3a3a3a"></i><i style="background:#9a9a9a"></i><i style="background:#f0a640"></i><span>IBM Plex · 3 px</span></div>
+        <div class="fit"><b>Best fit:</b> custom tokens on Radix Primitives / Base UI / Ark UI; Radix Themes</div>
+      </div>
+      <div class="foot"><a class="btn primary" href="c-workbench.html" target="_blank" rel="noopener">Open mockup C</a></div>
+    </article>
+    <article class="card">
+      <img src="screenshots/d-gallery.png" alt="Mockup D, Gallery: light interface with large square thumbnails, rounded cards and a teal accent">
+      <div class="head"><span class="k">D</span><h3>Gallery</h3></div>
+      <div class="body">
+        <p>Light-first and image-led, like Thingiverse or MakerWorld: 14 px radii, soft shadows, square thumbnails, pill chips, a teal accent.</p>
+        <div class="swatches"><i style="background:#f4f5f7"></i><i style="background:#ffffff"></i><i style="background:#e5e7eb"></i><i style="background:#6b7280"></i><i style="background:#0f8b8d"></i><span>Manrope · 14 px</span></div>
+        <div class="fit"><b>Best fit:</b> Mantine; Tailwind + DaisyUI; shadcn with a large radius token</div>
+      </div>
+      <div class="foot"><a class="btn primary" href="d-gallery.html" target="_blank" rel="noopener">Open mockup D</a></div>
+    </article>
+  </section>
+
+  <section>
+    <h2>How they compare</h2>
+    <p style="margin-bottom:14px">Ratings are relative to each other for this product: a browsing tool for libraries with thousands of projects, built mostly by coding agents, shipping light and dark themes on Windows, macOS and Linux.</p>
+    <div class="tablewrap">
+    <table>
+      <thead><tr><th scope="col">Criterion</th><th scope="col">A Studio</th><th scope="col">B Fluent</th><th scope="col">C Workbench</th><th scope="col">D Gallery</th></tr></thead>
+      <tbody>
+        <tr><th scope="row">Density<small>How many projects, folders and properties fit on one screen</small></th><td><span class="dots">●●<span class="o">●●</span></span></td><td><span class="dots">●●<span class="o">●●</span></span></td><td><span class="dots">●●●●</span></td><td><span class="dots">●<span class="o">●●●</span></span></td></tr>
+        <tr><th scope="row">Native feel across OSes<small>Looks at home on Windows, macOS and Linux alike</small></th><td><span class="dots">●●●<span class="o">●</span></span></td><td><span class="dots">●●<span class="o">●●</span></span><small>Perfect on Windows, foreign elsewhere</small></td><td><span class="dots">●●●<span class="o">●</span></span></td><td><span class="dots">●●<span class="o">●●</span></span></td></tr>
+        <tr><th scope="row">Match to reference mockup</th><td><span class="dots">●●●<span class="o">●</span></span></td><td><span class="dots">●●●●</span></td><td><span class="dots">●●<span class="o">●●</span></span></td><td><span class="dots">●<span class="o">●●●</span></span></td></tr>
+        <tr><th scope="row">Theming effort<small>Light, dark and system with one token set</small></th><td><span class="dots">●●●●</span></td><td><span class="dots">●●●<span class="o">●</span></span></td><td><span class="dots">●●●<span class="o">●</span></span><small>Custom tokens, written once</small></td><td><span class="dots">●●●<span class="o">●</span></span></td></tr>
+        <tr><th scope="row">Accessibility out of the box<small>Keyboard, focus, ARIA from the component layer</small></th><td><span class="dots">●●●●</span></td><td><span class="dots">●●●●</span></td><td><span class="dots">●●●<span class="o">●</span></span><small>Depends on the primitives chosen</small></td><td><span class="dots">●●●<span class="o">●</span></span></td></tr>
+        <tr><th scope="row">Component coverage<small>Tree, virtualized grid, tabs, command palette, menus, resizable panels</small></th><td><span class="dots">●●●<span class="o">●</span></span><small>Tree and virtualization from third parties</small></td><td><span class="dots">●●●●</span></td><td><span class="dots">●●<span class="o">●●</span></span><small>Most assembled by hand</small></td><td><span class="dots">●●●●</span><small>Mantine ships almost everything</small></td></tr>
+        <tr><th scope="row">Agent productivity<small>How fluently coding agents produce correct UI in it</small></th><td><span class="dots">●●●●</span></td><td><span class="dots">●●<span class="o">●●</span></span><small>Griffel styling, larger API</small></td><td><span class="dots">●●●<span class="o">●</span></span></td><td><span class="dots">●●●<span class="o">●</span></span></td></tr>
+        <tr><th scope="row">Distinctiveness<small>Does the product have a face of its own</small></th><td><span class="dots">●<span class="o">●●●</span></span><small>Looks like every 2025 dev tool</small></td><td><span class="dots">●●<span class="o">●●</span></span></td><td><span class="dots">●●●●</span></td><td><span class="dots">●●●<span class="o">●</span></span></td></tr>
+        <tr><th scope="row">Framework lock-in<small>Lower is better; ports and web components help</small></th><td><span class="dots">●●●<span class="o">●</span></span><small>Svelte and Vue ports exist</small></td><td><span class="dots">●●●<span class="o">●</span></span><small>Web components variant</small></td><td><span class="dots">●●●●</span><small>Ark UI is framework-agnostic</small></td><td><span class="dots">●●<span class="o">●●</span></span><small>Mantine is React only</small></td></tr>
+      </tbody>
+    </table>
+    </div>
+  </section>
+
+  <section class="reco">
+    <h2 style="margin:0">Recommendation</h2>
+    <ul>
+      <li><b>All platforms equal:</b> A with C's density. shadcn/ui on a compact spacing scale, square thumbnails, and C's monospaced data column in the inspector. Keeps the proven stack and agent fluency, fixes A's looseness and sameness.</li>
+      <li><b>Windows first, others best-effort:</b> B with Fluent UI React v9, accepting a plainer fallback theme on macOS and Linux.</li>
+      <li><b>You are the primary user and want a Blender- or Lightroom-like instrument:</b> C, as a small custom design system on headless primitives.</li>
+      <li><b>A wide, less technical audience is the goal:</b> D with Mantine.</li>
+    </ul>
+    <p>Full reasoning in <code>docs/decisions/0002-ui-framework.md</code>; the shell decision (Electron vs. Tauri) is independent and lives in <code>docs/decisions/0001-tech-stack.md</code>.</p>
+  </section>
+
+  <footer>Static HTML, no framework. Mockups are reference material, not code to reuse. Source: <code>docs/mockups/</code> on the <code>claude/dreamy-goodall-cd9354</code> branch.</footer>
+</div>
+</body>
+</html>
