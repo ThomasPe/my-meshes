@@ -14,12 +14,14 @@ automated end-to-end check against the real desktop app (see `spec/04-quality.md
 - [x] Answer Q1, Q2, Q20, Q21 (Windows first, Store release, drag-out low priority,
       Rust welcome).
 - [x] Decide the application shell: Tauri 2 + Rust engine (ADR-0001 accepted).
-- [ ] **0.4 De-risking spike (2 days, Windows):** Tauri 2 app that (a) loads a 50 MB STL
-      in Three.js inside WebView2 with orbit controls, (b) renders 20 thumbnails via
-      OffscreenCanvas in a Web Worker and writes PNGs through a Rust command, (c) runs
-      one `tauri-driver` WebDriver test in GitHub Actions on `windows-latest`, (d) builds
-      an MSIX with `MakeAppx` that side-loads. Any hard failure means fall back to
-      Electron per ADR-0001.
+- [x] **0.4 De-risking spike (Windows CI):** `spike/` + `.github/workflows/spike-windows.yml`.
+      All four checks passed on `windows-latest` (run 1, 2026-10-17): (a) 1,002,528-triangle
+      STL loads in WebView2, (b) 20 thumbnails rendered in a Web Worker via OffscreenCanvas
+      and written by Rust, (c) WebdriverIO E2E against the real app passes, (d) MSIX built,
+      signed, side-loaded, launched and removed. Details in ADR-0001 "Spike results".
+- [ ] **0.4b Spike on real hardware:** run `spike/` on your Windows machine (GPU) to get
+      FPS and thumbnail timings that the GPU-less CI runner cannot provide; fill in the
+      table in ADR-0001.
 - [x] Decide visual direction: D Gallery (ADR-0002 accepted).
 - [ ] **0.5 Click dummy review.** Walk through `docs/clickdummy/index.html` on all screens; collect changes to layout, wording and flows before the spike. Confirm the component library (Mantine default) during the scaffold.
 - [ ] Answer the remaining items in `docs/open-questions.md` (Q4, Q5, Q10 before

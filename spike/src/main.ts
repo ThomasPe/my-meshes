@@ -33,12 +33,16 @@ const key = new THREE.DirectionalLight(0xffffff, 1.5); key.position.set(100, 80,
 const grid = new THREE.GridHelper(400, 40, 0x9ca3af, 0xd1d5db); grid.rotation.x = Math.PI / 2; scene.add(grid);
 let mesh: THREE.Mesh | null = null;
 let frames = 0; let fpsWindowStart = performance.now(); let fps = 0;
+// While thumbnails render we stop drawing the big viewer scene so the main-thread probe measures
+// only what the worker costs the UI, not the viewer's own frame time on slow GPUs.
+let viewerPaused = false;
 function resize() {
   const w = canvas.clientWidth, h = canvas.clientHeight;
   if (canvas.width !== w * renderer.getPixelRatio() || canvas.height !== h * renderer.getPixelRatio()) { renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
 }
 function tick() {
-  resize(); controls.update(); renderer.render(scene, camera);
+  resize(); controls.update();
+  if (!viewerPaused) renderer.render(scene, camera);
   frames++; const now = performance.now();
   if (now - fpsWindowStart >= 1000) { fps = Math.round(frames * 1000 / (now - fpsWindowStart)); frames = 0; fpsWindowStart = now; $('hud').textContent = `${fps} fps · ${mesh ? (mesh.geometry.getAttribute('position').count / 3).toLocaleString() + ' triangles' : 'no model'} · drag to orbit`; }
   requestAnimationFrame(tick);
@@ -109,6 +113,7 @@ async function renderThumbnails() {
   $('thumbgrid').innerHTML = '';
   $('thumbsWritten').textContent = '0';
   setStatus(`rendering ${count} thumbnails in worker…`);
+  viewerPaused = true;
   const t0 = performance.now();
   const per: { renderMs: number; encodeMs: number; ipcMs: number; bytes: number }[] = [];
   let written = 0; let glRenderer = ''; let setupMs = 0;
@@ -150,6 +155,7 @@ async function renderThumbnails() {
     await renderThumbnailSeries(hidden, current!.positions.slice(), current!.normals.slice(), count, size, async (ev) => { if (ev.type === 'error') throw new Error(ev.error); await handle(ev); });
   }
   probing = false;
+  viewerPaused = false;
   const totalMs = performance.now() - t0;
   const onDisk = await backend.listThumbnails();
   const avg = (k: keyof typeof per[0]) => per.reduce((a, p) => a + (p[k] as number), 0) / Math.max(per.length, 1);
@@ -199,7 +205,7 @@ function verdict() {
     uiStayedResponsive: !!t && t.mode === 'worker' && t.worstMainThreadFrameGapMs < 200,
   };
 }
-function fail(e: unknown) { console.error(e); setStatus('error: ' + (e instanceof Error ? e.message : String(e))); publish('error', String(e)); }
+function fail(e: unknown) { viewerPaused = false; console.error(e); setStatus('error: ' + (e instanceof Error ? e.message : String(e))); publish('error', String(e)); }
 
 (async () => {
   backend = await createBackend();

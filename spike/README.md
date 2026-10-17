@@ -44,6 +44,19 @@ Any hard failure means fall back to Electron per ADR-0001. Soft misses (slow FPS
 runner without a GPU) are expected on GitHub-hosted runners and must be re-measured on
 your Windows machine; the `verdict` block in the results separates the two.
 
+## Results so far
+
+First CI run on `windows-latest` (no GPU): all four checks passed. Numbers and the
+Linux comparison are in `docs/decisions/0001-tech-stack.md`, section "Spike results".
+Run it on a machine with a GPU for FPS and thumbnail timings that mean something:
+
+```powershell
+cd spike; npm ci; npm run tauri dev     # click "Run full spike", read the Results JSON
+```
+
+or install the MSIX from the CI artifact (`spike-<run>.zip`): import `spike-dev.cer`
+into *Trusted People* (local machine), then double-click the `.msix`.
+
 ## Layout
 
 ```
