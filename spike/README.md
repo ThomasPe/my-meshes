@@ -15,8 +15,17 @@ all cores (rayon) and reports MB/s.
 
 ## Running
 
-Prerequisites: Node 22, Rust stable, and on Windows the MSVC build tools. On Linux
-`libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev` (dev only, Linux is not a target).
+Prerequisites: Node 22 and the Rust toolchain. On Windows:
+
+```powershell
+winget install --id Microsoft.VisualStudio.2022.BuildTools --override "--wait --passive --add Microsoft.VisualStudio.Workload.VCTools --includeRecommended"
+winget install --id Rustlang.Rustup
+# open a new terminal, then: cargo --version
+```
+
+(`cargo: program not found` from `npm run tauri dev` means Rust is missing or the terminal
+was opened before the install.) On Linux, for development only:
+`libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev`.
 
 ```bash
 cd spike
