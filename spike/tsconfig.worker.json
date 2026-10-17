@@ -1,0 +1,7 @@
+{
+  "compilerOptions": {
+    "target": "ES2022", "module": "ESNext", "moduleResolution": "bundler",
+    "lib": ["ES2022", "WebWorker"], "strict": true, "noEmit": true, "skipLibCheck": true, "isolatedModules": true, "types": []
+  },
+  "include": ["src/workers/**/*.ts", "src/stl-shared.ts", "src/thumb-render.ts"]
+}

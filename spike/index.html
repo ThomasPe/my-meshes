@@ -1,0 +1,68 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>My Meshes Spike</title>
+<link rel="stylesheet" href="/src/style.css">
+</head>
+<body>
+<div class="app">
+  <aside class="panel">
+    <h1>My Meshes <span>Tauri 2 spike</span></h1>
+    <p class="muted" id="mode">detecting runtime…</p>
+
+    <section>
+      <h2>1 · Load a large STL</h2>
+      <div class="row">
+        <label>Triangles <input id="tris" type="number" value="1000000" min="1000" step="1000" data-testid="tris"></label>
+        <button id="gen" data-testid="generate">Generate test STL</button>
+        <button id="open" data-testid="open">Open STL…</button>
+      </div>
+      <dl class="kv" id="loadStats"></dl>
+    </section>
+
+    <section>
+      <h2>2 · Thumbnails off the UI thread</h2>
+      <div class="row">
+        <label>Count <input id="thumbCount" type="number" value="20" min="1" max="200" data-testid="thumb-count"></label>
+        <label>Size <input id="thumbSize" type="number" value="512" min="64" max="2048" step="64"></label>
+        <button id="thumbs" data-testid="thumbs" disabled>Render thumbnails</button>
+      </div>
+      <dl class="kv" id="thumbStats"></dl>
+      <div class="thumbgrid" id="thumbgrid"></div>
+    </section>
+
+    <section>
+      <h2>3 · Engine workload (Rust)</h2>
+      <div class="row">
+        <button id="hash" data-testid="hash">Hash a folder…</button>
+        <button id="hashCache" data-testid="hash-cache">Hash the spike cache</button>
+      </div>
+      <dl class="kv" id="hashStats"></dl>
+    </section>
+
+    <section>
+      <h2>Run everything</h2>
+      <div class="row">
+        <button id="runAll" class="primary" data-testid="run-all">Run full spike</button>
+        <span class="status" data-testid="status" id="status">idle</span>
+      </div>
+      <details open><summary>Results (JSON)</summary><pre id="results" data-testid="results">{}</pre></details>
+      <p class="hidden" data-testid="tri-count" id="triCount">0</p>
+      <p class="hidden" data-testid="thumbs-written" id="thumbsWritten">0</p>
+    </section>
+
+    <section>
+      <h2>Environment</h2>
+      <dl class="kv" id="envStats"></dl>
+    </section>
+  </aside>
+  <main class="stage">
+    <canvas id="view"></canvas>
+    <div class="hud" id="hud">drag to orbit · wheel to zoom</div>
+  </main>
+</div>
+<script type="module" src="/src/main.ts"></script>
+</body>
+</html>

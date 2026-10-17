@@ -1,0 +1,13 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "default",
+  "description": "Spike window: core, dialogs, and the WebdriverIO plugins (inactive unless built with --features e2e).",
+  "windows": ["main"],
+  "permissions": [
+    "core:default",
+    "core:window:default",
+    "dialog:default",
+    "wdio:default",
+    "wdio-webdriver:default"
+  ]
+}
