@@ -1,4 +1,4 @@
-# My Meshes
+# Meshkeep
 
 A local-first desktop library manager for 3D printing models (STL, OBJ, 3MF): browse,
 preview, tag and organize the models on your own disks, Lightroom-style.

@@ -1,6 +1,6 @@
 {
-  "name": "my-meshes",
-  "productName": "My Meshes",
+  "name": "meshkeep",
+  "productName": "Meshkeep",
   "private": true,
   "version": "0.1.0",
   "type": "module",

@@ -20,6 +20,7 @@ file keeps the record of what was decided and when.
 | Q11 | Model formats | Preview STL/OBJ/3MF; STEP/PLY/AMF indexed as models; slicer 3MF = model + badge (2026-10-18). | `spec/02-domain-model.md`, `spec/03-features.md` VIEW-2 |
 | Q13 | Languages | English and German at launch (2026-10-18). | `spec/03-features.md` APP-3 |
 | Q14 | Frameless window | No; native title bar (2026-10-18). | `spec/03-features.md` APP-10 |
+| Q15 | Name and branding | **Meshkeep** (2026-10-18). Identifier `de.devsym.meshkeep`, sidecar/ignore folder `.meshkeep`, env prefix `MESHKEEP_*`. Store name to be reserved in Partner Center before the first Store submission; GitHub repo rename is optional. | `src-tauri/tauri.conf.json`, `README.md` |
 | Q16 | License | **MIT** (2026-10-18). | `LICENSE` |
 | Q17 | Agent tooling | Claude Code primary, Copilot secondary, both via `AGENTS.md`; npm stays (2026-10-18). | `AGENTS.md`, `CLAUDE.md`, `.github/copilot-instructions.md` |
 | Q18 | MVP definition | Three deliveries: walking skeleton, daily driver, Store-ready (2026-10-18). | `docs/backlog.md` Phase 1 |
@@ -30,7 +31,4 @@ file keeps the record of what was decided and when.
 
 ## Open
 
-- **[Q15] Name and branding.** Repository says "My Meshes", the mockup said "Hyperion
-  3D". The name must be reserved in Partner Center before the Store release; the app
-  identifier (`de.devsym.mymeshes`), window title and Store listing follow from it.
-  Brainstorm in progress.
+None. New questions go here with a `[Q#]` marker in the spec until decided.

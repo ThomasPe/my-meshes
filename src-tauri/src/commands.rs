@@ -1,6 +1,6 @@
 use crate::state::{self, AppState};
-use mymeshes_engine::model::{FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, ScanReport, SyncMode, TagCount};
-use mymeshes_engine::{EngineError, UpdateMetadata};
+use meshkeep_engine::model::{FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, ScanReport, SyncMode, TagCount};
+use meshkeep_engine::{EngineError, UpdateMetadata};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -229,12 +229,12 @@ pub fn open_project_file(app: AppHandle, state: State<AppState>, project_id: Str
         })
 }
 
-/// Native folder picker. In test mode `MYMESHES_PICK_FOLDER` short-circuits the dialog
+/// Native folder picker. In test mode `MESHKEEP_PICK_FOLDER` short-circuits the dialog
 /// (a narrow test seam, see docs/spec/04-quality.md).
 #[tauri::command]
 pub async fn pick_folder(app: AppHandle) -> CmdResult<Option<String>> {
     if app.state::<AppState>().config.test_mode {
-        if let Some(p) = std::env::var_os("MYMESHES_PICK_FOLDER") {
+        if let Some(p) = std::env::var_os("MESHKEEP_PICK_FOLDER") {
             return Ok(Some(p.to_string_lossy().into_owned()));
         }
     }

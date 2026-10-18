@@ -1,4 +1,4 @@
-//! Tauri shell: a thin, typed command layer over `mymeshes_engine` plus the few things only
+//! Tauri shell: a thin, typed command layer over `meshkeep_engine` plus the few things only
 //! the shell can do (dialogs, revealing files, events to the webview, test mode).
 
 mod commands;
@@ -25,7 +25,7 @@ pub fn run() {
                 .targets([
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
-                        file_name: Some("mymeshes".into()),
+                        file_name: Some("meshkeep".into()),
                     }),
                 ])
                 .build(),
@@ -40,7 +40,7 @@ pub fn run() {
         .setup(move |app| {
             let data_dir = config.resolve_data_dir(app.handle())?;
             log::info!("data dir: {} (test mode: {})", data_dir.display(), config.test_mode);
-            let engine = mymeshes_engine::Engine::open(&data_dir)?;
+            let engine = meshkeep_engine::Engine::open(&data_dir)?;
             let state = AppState {
                 engine: Mutex::new(engine),
                 watchers: Mutex::new(Default::default()),
@@ -75,5 +75,5 @@ pub fn run() {
             commands::set_ignore_patterns,
         ])
         .run(tauri::generate_context!())
-        .expect("error while running My Meshes");
+        .expect("error while running Meshkeep");
 }

@@ -1,9 +1,9 @@
 {
-  "app": { "name": "My Meshes" },
+  "app": { "name": "Meshkeep" },
   "nav": { "library": "Library", "settings": "Settings", "search": "Search library…", "theme": "Toggle theme" },
   "welcome": {
     "title": "Your 3D models, organized like a photo library",
-    "lead": "My Meshes indexes the STL, OBJ and 3MF files already on your disks. Nothing is uploaded, nothing is moved without asking, and your metadata lives next to your files.",
+    "lead": "Meshkeep indexes the STL, OBJ and 3MF files already on your disks. Nothing is uploaded, nothing is moved without asking, and your metadata lives next to your files.",
     "addRoot": "Add a library folder",
     "addRootHint": "Pick the folder where your models live. Subfolders are scanned as projects.",
     "settings": "Open settings",

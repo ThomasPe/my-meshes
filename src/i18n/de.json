@@ -1,9 +1,9 @@
 {
-  "app": { "name": "My Meshes" },
+  "app": { "name": "Meshkeep" },
   "nav": { "library": "Bibliothek", "settings": "Einstellungen", "search": "Bibliothek durchsuchen…", "theme": "Design umschalten" },
   "welcome": {
     "title": "Deine 3D-Modelle, organisiert wie eine Fotobibliothek",
-    "lead": "My Meshes indexiert die STL-, OBJ- und 3MF-Dateien, die schon auf deinen Laufwerken liegen. Nichts wird hochgeladen, nichts ohne Nachfrage verschoben, und deine Metadaten liegen neben deinen Dateien.",
+    "lead": "Meshkeep indexiert die STL-, OBJ- und 3MF-Dateien, die schon auf deinen Laufwerken liegen. Nichts wird hochgeladen, nichts ohne Nachfrage verschoben, und deine Metadaten liegen neben deinen Dateien.",
     "addRoot": "Bibliotheksordner hinzufügen",
     "addRootHint": "Wähle den Ordner mit deinen Modellen. Unterordner werden als Projekte erkannt.",
     "settings": "Einstellungen öffnen",

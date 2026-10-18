@@ -128,7 +128,7 @@ is remounted under a different absolute path.
 ## Thumbnails and cache
 
 - Default thumbnail location (decided Q5): the **app data cache**
-  (`%LOCALAPPDATA%\My Meshes\thumbs\<content-hash>.png`). Rendering a preview never
+  (`%LOCALAPPDATA%\Meshkeep\thumbs\<content-hash>.png`). Rendering a preview never
   writes into a project folder, no hidden folders travel with zipped or shared projects,
   and the scan-never-writes rule stays intact. Thumbnails are reproducible, so losing
   them on reinstall is acceptable.

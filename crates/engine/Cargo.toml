@@ -1,6 +1,6 @@
 [package]
-name = "mymeshes-engine"
-description = "Shell-agnostic engine for My Meshes: library roots, scanning, sidecars, index, watching."
+name = "meshkeep-engine"
+description = "Shell-agnostic engine for Meshkeep: library roots, scanning, sidecars, index, watching."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

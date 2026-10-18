@@ -6,7 +6,7 @@ import path from 'node:path';
 // Acceptance for the walking skeleton against the real app (docs/spec/04-quality.md):
 // the window becomes interactive, the seeded fixture root is indexed, and a metadata edit
 // lands on disk as project.yaml.
-describe('My Meshes (test mode, fixture library)', () => {
+describe('Meshkeep (test mode, fixture library)', () => {
   afterEach(async function () {
     fs.mkdirSync('logs', { recursive: true });
     const name = (this.currentTest?.title || 'test').replace(/[^a-z0-9]+/gi, '-').toLowerCase();
@@ -34,7 +34,7 @@ describe('My Meshes (test mode, fixture library)', () => {
     await $('[data-testid="tag-input"]').setValue('e2e-tag');
     await browser.keys('Enter');
     await browser.waitUntil(async () => (await $('[data-testid="inspector"]').getText()).includes('project.yaml in sync'), { timeout: 15000 });
-    const sidecar = path.join(process.env.MYMESHES_E2E_FIXTURE!, 'Decor/Vase/project.yaml');
+    const sidecar = path.join(process.env.MESHKEEP_E2E_FIXTURE!, 'Decor/Vase/project.yaml');
     await browser.waitUntil(() => fs.existsSync(sidecar), { timeout: 10000, timeoutMsg: 'project.yaml was not written' });
     const text = fs.readFileSync(sidecar, 'utf8');
     expect(text).toContain('e2e-tag');
@@ -53,7 +53,7 @@ describe('My Meshes (test mode, fixture library)', () => {
     await $('[data-testid="nav-settings"]').click();
     await $('[data-testid="settings"]').waitForDisplayed();
     const dir = await $('[data-testid="data-dir"]').getText();
-    expect(dir).toContain('mymeshes-e2e-');
+    expect(dir).toContain('meshkeep-e2e-');
     const info = await browser.tauri.execute(({ core }) => core.invoke('app_info')) as { testMode: boolean; e2eBuild: boolean };
     expect(info.testMode).toBe(true);
     expect(info.e2eBuild).toBe(true);

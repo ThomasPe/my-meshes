@@ -1,8 +1,8 @@
 //! End-to-end engine flow on a temporary library: add root, scan, list, edit metadata
 //! (lazy sidecar creation, conflict detection), offline handling.
 
-use mymeshes_engine::model::{ListQuery, SidecarState, SyncMode};
-use mymeshes_engine::{Engine, EngineError, UpdateMetadata};
+use meshkeep_engine::model::{ListQuery, SidecarState, SyncMode};
+use meshkeep_engine::{Engine, EngineError, UpdateMetadata};
 use std::fs;
 use std::path::Path;
 
@@ -110,7 +110,7 @@ fn add_scan_edit_conflict_offline() {
     let moved = lib.path().with_extension("gone");
     fs::rename(lib.path(), &moved).unwrap();
     let roots = engine.roots().unwrap();
-    assert_eq!(roots[0].status, mymeshes_engine::model::RootStatus::Offline);
+    assert_eq!(roots[0].status, meshkeep_engine::model::RootStatus::Offline);
     assert!(matches!(engine.scan_root(&root.id, |_| {}), Err(EngineError::RootOffline(_))));
     let still = engine.list_projects(&ListQuery::default()).unwrap();
     assert_eq!(still.len(), 2);

@@ -1,6 +1,6 @@
-use mymeshes_engine::model::SyncMode;
-use mymeshes_engine::watch::{RootWatcher, WatchEvent};
-use mymeshes_engine::Engine;
+use meshkeep_engine::model::SyncMode;
+use meshkeep_engine::watch::{RootWatcher, WatchEvent};
+use meshkeep_engine::Engine;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{mpsc, Mutex};
@@ -18,9 +18,9 @@ pub struct RuntimeConfig {
 impl RuntimeConfig {
     pub fn from_env_and_args() -> RuntimeConfig {
         let args: Vec<String> = std::env::args().collect();
-        let test_mode = args.iter().any(|a| a == "--test-mode") || std::env::var("MYMESHES_TEST_MODE").map(|v| v == "1").unwrap_or(false);
-        let data_dir_override = std::env::var_os("MYMESHES_DATA_DIR").map(PathBuf::from);
-        let fixture_root = std::env::var_os("MYMESHES_FIXTURE_ROOT").map(PathBuf::from);
+        let test_mode = args.iter().any(|a| a == "--test-mode") || std::env::var("MESHKEEP_TEST_MODE").map(|v| v == "1").unwrap_or(false);
+        let data_dir_override = std::env::var_os("MESHKEEP_DATA_DIR").map(PathBuf::from);
+        let fixture_root = std::env::var_os("MESHKEEP_FIXTURE_ROOT").map(PathBuf::from);
         RuntimeConfig {
             test_mode,
             data_dir_override,
@@ -33,7 +33,7 @@ impl RuntimeConfig {
             return Ok(d.clone());
         }
         if self.test_mode {
-            let d = std::env::temp_dir().join(format!("mymeshes-test-{}", std::process::id()));
+            let d = std::env::temp_dir().join(format!("meshkeep-test-{}", std::process::id()));
             return Ok(d);
         }
         app.path().app_data_dir()
@@ -48,18 +48,18 @@ pub struct AppState {
     pub data_dir: PathBuf,
 }
 
-/// In test mode with `MYMESHES_FIXTURE_ROOT` set: register that folder (once) and scan it.
+/// In test mode with `MESHKEEP_FIXTURE_ROOT` set: register that folder (once) and scan it.
 pub fn seed_test_fixture(app: &AppHandle) {
     let state = app.state::<AppState>();
     let Some(fixture) = state.config.fixture_root.clone() else { return };
     if !state.config.test_mode {
-        log::warn!("MYMESHES_FIXTURE_ROOT ignored outside test mode");
+        log::warn!("MESHKEEP_FIXTURE_ROOT ignored outside test mode");
         return;
     }
     let mut engine = state.engine.lock().unwrap();
     let id = match engine.add_root(&fixture, SyncMode::Manual) {
         Ok(r) => r.id,
-        Err(mymeshes_engine::EngineError::RootExists(_)) => engine
+        Err(meshkeep_engine::EngineError::RootExists(_)) => engine
             .roots()
             .ok()
             .and_then(|rs| rs.into_iter().find(|r| r.path == fixture).map(|r| r.id))
@@ -110,7 +110,7 @@ pub fn stop_watcher_for(app: &AppHandle, root_id: &str) {
 /// Receives debounced file-system events and rescans the affected root, then tells the UI.
 pub fn spawn_watch_loop(app: AppHandle, rx: mpsc::Receiver<WatchEvent>) {
     std::thread::Builder::new()
-        .name("mymeshes-watch".into())
+        .name("meshkeep-watch".into())
         .spawn(move || {
             while let Ok(ev) = rx.recv() {
                 log::debug!("fs change in {}: {} paths", ev.root_id, ev.paths.len());

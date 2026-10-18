@@ -20,7 +20,7 @@ pub const DEFAULT_IGNORE: &[&str] = &[
     "Thumbs.db",
     "node_modules",
     ".cache",
-    ".mymeshes",
+    ".meshkeep",
     "*.gcode",
     "*.bgcode",
     "*.tmp",

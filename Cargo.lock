@@ -2335,6 +2335,46 @@ dependencies = [
 ]
 
 [[package]]
+name = "meshkeep"
+version = "0.1.0"
+dependencies = [
+ "log",
+ "meshkeep-engine",
+ "serde",
+ "serde_json",
+ "tauri",
+ "tauri-build",
+ "tauri-plugin-dialog",
+ "tauri-plugin-log",
+ "tauri-plugin-opener",
+ "tauri-plugin-wdio",
+ "tauri-plugin-wdio-webdriver",
+ "thiserror 2.0.21",
+ "time",
+]
+
+[[package]]
+name = "meshkeep-engine"
+version = "0.1.0"
+dependencies = [
+ "globset",
+ "notify",
+ "notify-debouncer-full",
+ "rayon",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "serde_yaml_ng",
+ "sha2",
+ "tempfile",
+ "thiserror 2.0.21",
+ "time",
+ "tracing",
+ "uuid",
+ "walkdir",
+]
+
+[[package]]
 name = "mime"
 version = "0.3.17"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2391,46 +2431,6 @@ dependencies = [
  "serde",
  "thiserror 2.0.21",
  "windows-sys 0.61.2",
-]
-
-[[package]]
-name = "mymeshes"
-version = "0.1.0"
-dependencies = [
- "log",
- "mymeshes-engine",
- "serde",
- "serde_json",
- "tauri",
- "tauri-build",
- "tauri-plugin-dialog",
- "tauri-plugin-log",
- "tauri-plugin-opener",
- "tauri-plugin-wdio",
- "tauri-plugin-wdio-webdriver",
- "thiserror 2.0.21",
- "time",
-]
-
-[[package]]
-name = "mymeshes-engine"
-version = "0.1.0"
-dependencies = [
- "globset",
- "notify",
- "notify-debouncer-full",
- "rayon",
- "rusqlite",
- "serde",
- "serde_json",
- "serde_yaml_ng",
- "sha2",
- "tempfile",
- "thiserror 2.0.21",
- "time",
- "tracing",
- "uuid",
- "walkdir",
 ]
 
 [[package]]

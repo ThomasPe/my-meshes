@@ -1,4 +1,4 @@
-//! My Meshes engine. Everything here is independent of the application shell (Tauri):
+//! Meshkeep engine. Everything here is independent of the application shell (Tauri):
 //! it only knows about directories, files and an SQLite file it may rebuild at any time.
 //!
 //! Rules this crate enforces (see docs/spec):

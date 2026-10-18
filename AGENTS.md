@@ -1,4 +1,4 @@
-# Working on My Meshes (for coding agents and humans)
+# Working on Meshkeep (for coding agents and humans)
 
 Read `docs/README.md` first; the spec (`docs/spec/`) and the decisions (`docs/decisions/`)
 are binding. This file is the operating manual.
@@ -6,7 +6,7 @@ are binding. This file is the operating manual.
 ## Stack
 
 - **Shell:** Tauri 2 (`src-tauri/`), Rust 2021. Commands are thin wrappers over the engine.
-- **Engine:** `crates/engine` (`mymeshes-engine`), shell-agnostic. Scanner, sidecars, SQLite
+- **Engine:** `crates/engine` (`meshkeep-engine`), shell-agnostic. Scanner, sidecars, SQLite
   index with FTS5, watcher, hashing. No Tauri imports allowed here.
 - **Frontend:** React 19 + TypeScript + Vite 7, Tailwind CSS 4, shadcn-style components in
   `src/components/ui` (copied source, Radix primitives), TanStack Query + Virtual, zustand,
@@ -46,7 +46,7 @@ npm run tauri:build:e2e && npm run test:e2e   # real-app E2E (Windows/macOS/Linu
 A feature is done when its acceptance criteria are verified by an automated test at the
 right level, and all of these pass locally:
 
-- `cargo fmt --all --check && cargo clippy -p mymeshes-engine --all-targets -- -D warnings && cargo test`
+- `cargo fmt --all --check && cargo clippy -p meshkeep-engine --all-targets -- -D warnings && cargo test`
 - `npm run typecheck && npm test && npx vite build && npm run test:ui`
 - For anything touching the shell or disk behaviour: `npm run test:e2e` against a fresh
   e2e build (CI runs it on Windows; locally on Linux use `xvfb-run`).
@@ -56,8 +56,8 @@ behaviour: engine unit test > UI test in browser mode > real-app E2E.
 
 ## Test mode (real app)
 
-`--test-mode` or `MYMESHES_TEST_MODE=1` isolates app data (`MYMESHES_DATA_DIR` or a temp
-dir), seeds and scans `MYMESHES_FIXTURE_ROOT` if set, and lets `MYMESHES_PICK_FOLDER`
+`--test-mode` or `MESHKEEP_TEST_MODE=1` isolates app data (`MESHKEEP_DATA_DIR` or a temp
+dir), seeds and scans `MESHKEEP_FIXTURE_ROOT` if set, and lets `MESHKEEP_PICK_FOLDER`
 answer the native folder picker. `fixtures/library` is the deterministic sample library:
 tiny ASCII STLs, one proper sidecar, one malformed sidecar, one nested sidecar, an
 attachment, ignored files.
