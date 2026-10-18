@@ -1,6 +1,6 @@
 # 3. Functional Requirements
 
-> Status: specification, technology-neutral. **[Q#]** marks open questions, see
+> Status: specification, technology-neutral. Decisions reference question numbers (Q#) in
 > `docs/open-questions.md`. Priorities: **MVP** (phase 1) or **Later** (phase 2+).
 
 ## 3.1 Library & sync
@@ -26,7 +26,7 @@
 | META-4 | Conflict detection: when the sidecar changed externally during an edit, block the save and offer reload. | MVP |
 | META-5 | Rename a project in the app; the directory is renamed on disk. Name collisions are detected before anything is touched. | MVP |
 | META-6 | Batch editing: apply tag, creator or collection changes to a multi-selection. | Later |
-| META-7 | External enrichment: detect the source platform (Thingiverse, Printables, MakerWorld, …) from archive contents, file names or URLs and offer to fetch title, creator, tags, description and images into the sidecar. Explicitly user-triggered. **[Q8]** | Later |
+| META-7 | External enrichment: detect the source platform from archive contents, file names or URLs and offer to fetch title, creator, tags, description and images into the sidecar. Explicitly user-triggered. First Printables and Thingiverse (public APIs; Thingiverse with a user-supplied app key), then MakerWorld and Thangs limited to what a page publicly exposes (OpenGraph), never behind a login (Q8). | Later |
 
 ## 3.3 Browsing, search & organization
 
@@ -48,7 +48,7 @@
 | ID | Requirement | Priority |
 |---|---|---|
 | VIEW-1 | Interactive 3D preview for STL, OBJ and 3MF: orbit, pan, zoom, reset, standard views. Large files load progressively without freezing the UI. | MVP |
-| VIEW-2 | 3MF: load geometry and read embedded thumbnail and metadata. **[Q11]** | MVP |
+| VIEW-2 | 3MF: load geometry and read embedded thumbnail and metadata; slicer 3MFs get a badge. STEP, PLY and AMF are indexed as models with a "preview later" notice (Q11). | MVP |
 | VIEW-3 | Thumbnail generation for every project in a background queue, stored per `02-domain-model.md`. The UI never blocks on it. | MVP |
 | VIEW-4 | Custom thumbnails: "set current view as thumbnail" and "use image file as thumbnail". | Later |
 | VIEW-5 | Built-in image viewer for project images; documents open in the OS default app. | MVP |
@@ -60,8 +60,8 @@
 | ID | Requirement | Priority |
 |---|---|---|
 | IMP-1 | Drop one or more archives or folders onto the app to open the staging area. The app proposes projects; the user reviews, adjusts and confirms. | MVP |
-| IMP-2 | Confirmed imports extract archives into new project directories inside a chosen root. **[Q7]** decides what happens to the original archive. | MVP |
-| IMP-3 | Loose files can be routed to the inbox. | MVP |
+| IMP-2 | Confirmed imports extract archives into new project directories inside a chosen root. The original archive is kept as an attachment by default; moving it to `_Originals` or to the Recycle Bin is a setting (Q7). | MVP |
+| IMP-3 | Loose files can be routed to the `_Inbox` folder of the chosen root; the inbox has its own view with a promote-to-project action (Q6). | MVP |
 | IMP-4 | Files that appear in a root via the OS (not through the app) are picked up by sync; archives found this way are attachments and are not extracted. | MVP |
 | IMP-5 | Safe delete: deletions go to the OS trash after confirmation. | MVP |
 | IMP-6 | Drag a model or project out of the app into another application (slicer, Blender, file manager) as native files. Low priority (Q20). | Later |
@@ -74,12 +74,12 @@
 |---|---|---|
 | APP-1 | Runs on Windows (primary). macOS support is a stretch goal; Linux is out of scope for v1 (Q1). | MVP |
 | APP-2 | Light, dark and system theme. | MVP |
-| APP-3 | All user-facing text is localizable; English and German at launch. **[Q13]** | MVP |
+| APP-3 | All user-facing text is localizable; English and German at launch, further languages after the Store release via community translations (Q13). | MVP |
 | APP-4 | Settings: library roots, ignore patterns, thumbnail location, sync intervals, theme, language, notifications. | MVP |
 | APP-5 | Keyboard shortcuts for core actions (search, delete, rename, navigate) with a central, configurable keymap. | Later |
 | APP-6 | Undo/redo for disk operations (rename, move, tag) via inverse operations. | Later |
 | APP-7 | Notifications for import errors, sync failures and completed background jobs. | MVP |
 | APP-8 | Log viewer: browse, filter and export application logs for bug reports. | Later |
 | APP-9 | Updates: private builds update themselves (manual check, optional beta channel); Store builds leave updating to the Store and hide the updater (Q2). | MVP |
-| APP-10 | Custom (frameless) title bar for a consistent look across platforms. **[Q14]** | Later |
+| APP-10 | Native title bar (decided Q14): no frameless window in v1; Snap Layouts, Mica and accessibility come for free and Store review stays simple. Revisit after the MVP if wanted. | Decided |
 | APP-11 | Store readiness: Windows build packaged as MSIX with a Partner-Center-matching identity; macOS build runs in the App Sandbox, so library roots are chosen through the native folder picker and access is persisted with security-scoped bookmarks. No feature may rely on unrestricted file-system access outside registered roots. | MVP (Win), Later (Mac) |

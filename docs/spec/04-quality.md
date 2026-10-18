@@ -6,11 +6,12 @@
 
 | Area | Target |
 |---|---|
-| Library size | 50,000 files / 10,000 projects without degraded interaction. **[Q3]** |
+| Library size | 10,000 projects / 100,000 files / single models up to 500 MB without degraded interaction (Q3). |
 | Grid scrolling | 60 fps on a mid-range laptop; virtualized rendering |
 | Search | Results within 100 ms for the sizes above |
 | Startup | Interactive within 2 s with a warm index |
 | Heavy work | Hashing, archive extraction, geometry parsing and thumbnail rendering run off the UI thread and are cancelable |
+| Rescan after a change | A watcher event may rescan the whole root for now (seconds at the sizes above); project-granular rescans are an optimization once measured (Q22) |
 | Memory | Large meshes are streamed or chunked; the app must not exhaust memory on a 500 MB STL |
 
 ## Privacy & security

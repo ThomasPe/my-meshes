@@ -1,73 +1,36 @@
 # Open Questions
 
-Collected while consolidating the specification. Each is referenced from the spec as
-**[Q#]**. Answers should be folded back into the spec and the question removed.
+Collected while consolidating the specification. Answers are folded into the spec; this
+file keeps the record of what was decided and when.
 
 ## Answered
 
-| # | Question | Answer (2026-10-17) | Folded into |
+| # | Question | Answer | Folded into |
 |---|---|---|---|
-| Q1 | Platform priority | **Windows first.** macOS is a stretch goal. Linux is out of scope for v1. | `spec/01-vision.md`, `spec/03-features.md` APP-1, `spec/04-quality.md` |
-| Q2 | Audience and distribution | **Private use first**, then a public **Windows release via the Microsoft Store**; a **Mac App Store** release is a stretch goal. | `spec/03-features.md` APP-9/APP-11, `spec/04-quality.md` Platform & distribution |
-| Q20 | Drag-out to slicer | **Nice to have, very low priority.** Not an MVP requirement. | `spec/03-features.md` IMP-6 moved to Later |
-| Q21 | Rust in the stack? | **Yes.** Tauri 2 with a Rust engine is accepted. | `decisions/0001-tech-stack.md` (accepted) |
+| Q1 | Platform priority | **Windows first**, macOS stretch goal, Linux out of scope for v1 (2026-10-17). | `spec/01-vision.md`, `spec/03-features.md` APP-1, `spec/04-quality.md` |
+| Q2 | Audience and distribution | **Private use first**, then Microsoft Store; Mac App Store stretch goal (2026-10-17). | `spec/03-features.md` APP-9/APP-11, `spec/04-quality.md` |
+| Q3 | Library scale | **10,000 projects / 100,000 files / 500 MB single model** as design targets (2026-10-18). | `spec/04-quality.md` Performance |
+| Q4 | Sidecar schema | `project.yaml` stays; `schema` stays; printing block = material, supports, notes; per-file `quantity` stays (2026-10-18). | `spec/02-domain-model.md` |
+| Q5 | Thumbnail default | **App data cache** by default; per-project `.cache` as an option (2026-10-18). | `spec/02-domain-model.md` Thumbnails |
+| Q6 | Inbox vs. staging | Staging is the review workflow; `_Inbox` is a folder below the root with its own view and promote action (2026-10-18). | `spec/02-domain-model.md`, `spec/03-features.md` IMP-3 |
+| Q7 | Archive after import | Keep as attachment by default; `_Originals` or Recycle Bin as settings (2026-10-18). | `spec/02-domain-model.md`, `spec/03-features.md` IMP-2 |
+| Q8 | Enrichment sources | Printables and Thingiverse first (APIs), MakerWorld/Thangs via public page data only; `source_url` canonical plus optional `source {platform,id}` (2026-10-18). | `spec/02-domain-model.md`, `spec/03-features.md` META-7 |
+| Q9 | Collections location | App data (2026-10-18). | `spec/02-domain-model.md` Collections store |
+| Q10 | Project boundary | Option c: first directory with model files or sidecar; nested sidecars are notes (2026-10-18). | `spec/02-domain-model.md` Project |
+| Q11 | Model formats | Preview STL/OBJ/3MF; STEP/PLY/AMF indexed as models; slicer 3MF = model + badge (2026-10-18). | `spec/02-domain-model.md`, `spec/03-features.md` VIEW-2 |
+| Q13 | Languages | English and German at launch (2026-10-18). | `spec/03-features.md` APP-3 |
+| Q14 | Frameless window | No; native title bar (2026-10-18). | `spec/03-features.md` APP-10 |
+| Q16 | License | **MIT** (2026-10-18). | `LICENSE` |
+| Q17 | Agent tooling | Claude Code primary, Copilot secondary, both via `AGENTS.md`; npm stays (2026-10-18). | `AGENTS.md`, `CLAUDE.md`, `.github/copilot-instructions.md` |
+| Q18 | MVP definition | Three deliveries: walking skeleton, daily driver, Store-ready (2026-10-18). | `docs/backlog.md` Phase 1 |
+| Q20 | Drag-out to slicer | Nice to have, very low priority (2026-10-17). | `spec/03-features.md` IMP-6 |
+| Q21 | Rust in the stack? | Yes, Tauri 2 (2026-10-17). | `decisions/0001-tech-stack.md` |
+| Q22 | Rescan granularity | Whole-root rescan on watcher events is acceptable for now; project-granular rescan is a later optimization (2026-10-18). | `spec/04-quality.md` Performance |
+| Q23 | Rust to TypeScript types | Hand-mirrored for now; switch to `tauri-specta` with the next API extension (2026-10-18). | `AGENTS.md` Conventions |
 
-- **[Q3] Library scale.** Roughly how many projects and files, and how large is the
-  biggest single model you expect? (Drives indexing design and streaming requirements.)
+## Open
 
-## Data model
-
-- **[Q4] Sidecar schema.** Is the proposed `project.yaml` (see `spec/02-domain-model.md`)
-  what you want? Specifically: the file name (`project.yaml` vs. something more
-  specific like `.mymeshes.yaml`), a `schema` version field, the `printing` fields you
-  actually care about (material, supports, layer height, infill, print time, nozzle?),
-  and whether per-file `quantity` is useful.
-- **[Q5] Thumbnail default.** The spec offers three storage locations and defaults to a
-  hidden `.cache` folder inside every project. Confirm the default. Note that hidden
-  folders inside projects show up when projects are zipped or shared and may be
-  undesirable on a NAS.
-- **[Q9] Where do collections live?** App-data folder (survives cache rebuilds, but is
-  per machine) or inside the library root (travels with the library, shareable between
-  machines, but one file per root)?
-- **[Q10] Project boundary heuristic.** Without a sidecar, which directory is "the
-  project"? Options: (a) the deepest directory containing model files, (b) the highest
-  directory below the root that contains model files anywhere beneath it, (c) a
-  directory containing model files directly, with subdirectories becoming part of it
-  only if they contain no model files themselves. Example: `Gridfinity/Bins/*.stl` and
-  `Gridfinity/Lids/*.stl`: one project or two? And what should happen when a nested
-  `project.yaml` is found: error badge, ignore the inner file, or treat as separate?
-- **[Q11] Supported model formats.** Beyond STL/OBJ/3MF: STEP, PLY, GLTF, AMF, SCAD,
-  Blender/Fusion sources? How should slicer project files (Bambu/Prusa `.3mf` with
-  plates and print settings) be treated: as models, as "slicer projects" or both?
-
-## Workflows
-
-- **[Q6] Inbox vs. staging area.** The spec has both. Is the inbox simply the default
-  target of the staging area for loose files, or a separate concept with its own view?
-- **[Q7] Archive handling on import.** After extracting an imported archive into a new
-  project: keep the original archive as an attachment inside the project, move it to a
-  configurable "originals" folder, or trash it?
-- **[Q8] Enrichment sources.** Which platforms should enrichment support first, and is
-  it acceptable to scrape pages where no public API exists (Printables, MakerWorld)?
-  This is phase 2 but influences how source URLs are stored.
-
-## Shell & UX
-
-- **[Q13] Languages at launch.** English and German? Others?
-- **[Q14] Frameless window.** Is a custom title bar a hard requirement? It costs effort
-  on every platform (macOS traffic lights, Linux window managers) and is harder in
-  Tauri than in Electron. The Windows 11 mockup could also be achieved with the native
-  title bar plus a custom tab strip below it.
-- **[Q15] Name and branding.** Repository says "My Meshes", the mockup says "Hyperion
-  3D". Which name, and is there a logo/colour you want to keep?
-- **[Q16] License.** The archived code was MIT. Same for the rebuild?
-
-## Process
-
-- **[Q17] Agent tooling.** Which agents will work on this (Claude Code, Copilot, Cursor)?
-  The repo previously carried Copilot instructions and vendored skills; a single
-  `AGENTS.md` plus per-tool thin wrappers would avoid drift. Package manager preference
-  (`npm`, `pnpm`, `bun`)?
-- **[Q18] Definition of MVP.** The backlog is large for a phase 1. Is there a smaller
-  "walking skeleton" you want first (e.g. roots + scan + grid + 3D preview + tag
-  editing), with import/staging and collections in a second step?
+- **[Q15] Name and branding.** Repository says "My Meshes", the mockup said "Hyperion
+  3D". The name must be reserved in Partner Center before the Store release; the app
+  identifier (`de.devsym.mymeshes`), window title and Store listing follow from it.
+  Brainstorm in progress.

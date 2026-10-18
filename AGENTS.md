@@ -67,7 +67,10 @@ attachment, ignored files.
 - Rust: `rustfmt` defaults, clippy clean, `thiserror` enums, no `unwrap` outside tests
   except on mutex locks. Return typed errors; the shell maps them to `AppError { code }`.
 - TypeScript: strict, no `any`, named exports, components in PascalCase files, hooks in
-  `use*`. Types in `src/lib/types.ts` mirror the Rust structs field by field.
+  `use*`. Types in `src/lib/types.ts` mirror the Rust structs field by field; the next
+  change that extends the command API switches this to generated types (`tauri-specta`).
+- Tooling: Claude Code is the primary agent, Copilot secondary; both follow this file.
+  Package manager is npm (lockfile committed).
 - Commits: imperative subject, body explains why. Keep the spike (`spike/`) untouched; it
   is reference material until Epic 3 replaces it.
 - Do not add dependencies without a line in the PR description saying why.

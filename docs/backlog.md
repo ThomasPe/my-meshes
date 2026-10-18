@@ -31,6 +31,13 @@ automated end-to-end check against the real desktop app (see `spec/04-quality.md
 
 `[~]` = partially done, see the note.
 
+Decided (Q18): phase 1 ships in three deliveries. **D1 Walking skeleton** (done: roots,
+scan, grid and list, search, tags, inspector, STL viewer, settings). **D2 Daily driver**
+(rendered thumbnails, 3MF and OBJ preview, favorites and recent imports, poll mode, safe
+delete, rename): after D2 the author's real library goes live on it. **D3 Store-ready**
+(import with staging and inbox, collections and smart collections, onboarding, MSIX
+pipeline with the updater disabled, Store assets).
+
 ### Epic 1: Scaffold & foundation (Tauri 2 + Rust)
 - [x] **Repository layout.** Cargo workspace with `crates/engine` (shell-agnostic
       library) and `src-tauri` (commands, events, capabilities); `src/` Vite +

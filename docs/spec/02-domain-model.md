@@ -1,7 +1,7 @@
 # 2. Domain Model & Data Format
 
-> Status: specification, technology-neutral. Open points are marked **[Q#]** and listed
-> in `docs/open-questions.md`.
+> Status: specification, technology-neutral. Decisions reference the question numbers
+> (Q#) in `docs/open-questions.md`.
 
 ## Core concepts
 
@@ -16,30 +16,40 @@ The unit the user browses and curates. A project is a directory inside a library
 that contains model files and, optionally, a metadata sidecar `project.yaml`.
 
 - All files and subdirectories inside a project directory belong to that project.
-- Nested projects (a `project.yaml` below another project) are not permitted. **[Q10]**
+- Nested projects (a `project.yaml` below another project) are not permitted. A nested
+  sidecar is reported as a scanner note on the enclosing project and otherwise ignored.
 - Project identity is the directory. Renaming the project in the app renames the
   directory on disk.
 - A project without `project.yaml` is still a project; its title defaults to the
-  directory name and its metadata is derived (file list, sizes, dates). **[Q10]** defines
-  how directories without a sidecar are grouped into projects.
+  directory name and its metadata is derived (file list, sizes, dates).
+- **Boundary rule (decided Q10):** walking top-down from the root, the first directory
+  that directly contains a model file or a `project.yaml` is a project, and everything
+  beneath it belongs to that project. Directories without models of their own are only
+  structure. `Gridfinity/Bins/*.stl` and `Gridfinity/Lids/*.stl` are two projects;
+  `Robotics/Arm v4/` with `stl/` below it is one. A future `boundary: here` key in a
+  sidecar may force a boundary where the heuristic guesses wrong.
 
 ### Files inside a project
 | Kind | Examples | Handling |
 |---|---|---|
-| Model | `.stl`, `.obj`, `.3mf` | Indexed, previewable, thumbnail source. 3MF geometry and embedded thumbnails are extracted. **[Q11]** |
+| Model | `.stl`, `.obj`, `.3mf` (previewable); `.step`/`.stp`, `.ply`, `.amf` (indexed as models, preview later) | Indexed, thumbnail source. 3MF geometry and embedded thumbnails are extracted; a 3MF produced by a slicer (Bambu, Prusa) is a model with a "slicer project" badge derived from its metadata, not a separate concept (Q11). |
 | Image | `.jpg`, `.png`, `.webp` | Indexed, shown in the built-in image viewer, candidate for project thumbnail |
-| Document | `.pdf`, `.txt`, `.md`, `.scad` | Indexed, opened with the OS default application |
+| Document | `.pdf`, `.txt`, `.md`, `.scad`, `.blend`, `.f3d` | Indexed, opened with the OS default application |
 | Attachment | `.zip`, `.7z`, `.rar` found *inside* a project | Cataloged as opaque attachments. Never mounted or extracted |
 | Ignored | `.gcode`, `.git/`, `__MACOSX/`, `.DS_Store`, … | Excluded via a user-editable global ignore list (glob patterns) |
 
 ### Inbox (Unsorted)
-A designated project that collects loose files and quick downloads. Items in the inbox
-are expected to be promoted into proper projects later. **[Q6]**
+A designated folder `_Inbox` directly below a library root that collects loose files
+and quick downloads. It has its own sidebar view and a "make this a project" action.
+Items in the inbox are expected to be promoted into proper projects later (Q6).
 
 ### Staging Area
-A review step for imports. Dropped archives or scanned input folders are analyzed and
-the app proposes a project structure. Nothing is written to the library until the user
-confirms. **[Q6]**, **[Q7]**
+A review step for imports, not a place on disk. Dropped archives or scanned input folders
+are analyzed and the app proposes a project structure; single files are proposed for the
+inbox. Nothing is written to the library until the user confirms (Q6). After extracting
+an archive into a new project, the original archive is **kept as an attachment inside the
+project by default**; settings allow moving it to `_Originals` below the root or sending
+it to the Recycle Bin. The import dialog shows the space each choice costs (Q7).
 
 ### Collection
 A user-defined, ordered set of projects independent of the folder structure.
@@ -52,20 +62,23 @@ A saved query (e.g. `tag = gridfinity AND created > 2024-01-01`) evaluated live.
 Human-readable, diff-friendly, inspired by 3MF core metadata and Dublin Core.
 
 ```yaml
-schema: 1                                 # format version, for migrations [Q4]
+schema: 1                                 # format version, for migrations
 
 metadata:
   title: "Gridfinity Storage Bin"         # dc:title
   creator: "Zach Freedman"                # dc:creator / 3MF designer
   license: "CC-BY-NC-SA-4.0"              # SPDX identifier where possible; dc:rights
-  source_url: "https://thangs.com/..."    # dc:identifier
+  source_url: "https://thangs.com/..."    # dc:identifier, canonical URL
+  source:                                 # optional, filled by enrichment (phase 2)
+    platform: thangs
+    id: "123456"
   description: "Parametric bins for the Gridfinity system."
   tags:
     - gridfinity
     - organizer
   created: 2024-03-02                     # date added to the library
 
-printing:                                 # Schema.org/3DModel-like technical hints
+printing:                                 # only what you filter by; slicer settings stay in the slicer
   recommended_material: "PLA"
   supports_required: false
   notes: "0.2 mm layers, 15% infill"
@@ -78,6 +91,9 @@ files:                                    # optional per-file annotations
 thumbnail: ".cache/preview.png"           # relative path; absent = auto-generated
 ```
 
+Decided (Q4): the file name stays `project.yaml`; `schema` stays; the printing block is
+limited to material, supports and free-text notes; per-file `quantity` stays.
+
 Rules:
 - **Lazy creation.** `project.yaml` is only written when the user changes metadata.
   Scanning never creates or modifies sidecars.
@@ -89,8 +105,9 @@ Rules:
 ## Collections store: `collections.json`
 
 Manual collections and smart collection definitions are stored in a JSON file in the
-user's application data directory so they survive cache rebuilds. **[Q9]** asks whether
-this file should instead live in the library root so collections travel with the library.
+user's application data directory so they survive cache rebuilds. Decided (Q9): they stay
+in app data because collections span roots and a NAS root should not carry one app's
+files; export/import of the file is a later feature for sharing between machines.
 
 ```json
 {
@@ -110,10 +127,13 @@ is remounted under a different absolute path.
 
 ## Thumbnails and cache
 
-- Default thumbnail location: `<project>/.cache/preview.png` so previews travel with the
-  project and can be regenerated when deleted. **[Q5]**
-- Alternative locations (user setting): centralized app-data cache, or a `.cache`
-  folder at the library root.
+- Default thumbnail location (decided Q5): the **app data cache**
+  (`%LOCALAPPDATA%\My Meshes\thumbs\<content-hash>.png`). Rendering a preview never
+  writes into a project folder, no hidden folders travel with zipped or shared projects,
+  and the scan-never-writes rule stays intact. Thumbnails are reproducible, so losing
+  them on reinstall is acceptable.
+- Alternative location (user setting): `<project>/.cache/preview.png` for people who
+  want previews to travel with the project.
 - A user-provided image ("set view as thumbnail", or an uploaded photo) replaces the
   generated preview and is referenced from `project.yaml`.
 
