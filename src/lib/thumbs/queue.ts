@@ -119,6 +119,7 @@ async function runJob(job: ThumbJob): Promise<void> {
       source = 'render'; // broken/missing preview entry: render the geometry instead
     }
   }
+  if (source === 'render' && useThumbs.getState().unavailable) throw Object.assign(new Error(useThumbs.getState().unavailable!), { fatal: true });
   const bytes = await b.readProjectFile(job.project_id, job.rel_path);
   const png = source === 'image' ? await renderImage(bytes) : await renderModel(bytes, extOf(job.rel_path));
   const key = await b.storeThumbnail(job.project_id, png);
@@ -148,19 +149,25 @@ export async function kickThumbQueue(): Promise<void> {
     for (;;) {
       rerun = false;
       await refreshStats();
-      const jobs = await b.thumbQueue(24);
+      let jobs = await b.thumbQueue(24);
+      // Without WebGL anywhere, model jobs are not failures of the file: leave them pending
+      // (they render once a GPU/driver is back) and only process images and embedded previews.
+      if (useThumbs.getState().unavailable) jobs = jobs.filter((j) => j.source !== 'render');
       if (jobs.length === 0) { if (!rerun) break; continue; }
+      let progressed = false;
       for (const job of jobs) {
         try {
           await runJob(job);
+          progressed = true;
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);
           const fatal = (e as { fatal?: boolean }).fatal || mode === 'none';
-          if (fatal) { useThumbs.setState({ unavailable: msg }); }
-          try { await b.thumbnailFailed(job.project_id, msg); } catch { /* project may be gone */ }
+          if (fatal) { useThumbs.setState({ unavailable: msg }); if (job.source !== 'image') continue; }
+          try { await b.thumbnailFailed(job.project_id, msg); progressed = true; } catch { /* project may be gone */ }
         }
       }
       await refreshStats();
+      if (!progressed) break; // nothing moved: do not spin on the same jobs
     }
   } finally {
     loopRunning = false;
