@@ -74,6 +74,8 @@ pub fn run() {
             commands::pick_folder,
             commands::get_ignore_patterns,
             commands::set_ignore_patterns,
+            commands::get_container_dirs,
+            commands::set_container_dirs,
             commands::set_favorite,
             commands::rename_project,
             commands::delete_project,

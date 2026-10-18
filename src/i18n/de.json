@@ -173,7 +173,11 @@
     "previewsHint": "Werden im Hintergrund gerendert und im Datenordner zwischengespeichert, nie in deine Bibliothek geschrieben.",
     "clearThumbs": "Cache leeren",
     "thumbsCleared": "Vorschau-Cache geleert, wird neu gerendert…",
-    "thumbSummary": "{{done}} gerendert · {{pending}} ausstehend · {{failed}} fehlgeschlagen"
+    "thumbSummary": "{{done}} gerendert · {{pending}} ausstehend · {{failed}} fehlgeschlagen",
+    "containers": "Bundle-Ordner",
+    "containersHint": "Ein Ordner, dessen Modelle nur in einem Unterordner mit einem dieser Namen liegen (plus Bilder oder README daneben), zählt als ein Projekt. Gilt ab dem nächsten Scan.",
+    "addContainer": "Name eingeben, Enter",
+    "containerSaved": "Bundle-Ordner gespeichert"
   },
   "status": {
     "watching": "Beobachte {{path}}",

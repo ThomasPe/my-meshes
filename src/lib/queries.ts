@@ -16,6 +16,7 @@ export const keys = {
   stats: ['stats'] as const,
   ignore: ['ignore'] as const,
   thumbStats: ['thumbStats'] as const,
+  containers: ['containers'] as const,
 };
 
 export const useAppInfo = () => useQuery({ queryKey: keys.appInfo, queryFn: async () => (await getBackend()).appInfo(), staleTime: Infinity });
@@ -26,6 +27,7 @@ export const useTagCounts = (rootId: string | null = null) => useQuery({ queryKe
 export const useFolderTree = (rootId: string) => useQuery({ queryKey: keys.tree(rootId), queryFn: async () => (await getBackend()).folderTree(rootId) });
 export const useLibraryStats = () => useQuery({ queryKey: keys.stats, queryFn: async () => (await getBackend()).libraryStats() });
 export const useIgnorePatterns = () => useQuery({ queryKey: keys.ignore, queryFn: async () => (await getBackend()).getIgnorePatterns() });
+export const useContainerDirs = () => useQuery({ queryKey: keys.containers, queryFn: async () => (await getBackend()).getContainerDirs() });
 
 export function invalidateLibrary(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ['projects'] });

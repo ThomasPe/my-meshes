@@ -24,6 +24,8 @@ export function createTauriBackend(): Backend {
     pickFolder: () => invoke('pick_folder'),
     getIgnorePatterns: () => invoke('get_ignore_patterns'),
     setIgnorePatterns: (patterns) => invoke('set_ignore_patterns', { patterns }),
+    getContainerDirs: () => invoke('get_container_dirs'),
+    setContainerDirs: (names) => invoke('set_container_dirs', { names }),
     setFavorite: (projectId, favorite) => invoke('set_favorite', { projectId, favorite }),
     renameProject: (projectId, newName) => invoke('rename_project', { projectId, newName }),
     deleteProject: (projectId) => invoke('delete_project', { projectId }),

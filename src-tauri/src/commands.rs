@@ -271,6 +271,18 @@ pub fn set_ignore_patterns(state: State<AppState>, patterns: Vec<String>) -> Cmd
     Ok(engine.ignore_patterns().to_vec())
 }
 
+#[tauri::command]
+pub fn get_container_dirs(state: State<AppState>) -> Vec<String> {
+    state.engine.lock().unwrap().container_dirs().to_vec()
+}
+
+#[tauri::command]
+pub fn set_container_dirs(state: State<AppState>, names: Vec<String>) -> Vec<String> {
+    let mut engine = state.engine.lock().unwrap();
+    engine.set_container_dirs(names);
+    engine.container_dirs().to_vec()
+}
+
 // ---- favorites, rename, delete ---------------------------------------------------------
 
 #[tauri::command]

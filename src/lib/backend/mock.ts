@@ -97,6 +97,7 @@ export function createMockBackend(): Backend {
     projects.push(mk('r1', `Projects/Misc/Part ${String(i).padStart(2, '0')}`, `Misc Part ${i}`, { creator: i % 3 ? 'Various' : null, tags: i % 2 ? ['misc'] : ['misc', 'spare'], has_sidecar: i % 4 !== 0, files: [f(`part_${i}.stl`, (i % 7 + 1) * MB)], daysAgo: 130 + i }));
   }
   let ignore = ['.git', '__MACOSX', '.DS_Store', 'Thumbs.db', '*.gcode'];
+  let containers = ['files', 'stl', 'stls', 'models', '3d'];
   const thumbs = new Map<string, ArrayBuffer>(); // key -> png
   const failed = new Set<string>();
   const listeners = { scan: new Set<(p: ScanProgress) => void>(), lib: new Set<(e: LibraryChanged) => void>(), proj: new Set<(e: { projectId: string }) => void>() };
@@ -274,6 +275,8 @@ export function createMockBackend(): Backend {
     async pickFolder() { return 'E:\\More Models'; },
     async getIgnorePatterns() { return ignore.slice(); },
     async setIgnorePatterns(p) { ignore = p.slice(); return ignore.slice(); },
+    async getContainerDirs() { return containers.slice(); },
+    async setContainerDirs(n) { containers = n.map((x) => x.trim()).filter(Boolean); return containers.slice(); },
     onScanProgress: (cb) => sub(listeners.scan, cb),
     onLibraryChanged: (cb) => sub(listeners.lib, cb),
     onProjectChanged: (cb) => sub(listeners.proj, cb),

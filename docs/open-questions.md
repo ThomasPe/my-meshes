@@ -16,7 +16,7 @@ file keeps the record of what was decided and when.
 | Q7 | Archive after import | Keep as attachment by default; `_Originals` or Recycle Bin as settings (2026-10-18). | `spec/02-domain-model.md`, `spec/03-features.md` IMP-2 |
 | Q8 | Enrichment sources | Printables and Thingiverse first (APIs), MakerWorld/Thangs via public page data only; `source_url` canonical plus optional `source {platform,id}` (2026-10-18). | `spec/02-domain-model.md`, `spec/03-features.md` META-7 |
 | Q9 | Collections location | App data (2026-10-18). | `spec/02-domain-model.md` Collections store |
-| Q10 | Project boundary | Option c: first directory with model files or sidecar; nested sidecars are notes (2026-10-18). | `spec/02-domain-model.md` Project |
+| Q10 | Project boundary | Option c: first directory with model files or sidecar; nested sidecars are notes. Extended for download bundles (`files/`, `stl/` … under a folder with images or a README count as one project; list configurable) (2026-10-18). | `spec/02-domain-model.md` Project |
 | Q11 | Model formats | Preview STL/OBJ/3MF; STEP/PLY/AMF indexed as models; slicer 3MF = model + badge (2026-10-18). | `spec/02-domain-model.md`, `spec/03-features.md` VIEW-2 |
 | Q13 | Languages | English and German at launch (2026-10-18). | `spec/03-features.md` APP-3 |
 | Q14 | Frameless window | No; native title bar (2026-10-18). | `spec/03-features.md` APP-10 |

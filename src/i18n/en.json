@@ -173,7 +173,11 @@
     "previewsHint": "Rendered in the background and cached in the data folder; never written into your library.",
     "clearThumbs": "Clear cache",
     "thumbsCleared": "Preview cache cleared, rendering again…",
-    "thumbSummary": "{{done}} rendered · {{pending}} pending · {{failed}} failed"
+    "thumbSummary": "{{done}} rendered · {{pending}} pending · {{failed}} failed",
+    "containers": "Bundle folders",
+    "containersHint": "A folder whose models sit only in a sub-folder with one of these names (plus images or a README next to it) counts as one project. Applies on the next scan.",
+    "addContainer": "add name, Enter",
+    "containerSaved": "Bundle folders saved"
   },
   "status": {
     "watching": "Watching {{path}}",

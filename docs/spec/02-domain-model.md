@@ -28,6 +28,15 @@ that contains model files and, optionally, a metadata sidecar `project.yaml`.
   structure. `Gridfinity/Bins/*.stl` and `Gridfinity/Lids/*.stl` are two projects;
   `Robotics/Arm v4/` with `stl/` below it is one. A future `boundary: here` key in a
   sidecar may force a boundary where the heuristic guesses wrong.
+- **Download bundles (added 2026-10-18):** Printables, MakerWorld and Thingiverse zips
+  unpack to a folder with images and a README at the top and the models in `files/`,
+  `stl/` or similar. Such a folder is one project, not a project called "files": a
+  directory without models of its own is a project when at least one container-named
+  child (`files`, `stl`, `stls`, `3mf`, `obj`, `models`, `meshes`, `3d`, `print files`;
+  the list is a setting) directly holds models, and the directory either carries images
+  or documents itself or contains nothing but container children. A category folder like
+  `Gridfinity/` with `Bins/` and `Lids/` is unaffected because those names are not
+  containers.
 
 ### Files inside a project
 | Kind | Examples | Handling |

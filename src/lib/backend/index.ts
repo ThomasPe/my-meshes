@@ -23,6 +23,8 @@ export interface Backend {
   pickFolder(): Promise<string | null>;
   getIgnorePatterns(): Promise<string[]>;
   setIgnorePatterns(patterns: string[]): Promise<string[]>;
+  getContainerDirs(): Promise<string[]>;
+  setContainerDirs(names: string[]): Promise<string[]>;
   setFavorite(projectId: string, favorite: boolean): Promise<Project>;
   renameProject(projectId: string, newName: string): Promise<Project>;
   deleteProject(projectId: string): Promise<void>;

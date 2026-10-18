@@ -14,7 +14,7 @@ import { LANGUAGES, setLanguage, type Language } from '@/i18n';
 import { getBackend } from '@/lib/backend';
 import { reportError } from '@/lib/errors';
 import { formatDate } from '@/lib/format';
-import { invalidateLibrary, keys, useAppInfo, useIgnorePatterns, useRoots, useThumbStats } from '@/lib/queries';
+import { invalidateLibrary, keys, useAppInfo, useContainerDirs, useIgnorePatterns, useRoots, useThumbStats } from '@/lib/queries';
 import { kickThumbQueue, useThumbs } from '@/lib/thumbs/queue';
 import { dropThumbnailCache } from '@/lib/thumbs/useThumbnail';
 import { applyTheme, loadTheme, type Theme } from '@/lib/store';
@@ -27,15 +27,20 @@ export function SettingsPage({ scanning, onScanEnd }: { scanning: ScanState; onS
   const roots = useRoots();
   const info = useAppInfo();
   const ignore = useIgnorePatterns();
+  const containers = useContainerDirs();
   const thumbStats = useThumbStats();
   const thumbs = useThumbs();
   const { scan, addRootViaPicker, removeRoot } = useLibraryActions(onScanEnd);
   const [removing, setRemoving] = useState<LibraryRoot | null>(null);
   const [theme, setTheme] = useState<Theme>(loadTheme());
   const [pattern, setPattern] = useState('');
+  const [container, setContainer] = useState('');
 
   const setMode = async (root: LibraryRoot, mode: SyncMode, pollIntervalSecs?: number) => {
     try { const b = await getBackend(); await b.setRootMode(root.id, mode, pollIntervalSecs); await qc.invalidateQueries({ queryKey: keys.roots }); } catch (e) { reportError(e); }
+  };
+  const saveContainers = async (next: string[]) => {
+    try { const b = await getBackend(); await b.setContainerDirs(next); await qc.invalidateQueries({ queryKey: keys.containers }); toast.success(t('settings.containerSaved')); } catch (e) { reportError(e); }
   };
   const clearThumbs = async () => {
     try { const b = await getBackend(); await b.clearThumbnails(); dropThumbnailCache(); invalidateLibrary(qc); toast(t('settings.thumbsCleared')); void kickThumbQueue(); } catch (e) { reportError(e); }
@@ -79,6 +84,13 @@ export function SettingsPage({ scanning, onScanEnd }: { scanning: ScanState; onS
           <div className="flex flex-wrap items-center gap-1.5">
             {(ignore.data ?? []).map((p) => <span key={p} className="inline-flex items-center gap-1 rounded-full bg-secondary pl-2.5 pr-1 py-0.5 font-mono text-xs font-semibold">{p}<button type="button" aria-label={`remove ${p}`} className="rounded-full p-0.5 text-muted-foreground hover:text-destructive" onClick={() => void savePatterns((ignore.data ?? []).filter((x) => x !== p))}><X className="size-3" /></button></span>)}
             <Input value={pattern} placeholder={t('settings.addPattern')} className="h-7 w-44 rounded-full font-mono text-xs" onChange={(e) => setPattern(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && pattern.trim()) { void savePatterns([...(ignore.data ?? []), pattern.trim()]); setPattern(''); } }} />
+          </div>
+        </Card>
+
+        <Card title={t('settings.containers')} hint={t('settings.containersHint')}>
+          <div className="flex flex-wrap items-center gap-1.5" data-testid="container-dirs">
+            {(containers.data ?? []).map((n) => <span key={n} className="inline-flex items-center gap-1 rounded-full bg-secondary pl-2.5 pr-1 py-0.5 font-mono text-xs font-semibold">{n}<button type="button" aria-label={`remove ${n}`} className="rounded-full p-0.5 text-muted-foreground hover:text-destructive" onClick={() => void saveContainers((containers.data ?? []).filter((x) => x !== n))}><X className="size-3" /></button></span>)}
+            <Input value={container} placeholder={t('settings.addContainer')} className="h-7 w-44 rounded-full font-mono text-xs" onChange={(e) => setContainer(e.target.value)} onKeyDown={(e) => { if (e.key === 'Enter' && container.trim()) { void saveContainers([...(containers.data ?? []), container.trim()]); setContainer(''); } }} />
           </div>
         </Card>
 

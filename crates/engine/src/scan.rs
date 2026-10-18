@@ -27,16 +27,43 @@ pub const DEFAULT_IGNORE: &[&str] = &[
     "*.tmp",
 ];
 
+/// Sub-folder names that download bundles (Printables, MakerWorld, Thingiverse zips) use to
+/// hold the model files next to images and a README. A folder whose models live only in such
+/// children is one project, not a project per child (case-insensitive match).
+pub const DEFAULT_CONTAINER_DIRS: &[&str] = &[
+    "files",
+    "file",
+    "stl",
+    "stls",
+    "3mf",
+    "obj",
+    "models",
+    "model",
+    "meshes",
+    "3d",
+    "print files",
+    "printfiles",
+];
+
 #[derive(Debug, Clone)]
 pub struct ScanOptions {
     pub ignore: Vec<String>,
+    pub container_dirs: Vec<String>,
 }
 
 impl Default for ScanOptions {
     fn default() -> Self {
         ScanOptions {
             ignore: DEFAULT_IGNORE.iter().map(|s| s.to_string()).collect(),
+            container_dirs: DEFAULT_CONTAINER_DIRS.iter().map(|s| s.to_string()).collect(),
         }
+    }
+}
+
+impl ScanOptions {
+    pub fn is_container_name(&self, name: &str) -> bool {
+        let n = name.trim().to_lowercase();
+        self.container_dirs.iter().any(|c| c.trim().to_lowercase() == n)
     }
 }
 
@@ -87,7 +114,19 @@ fn modified_of(meta: &std::fs::Metadata) -> OffsetDateTime {
     meta.modified().ok().map(OffsetDateTime::from).unwrap_or(OffsetDateTime::UNIX_EPOCH)
 }
 
-fn dir_has_project_marker(dir: &Path, ignore: &IgnoreMatcher, root: &Path) -> std::io::Result<bool> {
+/// What a directory directly contains, as far as the boundary rule cares.
+#[derive(Debug, Default)]
+struct DirShape {
+    /// A model file or a `project.yaml` directly inside.
+    marker: bool,
+    /// Images or documents directly inside (what a download bundle carries next to `files/`).
+    media: bool,
+    /// Non-ignored child directories: (name, directly contains models).
+    children: Vec<(String, bool)>,
+}
+
+fn dir_shape(dir: &Path, ignore: &IgnoreMatcher, root: &Path, look_into_children: bool) -> std::io::Result<DirShape> {
+    let mut shape = DirShape::default();
     for entry in std::fs::read_dir(dir)? {
         let entry = entry?;
         let path = entry.path();
@@ -95,25 +134,47 @@ fn dir_has_project_marker(dir: &Path, ignore: &IgnoreMatcher, root: &Path) -> st
         if ignore.is_ignored(rel) {
             continue;
         }
-        if entry.file_type()?.is_file() {
+        let ft = entry.file_type()?;
+        if ft.is_file() {
             let name = entry.file_name();
             let name = name.to_string_lossy();
             if name == SIDECAR_FILE_NAME {
-                return Ok(true);
+                shape.marker = true;
+                continue;
             }
-            if let Some(ext) = path.extension().and_then(|e| e.to_str()) {
-                if FileKind::from_extension(ext) == FileKind::Model {
-                    return Ok(true);
-                }
+            match path.extension().and_then(|e| e.to_str()).map(FileKind::from_extension) {
+                Some(FileKind::Model) => shape.marker = true,
+                Some(FileKind::Image) | Some(FileKind::Document) => shape.media = true,
+                _ => {}
             }
+        } else if ft.is_dir() && look_into_children {
+            let has_models = dir_shape(&path, ignore, root, false).map(|s| s.marker).unwrap_or(false);
+            shape.children.push((entry.file_name().to_string_lossy().into_owned(), has_models));
         }
     }
-    Ok(false)
+    Ok(shape)
 }
 
-/// Whether `dir` still qualifies as a project (directly contains a model or a sidecar).
-pub fn is_project_dir(dir: &Path, ignore: &IgnoreMatcher, root: &Path) -> bool {
-    dir_has_project_marker(dir, ignore, root).unwrap_or(false)
+/// The boundary rule (Q10 option c, extended): a directory is a project when it directly
+/// contains a model or a sidecar, or when it is a download bundle: no models of its own, at
+/// least one container-named child (`files/`, `stl/`, ...) that holds models, and either
+/// media next to it or nothing but container children.
+fn dir_is_project(dir: &Path, ignore: &IgnoreMatcher, root: &Path, opts: &ScanOptions) -> std::io::Result<bool> {
+    let shape = dir_shape(dir, ignore, root, true)?;
+    if shape.marker {
+        return Ok(true);
+    }
+    let container_with_models = shape.children.iter().any(|(n, m)| *m && opts.is_container_name(n));
+    if !container_with_models {
+        return Ok(false);
+    }
+    let all_containers = shape.children.iter().all(|(n, _)| opts.is_container_name(n));
+    Ok(shape.media || all_containers)
+}
+
+/// Whether `dir` still qualifies as a project under the boundary rule.
+pub fn is_project_dir(dir: &Path, ignore: &IgnoreMatcher, root: &Path, opts: &ScanOptions) -> bool {
+    dir_is_project(dir, ignore, root, opts).unwrap_or(false)
 }
 
 /// Collects every file beneath `project_dir` into a project. Does not write anything.
@@ -279,7 +340,7 @@ pub fn scan_root(root_id: &str, root: &Path, opts: &ScanOptions, mut progress: i
             walker.skip_current_dir();
             continue;
         }
-        let is_project = match dir_has_project_marker(dir, &ignore, root) {
+        let is_project = match dir_is_project(dir, &ignore, root, opts) {
             Ok(v) => v,
             Err(e) => {
                 out.warnings.push(format!("{}: {e}", to_rel_string(rel)));
@@ -366,6 +427,48 @@ mod tests {
         assert!(plate.embedded_thumbnail);
         assert_eq!(p.model_count, 3);
         assert!(p.warnings.iter().any(|w| w.contains("broken.3mf")), "{:?}", p.warnings);
+    }
+
+    #[test]
+    fn download_bundles_are_one_project() {
+        let t = tempfile::tempdir().unwrap();
+        let r = t.path();
+        // Printables-style: README + images at the top, models in files/
+        touch(&r.join("Cable Organizer/README.md"), 3);
+        touch(&r.join("Cable Organizer/images/photo.jpg"), 3);
+        touch(&r.join("Cable Organizer/photo.jpg"), 3);
+        touch(&r.join("Cable Organizer/files/body.stl"), 10);
+        touch(&r.join("Cable Organizer/files/lid.stl"), 10);
+        // bare bundle: nothing but a container folder
+        touch(&r.join("Bare/STL/part.stl"), 10);
+        // a plain category folder with real sub-projects stays a category
+        touch(&r.join("Gridfinity/notes.txt"), 3);
+        touch(&r.join("Gridfinity/Bins/bin.stl"), 10);
+        touch(&r.join("Gridfinity/Lids/lid.stl"), 10);
+        // media next to a non-container child: still a category
+        touch(&r.join("Mixed/cover.png"), 3);
+        touch(&r.join("Mixed/Arm/arm.stl"), 10);
+
+        let out = scan_root("r1", r, &ScanOptions::default(), |_| {}).unwrap();
+        let mut names: Vec<_> = out.projects.iter().map(|p| p.rel_path.clone()).collect();
+        names.sort();
+        assert_eq!(
+            names,
+            vec!["Bare", "Cable Organizer", "Gridfinity/Bins", "Gridfinity/Lids", "Mixed/Arm"]
+        );
+        let bundle = out.projects.iter().find(|p| p.rel_path == "Cable Organizer").unwrap();
+        assert_eq!(bundle.title, "Cable Organizer");
+        assert_eq!(bundle.model_count, 2);
+        assert_eq!(bundle.files.len(), 5);
+        assert!(bundle.files.iter().any(|f| f.rel_path == "files/body.stl"));
+
+        // the list is configurable
+        let opts = ScanOptions {
+            container_dirs: vec![],
+            ..Default::default()
+        };
+        let out = scan_root("r1", r, &opts, |_| {}).unwrap();
+        assert!(out.projects.iter().any(|p| p.rel_path == "Cable Organizer/files"));
     }
 
     #[test]

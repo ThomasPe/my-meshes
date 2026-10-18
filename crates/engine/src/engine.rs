@@ -96,6 +96,15 @@ impl Engine {
         Ok(())
     }
 
+    /// Sub-folder names that mark a download bundle (see `scan::DEFAULT_CONTAINER_DIRS`).
+    pub fn container_dirs(&self) -> &[String] {
+        &self.scan_opts.container_dirs
+    }
+
+    pub fn set_container_dirs(&mut self, names: Vec<String>) {
+        self.scan_opts.container_dirs = names.into_iter().map(|n| n.trim().to_string()).filter(|n| !n.is_empty()).collect();
+    }
+
     // ---- roots -------------------------------------------------------------------------
 
     pub fn roots(&mut self) -> Result<Vec<LibraryRoot>> {
@@ -517,7 +526,7 @@ impl Engine {
         let still_project = {
             let ignore = IgnoreMatcher::new(&self.scan_opts.ignore)?;
             let root = self.root(&current.root_id)?;
-            scan::is_project_dir(&dir, &ignore, &root.path)
+            scan::is_project_dir(&dir, &ignore, &root.path, &self.scan_opts)
         };
         if still_project {
             Ok(Some(self.reindex_dir(&current.root_id, &dir)?))

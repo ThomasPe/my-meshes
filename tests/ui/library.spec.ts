@@ -171,7 +171,10 @@ test('project page: OBJ renders in the viewer, slicer badge, delete a single fil
   await page.getByTestId('delete-file-confirm').click();
   await expect(page.getByText('README.md moved to trash')).toBeVisible();
   await expect(rows).toHaveCount(n - 1);
-  // settings: poll interval appears for polled roots
+  // settings: poll interval appears for polled roots, bundle folders are editable
   await page.getByTestId('nav-settings').click();
   await expect(page.getByTestId('poll-interval')).toHaveCount(1);
+  await expect(page.getByTestId('container-dirs')).toContainText('files');
+  await page.getByTestId('container-dirs').getByRole('button', { name: 'remove files' }).click();
+  await expect(page.getByTestId('container-dirs')).not.toContainText('files');
 });
