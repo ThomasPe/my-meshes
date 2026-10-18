@@ -267,5 +267,25 @@ Observations that feed the scaffold:
   several writes being in flight at once; the spike now applies backpressure (one ack per
   thumbnail), which the real thumbnail queue should do as well.
 
-Decision stands: **Tauri 2**. Open item 0.4b (real GPU) is a measurement, not a gate,
-unless orbiting a 1M-triangle mesh falls below 30 fps on your machine.
+### Real hardware (2026-10-18, backlog 0.4b)
+
+Developer laptop, Windows, Intel Iris Xe (integrated), 8 threads, WebView2 155.0.4283.62,
+`tauri dev` (debug build of the Rust side):
+
+| Measurement | Result | Pass criterion |
+|---|---|---|
+| Generate 50 MB STL (Rust) | 656 ms | – |
+| IPC read 50 MB (Rust → webview) | **431 ms** | < 2 s |
+| Parse 1,002,528 triangles in worker | **38 ms** (round trip 67 ms) | – |
+| GPU upload + first frame | 116 ms | – |
+| JS heap after load | 151 MB | – |
+| Orbit while auto-rotating | **120 fps** | ≥ 30 fps |
+| 20 thumbnails 512 px, worker + OffscreenCanvas | **660 ms total, 33 ms each** (render 4.3 ms, PNG encode 13.9 ms, IPC write 8.4 ms) | < 2 s each |
+| Worst main-thread frame gap during thumbnails | **20 ms** | < 200 ms |
+| SHA-256 of 21 files / 54 MB, rayon | 732 ms, 74 MB/s | – (debug build, dominated by one 50 MB file; expect several times more in release) |
+
+All seven verdict flags true. On integrated graphics a 4,000-project library would get its
+first thumbnails in roughly two minutes.
+
+**Decision confirmed: Tauri 2.** The spike is complete; the next step is the scaffold
+(backlog Epic 1).

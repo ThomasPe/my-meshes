@@ -19,9 +19,9 @@ automated end-to-end check against the real desktop app (see `spec/04-quality.md
       STL loads in WebView2, (b) 20 thumbnails rendered in a Web Worker via OffscreenCanvas
       and written by Rust, (c) WebdriverIO E2E against the real app passes, (d) MSIX built,
       signed, side-loaded, launched and removed. Details in ADR-0001 "Spike results".
-- [ ] **0.4b Spike on real hardware:** run `spike/` on your Windows machine (GPU) to get
-      FPS and thumbnail timings that the GPU-less CI runner cannot provide; fill in the
-      table in ADR-0001.
+- [x] **0.4b Spike on real hardware** (2026-10-18, Intel Iris Xe): 120 fps orbiting the
+      1M-triangle mesh, 20 thumbnails in 660 ms with a 20 ms worst UI frame gap, all
+      verdicts pass. Table in ADR-0001.
 - [x] Decide visual direction: D Gallery (ADR-0002 accepted).
 - [ ] **0.5 Click dummy review.** Walk through `docs/clickdummy/index.html` on all screens; collect changes to layout, wording and flows before the spike. Confirm the component library (Mantine default) during the scaffold.
 - [ ] Answer the remaining items in `docs/open-questions.md` (Q4, Q5, Q10 before
