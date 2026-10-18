@@ -1,0 +1,282 @@
+//! Domain types shared by the engine, the Tauri commands and (mirrored by hand) the frontend.
+//! See `docs/spec/02-domain-model.md`.
+
+use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
+use std::path::PathBuf;
+use time::OffsetDateTime;
+
+pub const SIDECAR_FILE_NAME: &str = "project.yaml";
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SyncMode {
+    Watch,
+    Poll,
+    Manual,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum RootStatus {
+    Online,
+    Offline,
+    Unknown,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LibraryRoot {
+    pub id: String,
+    pub path: PathBuf,
+    pub mode: SyncMode,
+    #[serde(default = "default_poll_interval")]
+    pub poll_interval_secs: u64,
+    #[serde(with = "time::serde::rfc3339")]
+    pub added_at: OffsetDateTime,
+    #[serde(default, with = "time::serde::rfc3339::option")]
+    pub last_scan_at: Option<OffsetDateTime>,
+    #[serde(default = "default_status")]
+    pub status: RootStatus,
+}
+
+fn default_poll_interval() -> u64 {
+    900
+}
+fn default_status() -> RootStatus {
+    RootStatus::Unknown
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum FileKind {
+    Model,
+    Image,
+    Document,
+    Attachment,
+    Other,
+}
+
+impl FileKind {
+    pub fn from_extension(ext: &str) -> FileKind {
+        match ext.to_ascii_lowercase().as_str() {
+            "stl" | "obj" | "3mf" | "ply" | "amf" | "step" | "stp" => FileKind::Model,
+            "png" | "jpg" | "jpeg" | "webp" | "gif" | "bmp" => FileKind::Image,
+            "pdf" | "txt" | "md" | "scad" | "f3d" | "blend" | "readme" => FileKind::Document,
+            "zip" | "7z" | "rar" | "tar" | "gz" => FileKind::Attachment,
+            _ => FileKind::Other,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FileEntry {
+    /// Path relative to the project directory, forward slashes.
+    pub rel_path: String,
+    pub name: String,
+    pub kind: FileKind,
+    pub size: u64,
+    #[serde(with = "time::serde::rfc3339")]
+    pub modified: OffsetDateTime,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(tag = "state", content = "message", rename_all = "snake_case")]
+pub enum SidecarState {
+    /// No project.yaml yet (metadata is derived from the directory).
+    Missing,
+    /// Parsed fine.
+    Ok,
+    /// File exists but could not be parsed; the message explains why.
+    Malformed(String),
+}
+
+/// `project.yaml`. Unknown keys are preserved on write via the `extra` maps.
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Sidecar {
+    #[serde(default = "default_schema")]
+    pub schema: u32,
+    #[serde(default)]
+    pub metadata: Metadata,
+    #[serde(default, skip_serializing_if = "Printing::is_empty")]
+    pub printing: Printing,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub files: Vec<SidecarFile>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub thumbnail: Option<String>,
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, serde_yaml_ng::Value>,
+}
+
+fn default_schema() -> u32 {
+    1
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Metadata {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub title: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub creator: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub license: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub source_url: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub tags: Vec<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub created: Option<String>,
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, serde_yaml_ng::Value>,
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct Printing {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub recommended_material: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub supports_required: Option<bool>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notes: Option<String>,
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, serde_yaml_ng::Value>,
+}
+
+impl Printing {
+    pub fn is_empty(&self) -> bool {
+        self.recommended_material.is_none() && self.supports_required.is_none() && self.notes.is_none() && self.extra.is_empty()
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct SidecarFile {
+    pub path: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub quantity: Option<u32>,
+    #[serde(flatten)]
+    pub extra: BTreeMap<String, serde_yaml_ng::Value>,
+}
+
+/// Opaque stamp identifying a sidecar version on disk (mtime + size). Returned with a
+/// project and handed back on save so an external edit in between is detected.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+pub struct SidecarStamp {
+    pub mtime_unix_nanos: i128,
+    pub size: u64,
+}
+
+/// A project as the UI sees it: derived data plus whatever the sidecar says.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct Project {
+    /// `{root_id}:{rel_path}`; stable as long as the directory is not renamed.
+    pub id: String,
+    pub root_id: String,
+    /// Directory relative to the root, forward slashes, empty for the root itself.
+    pub rel_path: String,
+    pub title: String,
+    pub creator: Option<String>,
+    pub license: Option<String>,
+    pub source_url: Option<String>,
+    pub description: Option<String>,
+    pub tags: Vec<String>,
+    pub material: Option<String>,
+    pub supports_required: Option<bool>,
+    pub thumbnail: Option<String>,
+    pub files: Vec<FileEntry>,
+    pub total_bytes: u64,
+    pub model_count: u32,
+    #[serde(with = "time::serde::rfc3339")]
+    pub modified: OffsetDateTime,
+    pub sidecar: SidecarState,
+    /// Present when read through `Engine::get_project`; pass back on save.
+    #[serde(default)]
+    pub sidecar_stamp: Option<SidecarStamp>,
+    /// Non-fatal findings from the scanner, e.g. a nested project.yaml.
+    pub warnings: Vec<String>,
+    pub offline: bool,
+}
+
+impl Project {
+    pub fn make_id(root_id: &str, rel_path: &str) -> String {
+        format!("{root_id}:{rel_path}")
+    }
+    pub fn split_id(id: &str) -> Option<(&str, &str)> {
+        id.split_once(':')
+    }
+}
+
+/// A lightweight row for lists and grids.
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProjectSummary {
+    pub id: String,
+    pub root_id: String,
+    pub rel_path: String,
+    pub title: String,
+    pub creator: Option<String>,
+    pub tags: Vec<String>,
+    pub thumbnail: Option<String>,
+    pub file_count: u32,
+    pub model_count: u32,
+    pub total_bytes: u64,
+    #[serde(with = "time::serde::rfc3339")]
+    pub modified: OffsetDateTime,
+    pub has_sidecar: bool,
+    pub offline: bool,
+}
+
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct ListQuery {
+    #[serde(default)]
+    pub root_id: Option<String>,
+    /// Only projects at or below this folder (relative to the root).
+    #[serde(default)]
+    pub path_prefix: Option<String>,
+    #[serde(default)]
+    pub tags: Vec<String>,
+    /// Full-text search over title, creator, description, tags, file names.
+    #[serde(default)]
+    pub text: Option<String>,
+    #[serde(default)]
+    pub sort: SortKey,
+    #[serde(default)]
+    pub limit: Option<u32>,
+    #[serde(default)]
+    pub offset: Option<u32>,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum SortKey {
+    #[default]
+    Modified,
+    Title,
+    Creator,
+    Size,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct TagCount {
+    pub tag: String,
+    pub count: u32,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct FolderNode {
+    pub name: String,
+    pub rel_path: String,
+    pub project_count: u32,
+    pub children: Vec<FolderNode>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScanReport {
+    pub root_id: String,
+    pub projects: u32,
+    pub files: u32,
+    pub ignored: u32,
+    pub warnings: Vec<String>,
+    pub millis: u128,
+}

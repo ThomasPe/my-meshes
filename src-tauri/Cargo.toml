@@ -1,0 +1,6 @@
+[package]
+name = "mymeshes"
+version.workspace = true
+edition.workspace = true
+
+[dependencies]

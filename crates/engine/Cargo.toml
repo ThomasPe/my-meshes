@@ -1,0 +1,26 @@
+[package]
+name = "mymeshes-engine"
+description = "Shell-agnostic engine for My Meshes: library roots, scanning, sidecars, index, watching."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+
+[dependencies]
+serde.workspace = true
+serde_json.workspace = true
+thiserror.workspace = true
+tracing.workspace = true
+time.workspace = true
+serde_yaml_ng = "0.10"
+rusqlite = { version = "0.40", features = ["bundled"] }
+walkdir = "2.5"
+globset = "0.4"
+notify = "8"
+notify-debouncer-full = "0.7"
+sha2 = "0.10"
+rayon = "1.10"
+uuid = { version = "1", features = ["v4"] }
+
+[dev-dependencies]
+tempfile = "3"

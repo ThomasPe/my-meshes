@@ -1,0 +1,17 @@
+# node
+node_modules/
+dist/
+coverage/
+playwright-report/
+test-results/
+# rust
+target/
+# tauri
+src-tauri/gen/schemas/
+# tests & logs
+logs/
+*.log
+.wdio-*
+# os
+.DS_Store
+Thumbs.db
