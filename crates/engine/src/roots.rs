@@ -29,9 +29,14 @@ impl RootsStore {
         let path = data_dir.join("roots.json");
         let roots = match fs::read_to_string(&path) {
             Ok(text) => {
-                serde_json::from_str::<RootsFile>(&text)
+                let mut roots = serde_json::from_str::<RootsFile>(&text)
                     .map_err(|e| EngineError::Serde(format!("roots.json: {e}")))?
-                    .roots
+                    .roots;
+                // Roots saved by earlier builds may carry Windows' verbatim prefix (`\\?\C:\...`).
+                for r in &mut roots {
+                    r.path = dunce::simplified(&r.path).to_path_buf();
+                }
+                roots
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
             Err(e) => return Err(EngineError::Io { path, source: e }),
@@ -51,7 +56,9 @@ impl RootsStore {
         if !path.is_dir() {
             return Err(EngineError::NotADirectory(path.to_path_buf()));
         }
-        let canonical = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+        // `dunce` canonicalizes without Windows' `\\?\` verbatim prefix, which users would
+        // otherwise see in every path we display.
+        let canonical = dunce::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
         if self.roots.iter().any(|r| r.path == canonical) {
             return Err(EngineError::RootExists(canonical));
         }
