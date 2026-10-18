@@ -1,6 +1,13 @@
 {
-  "app": { "name": "Meshkeep" },
-  "nav": { "library": "Bibliothek", "settings": "Einstellungen", "search": "Bibliothek durchsuchen…", "theme": "Design umschalten" },
+  "app": {
+    "name": "Meshkeep"
+  },
+  "nav": {
+    "library": "Bibliothek",
+    "settings": "Einstellungen",
+    "search": "Bibliothek durchsuchen…",
+    "theme": "Design umschalten"
+  },
   "welcome": {
     "title": "Deine 3D-Modelle, organisiert wie eine Fotobibliothek",
     "lead": "Meshkeep indexiert die STL-, OBJ- und 3MF-Dateien, die schon auf deinen Laufwerken liegen. Nichts wird hochgeladen, nichts ohne Nachfrage verschoben, und deine Metadaten liegen neben deinen Dateien.",
@@ -38,10 +45,22 @@
     "files_other": "{{count}} Dateien",
     "selected_one": "{{count}} ausgewählt",
     "selected_other": "{{count}} ausgewählt",
-    "columns": { "title": "Titel", "creator": "Designer", "tags": "Tags", "files": "Dateien", "size": "Größe", "modified": "Geändert" },
+    "columns": {
+      "title": "Titel",
+      "creator": "Designer",
+      "tags": "Tags",
+      "files": "Dateien",
+      "size": "Größe",
+      "modified": "Geändert"
+    },
     "hint": "Wähle ein Projekt, um hier Details zu sehen. Doppelklick öffnet es.",
     "topTags": "Häufigste Tags",
-    "creators": "Designer"
+    "creators": "Designer",
+    "recent": "Neu hinzugefügt",
+    "favorites": "Favoriten",
+    "sortAdded": "Hinzugefügt am",
+    "emptyFavorites": "Markiere ein Projekt mit einem Stern, dann erscheint es hier.",
+    "slicerProject": "Slicer"
   },
   "inspector": {
     "open": "Öffnen",
@@ -63,7 +82,8 @@
     "files": "Dateien",
     "notSet": "nicht gesetzt",
     "offlineHint": "{{path}} ist nicht erreichbar. Das Projekt bleibt in der Bibliothek und kommt zurück, sobald das Laufwerk wieder da ist.",
-    "warnings": "Hinweise des Scanners"
+    "warnings": "Hinweise des Scanners",
+    "added": "Hinzugefügt"
   },
   "project": {
     "back": "Bibliothek",
@@ -90,12 +110,18 @@
     "loading": "Lade {{name}}…",
     "triangles": "{{count}} Dreiecke",
     "noModels": "Dieses Projekt enthält keine Modelldateien.",
-    "unsupported": "Vorschau für {{ext}} kommt später; vorerst STL.",
+    "unsupported": "Vorschau für {{ext}} kommt später; STL, OBJ und 3MF gehen heute.",
     "conflictTitle": "project.yaml wurde auf der Platte geändert",
     "conflictBody": "Jemand hat die Datei bearbeitet, während du gearbeitet hast. Lade neu, um die Änderungen zu sehen, oder überschreibe sie mit deinen.",
     "reload": "Neu laden",
     "overwrite": "Überschreiben",
-    "fileRole": { "model": "Modell", "image": "Bild", "document": "Dokument", "attachment": "Anhang", "other": "Datei" },
+    "fileRole": {
+      "model": "Modell",
+      "image": "Bild",
+      "document": "Dokument",
+      "attachment": "Anhang",
+      "other": "Datei"
+    },
     "attachmentHint": "Archive innerhalb eines Projekts bleiben als Backups liegen. Sie werden nie entpackt oder durchsucht."
   },
   "settings": {
@@ -107,8 +133,16 @@
     "removeTitle": "{{path}} aus der Bibliothek entfernen?",
     "removeBody": "Die Projekte verschwinden aus der App. Auf der Platte wird nichts gelöscht; project.yaml-Dateien bleiben, wo sie sind.",
     "rescan": "Neu scannen",
-    "mode": { "watch": "Änderungen beobachten", "poll": "Regelmäßig prüfen", "manual": "Nur manuell" },
-    "status": { "online": "online", "offline": "offline, behalten", "unknown": "unbekannt" },
+    "mode": {
+      "watch": "Änderungen beobachten",
+      "poll": "Regelmäßig prüfen",
+      "manual": "Nur manuell"
+    },
+    "status": {
+      "online": "online",
+      "offline": "offline, behalten",
+      "unknown": "unbekannt"
+    },
     "lastScan": "letzter Scan {{when}}",
     "neverScanned": "noch nicht gescannt",
     "ignore": "Ignoriermuster",
@@ -116,7 +150,11 @@
     "addPattern": "Muster hinzufügen, Enter",
     "appearance": "Darstellung",
     "theme": "Design",
-    "themes": { "light": "Hell", "dark": "Dunkel", "system": "System" },
+    "themes": {
+      "light": "Hell",
+      "dark": "Dunkel",
+      "system": "System"
+    },
     "language": "Sprache",
     "about": "Über",
     "version": "Version",
@@ -127,7 +165,15 @@
     "scanFailed": "Scan fehlgeschlagen: {{message}}",
     "rootAdded": "{{path}} hinzugefügt. Scanne…",
     "rootRemoved": "{{path}} entfernt",
-    "patternSaved": "Ignoriermuster gespeichert"
+    "patternSaved": "Ignoriermuster gespeichert",
+    "every": "alle",
+    "minutes_one": "{{count}} Minute",
+    "minutes_other": "{{count}} Minuten",
+    "previews": "Vorschauen",
+    "previewsHint": "Werden im Hintergrund gerendert und im Datenordner zwischengespeichert, nie in deine Bibliothek geschrieben.",
+    "clearThumbs": "Cache leeren",
+    "thumbsCleared": "Vorschau-Cache geleert, wird neu gerendert…",
+    "thumbSummary": "{{done}} gerendert · {{pending}} ausstehend · {{failed}} fehlgeschlagen"
   },
   "status": {
     "watching": "Beobachte {{path}}",
@@ -136,7 +182,9 @@
     "synced": "synchronisiert {{when}}",
     "offline": "{{path}} offline",
     "noRoots": "Noch kein Bibliotheksordner",
-    "total": "{{count}} Projekte · {{size}}"
+    "total": "{{count}} Projekte · {{size}}",
+    "thumbs": "Vorschauen werden gerendert {{done}}/{{total}}",
+    "thumbsUnavailable": "Vorschauen nicht verfügbar (kein WebGL)"
   },
   "errors": {
     "sidecar_conflict": "project.yaml wurde auf der Platte geändert. Vor dem Speichern neu laden.",
@@ -144,7 +192,35 @@
     "not_found": "Nicht gefunden. Die Bibliothek hat sich vielleicht geändert; versuche einen Scan.",
     "root_exists": "Dieser Ordner ist bereits ein Bibliotheksordner.",
     "not_a_directory": "Dieser Pfad ist kein Ordner.",
-    "generic": "Etwas ist schiefgelaufen: {{message}}"
+    "generic": "Etwas ist schiefgelaufen: {{message}}",
+    "invalid_name": "Dieser Name ist als Ordnername nicht erlaubt.",
+    "already_exists": "Eine Datei oder ein Ordner mit diesem Namen existiert bereits.",
+    "not_allowed": "Diese Aktion ist hier nicht erlaubt."
   },
-  "common": { "cancel": "Abbrechen", "close": "Schließen", "retry": "Erneut versuchen", "loading": "Lade…" }
+  "common": {
+    "cancel": "Abbrechen",
+    "close": "Schließen",
+    "retry": "Erneut versuchen",
+    "loading": "Lade…"
+  },
+  "favorites": {
+    "add": "Zu Favoriten hinzufügen",
+    "remove": "Aus Favoriten entfernen"
+  },
+  "actions": {
+    "rename": "Umbenennen",
+    "renameTitle": "Projektordner umbenennen",
+    "renameBody": "Der Ordner auf der Festplatte wird umbenannt. Tags und Metadaten in der project.yaml bleiben erhalten.",
+    "folderName": "Ordnername",
+    "renamed": "Umbenannt in {{name}}",
+    "delete": "Löschen",
+    "deleteTitle": "„{{name}}“ in den Papierkorb verschieben?",
+    "deleteBody": "Der ganze Projektordner landet im Papierkorb. Von dort kannst du ihn wiederherstellen.",
+    "moveToTrash": "In den Papierkorb",
+    "deleted": "„{{name}}“ in den Papierkorb verschoben",
+    "deleteFileTitle": "„{{name}}“ in den Papierkorb verschieben?",
+    "deleteFileBody": "Nur diese Datei wird verschoben. Das Projekt behält seine übrigen Dateien und Metadaten.",
+    "fileDeleted": "{{name}} in den Papierkorb verschoben",
+    "projectGone": "Der Ordner enthält kein Modell mehr und ist aus der Bibliothek verschwunden."
+  }
 }

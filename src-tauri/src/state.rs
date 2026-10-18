@@ -129,3 +129,29 @@ pub fn spawn_watch_loop(app: AppHandle, rx: mpsc::Receiver<WatchEvent>) {
         })
         .expect("spawn watch thread");
 }
+
+/// Polled roots (LIB-4): every 30 s, rescan the roots whose interval has elapsed. Network
+/// shares that cannot be watched end up here. Scans run one at a time under the engine lock.
+pub fn spawn_poll_loop(app: AppHandle) {
+    std::thread::Builder::new()
+        .name("meshkeep-poll".into())
+        .spawn(move || loop {
+            std::thread::sleep(std::time::Duration::from_secs(30));
+            let state = app.state::<AppState>();
+            let due = { state.engine.lock().unwrap().poll_due(time::OffsetDateTime::now_utc()) };
+            for root_id in due {
+                log::debug!("poll: rescanning {root_id}");
+                let result = { state.engine.lock().unwrap().scan_root(&root_id, |_| {}) };
+                match result {
+                    Ok(report) => {
+                        let _ = app.emit(
+                            "library://changed",
+                            serde_json::json!({ "rootId": root_id, "report": report, "reason": "poll" }),
+                        );
+                    }
+                    Err(e) => log::warn!("poll rescan of {root_id} failed: {e}"),
+                }
+            }
+        })
+        .expect("spawn poll thread");
+}

@@ -112,6 +112,7 @@ files; export/import of the file is a later feature for sharing between machines
 ```json
 {
   "schema": 1,
+  "favorites": ["<root-id>:Gridfinity/Bins"],
   "collections": [
     { "id": "c_01", "name": "Desk setup", "projects": ["<root-id>/Gridfinity/Bins", "..."] }
   ],
@@ -123,15 +124,25 @@ files; export/import of the file is a later feature for sharing between machines
 ```
 
 Projects are referenced by root id plus relative path so the file stays valid when a root
-is remounted under a different absolute path.
+is remounted under a different absolute path. Favorites live here too (implemented): they
+are a per-user view, not project metadata, so they do not go into `project.yaml`, and they
+must survive an index rebuild, so they do not live only in the index. A rename moves the
+reference along.
 
 ## Thumbnails and cache
 
 - Default thumbnail location (decided Q5): the **app data cache**
-  (`%LOCALAPPDATA%\Meshkeep\thumbs\<content-hash>.png`). Rendering a preview never
-  writes into a project folder, no hidden folders travel with zipped or shared projects,
-  and the scan-never-writes rule stays intact. Thumbnails are reproducible, so losing
-  them on reinstall is acceptable.
+  (`<app data>\thumbs\<key>.png`). Rendering a preview never writes into a project
+  folder, no hidden folders travel with zipped or shared projects, and the scan-never-writes
+  rule stays intact. Thumbnails are reproducible, so losing them on reinstall is acceptable.
+- Implemented keying: `<key>` is a hash of project id + source file path, so re-rendering
+  overwrites instead of accumulating files. The index remembers the source file's size and
+  mtime; when they change the thumbnail counts as stale and the project re-enters the queue.
+  A full content hash was rejected for this: it would mean reading every model twice.
+- Source priority: the image named by `thumbnail:` in the sidecar, else a 3MF with an
+  embedded preview (extracted, no rendering), else the largest previewable model (STL,
+  OBJ, 3MF) rendered off-thread, else the first image in the project. Failures are
+  recorded per source state and not retried until the file changes.
 - Alternative location (user setting): `<project>/.cache/preview.png` for people who
   want previews to travel with the project.
 - A user-provided image ("set view as thumbnail", or an uploaded photo) replaces the

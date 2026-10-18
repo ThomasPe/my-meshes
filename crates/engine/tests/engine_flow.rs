@@ -128,3 +128,128 @@ fn add_scan_edit_conflict_offline() {
     assert!(engine.resolve_file(&vase.id, "../../etc/passwd").is_err());
     assert!(engine.resolve_file(&vase.id, "vase.stl").unwrap().ends_with("vase.stl"));
 }
+
+#[test]
+fn favorites_rename_delete_and_thumbnails() {
+    use meshkeep_engine::model::{SortKey, ThumbSource};
+    let data = tempfile::tempdir().unwrap();
+    let lib = tempfile::tempdir().unwrap();
+    touch(&lib.path().join("Gridfinity/Bins/small.stl"), 100);
+    touch(&lib.path().join("Gridfinity/Bins/big.stl"), 300);
+    touch(&lib.path().join("Decor/Vase/vase.stl"), 200);
+    touch(&lib.path().join("Decor/Vase/photo.jpg"), 50);
+    touch(&lib.path().join("Docs/Only/readme.txt"), 5);
+    touch(&lib.path().join("Docs/Only/thing.stl"), 7);
+
+    let mut engine = Engine::open(data.path()).unwrap();
+    engine.set_deleter(Box::new(
+        |p: &Path| if p.is_dir() { fs::remove_dir_all(p) } else { fs::remove_file(p) },
+    ));
+    let root = engine.add_root(lib.path(), SyncMode::Manual).unwrap();
+    engine.scan_root(&root.id, |_| {}).unwrap();
+    let bins_id = format!("{}:Gridfinity/Bins", root.id);
+    let vase_id = format!("{}:Decor/Vase", root.id);
+    let only_id = format!("{}:Docs/Only", root.id);
+
+    // favorites survive a rescan (they live in collections.json, not in the index)
+    let fav = engine.set_favorite(&bins_id, true).unwrap();
+    assert!(fav.favorite);
+    engine.scan_root(&root.id, |_| {}).unwrap();
+    let favs = engine
+        .list_projects(&ListQuery {
+            favorites: true,
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(favs.iter().map(|p| p.id.as_str()).collect::<Vec<_>>(), vec![bins_id.as_str()]);
+    assert_eq!(engine.favorite_count().unwrap(), 1);
+    assert!(data.path().join("collections.json").exists());
+    // sorting by "added" works and every project has a plausible added date
+    let by_added = engine
+        .list_projects(&ListQuery {
+            sort: SortKey::Added,
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(by_added.len(), 3);
+    assert!(by_added.iter().all(|p| p.added.year() >= 2020));
+
+    // thumbnails: queue picks the largest model per project, store + stale + failure
+    let mut queue = engine.thumb_queue(10).unwrap();
+    queue.sort_by(|a, b| a.project_id.cmp(&b.project_id));
+    assert_eq!(queue.len(), 3, "{queue:?}");
+    let bins_job = queue.iter().find(|j| j.project_id == bins_id).unwrap();
+    assert_eq!((bins_job.rel_path.as_str(), bins_job.source), ("big.stl", ThumbSource::Render));
+    let png = include_bytes!("../src/threemf.rs"); // not a PNG
+    assert!(engine.store_thumbnail(&bins_id, png).is_err());
+    const TINY_PNG: &[u8] = &[
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00,
+        0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63,
+        0x60, 0x00, 0x02, 0x00, 0x00, 0x05, 0x00, 0x01, 0xE2, 0x26, 0x05, 0x9B, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42,
+        0x60, 0x82,
+    ];
+    let key = engine.store_thumbnail(&bins_id, TINY_PNG).unwrap();
+    assert!(engine.thumbnail_path(&key).unwrap().is_file());
+    assert!(engine.thumbnail_path("../index.sqlite").is_err());
+    assert_eq!(engine.get_project(&bins_id).unwrap().thumb.as_deref(), Some(key.as_str()));
+    assert_eq!(engine.thumb_queue(10).unwrap().len(), 2);
+    engine.thumbnail_failed(&vase_id, "no webgl").unwrap();
+    assert_eq!(engine.thumb_queue(10).unwrap().len(), 1);
+    let stats = engine.thumb_stats().unwrap();
+    assert_eq!((stats.done, stats.failed, stats.pending), (1, 1, 1));
+    // the source file grows -> stale -> queued again
+    touch(&lib.path().join("Gridfinity/Bins/big.stl"), 301);
+    engine.scan_root(&root.id, |_| {}).unwrap();
+    assert!(engine.get_project(&bins_id).unwrap().thumb.is_none());
+    assert!(engine.thumb_queue(10).unwrap().iter().any(|j| j.project_id == bins_id));
+    let key2 = engine.store_thumbnail(&bins_id, TINY_PNG).unwrap();
+    assert_eq!(key, key2, "key is deterministic per project + source");
+
+    // rename: collision check, favorites and thumbnail follow, old id is gone
+    assert!(matches!(engine.rename_project(&bins_id, "Bins").unwrap().id.as_str(), id if id == bins_id));
+    assert!(matches!(engine.rename_project(&bins_id, "Bi/ns"), Err(EngineError::InvalidName(_))));
+    fs::create_dir_all(lib.path().join("Gridfinity/Taken")).unwrap();
+    assert!(matches!(
+        engine.rename_project(&bins_id, "Taken"),
+        Err(EngineError::AlreadyExists(_))
+    ));
+    let renamed = engine.rename_project(&bins_id, "Bins v2").unwrap();
+    assert_eq!(renamed.rel_path, "Gridfinity/Bins v2");
+    assert!(renamed.favorite);
+    assert_eq!(renamed.thumb.as_deref(), Some(key.as_str()));
+    assert!(lib.path().join("Gridfinity/Bins v2/big.stl").exists());
+    assert!(matches!(engine.get_project(&bins_id), Err(EngineError::ProjectNotFound(_))));
+    assert_eq!(engine.favorite_count().unwrap(), 1);
+    assert_eq!(engine.list_projects(&ListQuery::default()).unwrap().len(), 3);
+
+    // delete a file: project stays while it still has a model, disappears otherwise
+    assert!(matches!(
+        engine.delete_file(&vase_id, "project.yaml"),
+        Err(EngineError::NotAllowed(_))
+    ));
+    let after = engine.delete_file(&vase_id, "photo.jpg").unwrap().unwrap();
+    assert_eq!(after.files.len(), 1);
+    assert!(!lib.path().join("Decor/Vase/photo.jpg").exists());
+    assert!(engine.delete_file(&only_id, "thing.stl").unwrap().is_none());
+    assert!(matches!(engine.get_project(&only_id), Err(EngineError::ProjectNotFound(_))));
+    assert!(lib.path().join("Docs/Only/readme.txt").exists(), "other files stay");
+
+    // delete a project
+    engine.delete_project(&renamed.id).unwrap();
+    assert!(!lib.path().join("Gridfinity/Bins v2").exists());
+    assert_eq!(engine.favorite_count().unwrap(), 0);
+    assert_eq!(engine.list_projects(&ListQuery::default()).unwrap().len(), 1);
+    let root_project = engine.list_projects(&ListQuery::default()).unwrap();
+    assert_eq!(root_project[0].id, vase_id);
+
+    // poll due-check
+    let polled = engine.set_root_mode(&root.id, SyncMode::Poll, Some(60)).unwrap();
+    assert_eq!(polled.poll_interval_secs, 60);
+    let now = time::OffsetDateTime::now_utc();
+    assert!(engine.poll_due(now).is_empty(), "scanned moments ago");
+    assert_eq!(engine.poll_due(now + time::Duration::seconds(61)), vec![root.id.clone()]);
+
+    // clearing the cache
+    engine.clear_thumbnails().unwrap();
+    assert!(!data.path().join("thumbs").exists());
+}

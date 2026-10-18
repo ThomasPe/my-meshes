@@ -59,3 +59,69 @@ describe('Meshkeep (test mode, fixture library)', () => {
     expect(info.e2eBuild).toBe(true);
   });
 });
+
+// ---- D2: thumbnails, favorites, rename against the real engine --------------------------
+describe('Meshkeep D2 (thumbnails, favorites, rename, 3MF)', () => {
+  const fixture = () => process.env.MESHKEEP_E2E_FIXTURE!;
+
+  it('renders thumbnails into the app data cache and shows them on cards', async () => {
+    await browser.url(await browser.getUrl().then((u) => u.split('#')[0] + '#/library'));
+    await $('[data-testid="library"]').waitForDisplayed({ timeout: 20000 });
+    await browser.waitUntil(async () => (await $$('[data-testid="thumb-img"]')).length >= 3, { timeout: 90000, timeoutMsg: 'no thumbnails appeared' });
+    const dataDir = (await browser.tauri.execute(({ core }) => core.invoke('app_info')) as { dataDir: string }).dataDir;
+    const thumbs = fs.readdirSync(path.join(dataDir, 'thumbs')).filter((f) => f.endsWith('.png'));
+    expect(thumbs.length).toBeGreaterThanOrEqual(3);
+    // the slicer 3MF got its embedded preview (no rendering) and a badge
+    const plate = await $('[data-testid="project-card"][data-id$="Slicer/Plate"]');
+    await expect(plate.$('[data-testid="slicer-badge"]')).toBeDisplayed();
+    await expect(plate.$('[data-testid="thumb-img"]')).toBeDisplayed();
+  });
+
+  it('favorites persist in collections.json and survive a rescan', async () => {
+    const card = await $('[data-testid="project-card"][data-id$="Gridfinity/Bins"]');
+    await card.moveTo();
+    await card.$('[data-testid="card-favorite"]').click();
+    await browser.waitUntil(async () => (await $('[data-testid="favorites-count"]').getText()) === '1', { timeout: 10000 });
+    const dataDir = (await browser.tauri.execute(({ core }) => core.invoke('app_info')) as { dataDir: string }).dataDir;
+    const file = path.join(dataDir, 'collections.json');
+    await browser.waitUntil(() => fs.existsSync(file), { timeout: 5000 });
+    expect(JSON.parse(fs.readFileSync(file, 'utf8')).favorites.some((id: string) => id.endsWith('Gridfinity/Bins'))).toBe(true);
+    await $('[data-testid="rescan"]').click();
+    await browser.pause(1500);
+    await $('[data-testid="filter-favorites"]').click();
+    await browser.waitUntil(async () => (await $('[data-testid="result-count"]').getText()) === '1', { timeout: 10000 });
+    await $('[data-testid="filter-all"]').click();
+  });
+
+  it('renames the project directory on disk and refuses collisions', async () => {
+    const card = await $('[data-testid="project-card"][data-id$="Gridfinity/Baseplates"]');
+    await card.click();
+    await $('[data-testid="inspector-rename"]').click();
+    await $('[data-testid="rename-input"]').waitForDisplayed();
+    await $('[data-testid="rename-input"]').setValue('Bins');
+    await $('[data-testid="rename-confirm"]').click();
+    await $('[data-testid="rename-error"]').waitForDisplayed();
+    await $('[data-testid="rename-input"]').setValue('Baseplates E2E');
+    await $('[data-testid="rename-confirm"]').click();
+    const renamed = path.join(fixture(), 'Gridfinity/Baseplates E2E');
+    await browser.waitUntil(() => fs.existsSync(renamed), { timeout: 10000, timeoutMsg: 'directory was not renamed' });
+    await browser.waitUntil(async () => (await $$('[data-testid="project-card"][data-id$="Gridfinity/Baseplates E2E"]')).length === 1, { timeout: 10000 });
+    // rename back through the UI so the fixture is left untouched
+    await $('[data-testid="inspector-rename"]').click();
+    await $('[data-testid="rename-input"]').waitForDisplayed();
+    await $('[data-testid="rename-input"]').setValue('Baseplates');
+    await $('[data-testid="rename-confirm"]').click();
+    await browser.waitUntil(() => fs.existsSync(path.join(fixture(), 'Gridfinity/Baseplates')) && !fs.existsSync(renamed), { timeout: 10000 });
+  });
+
+  it('opens the 3MF project and renders its geometry in the viewer', async () => {
+    await $('[data-testid="filter-all"]').click();
+    const card = await $('[data-testid="project-card"][data-id$="Slicer/Plate"]');
+    await card.scrollIntoView();
+    await card.click();
+    await $('[data-testid="inspector-open"]').click();
+    await $('[data-testid="project-page"]').waitForDisplayed();
+    await browser.waitUntil(async () => (await $$('[data-testid="viewer-triangles"]')).length > 0, { timeout: 30000 });
+    expect(await $('[data-testid="viewer-triangles"]').getText()).toMatch(/24 /);
+  });
+});

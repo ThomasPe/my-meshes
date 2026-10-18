@@ -1,6 +1,7 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { useEffect, useRef, useState } from 'react';
 import { ProjectCard } from '@/features/library/ProjectCard';
+import type { ProjectActions } from '@/features/library/ProjectMenu';
 import type { ProjectSummary } from '@/lib/types';
 
 interface Props {
@@ -10,13 +11,14 @@ interface Props {
   onSelect: (id: string, e: React.MouseEvent) => void;
   onOpen: (id: string) => void;
   onTag: (tag: string) => void;
+  actions: ProjectActions;
 }
 
 const GAP = 18;
 const META_HEIGHT = 112;
 
 /** Virtualized by row: TanStack Virtual measures rows, each row renders `columns` cards. */
-export function ProjectGrid({ projects, tile, selected, onSelect, onOpen, onTag }: Props) {
+export function ProjectGrid({ projects, tile, selected, onSelect, onOpen, onTag, actions }: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
   const [width, setWidth] = useState(0);
   useEffect(() => {
@@ -40,7 +42,7 @@ export function ProjectGrid({ projects, tile, selected, onSelect, onOpen, onTag 
         {virt.getVirtualItems().map((row) => (
           <div key={row.key} data-index={row.index} ref={virt.measureElement} className="absolute left-0 top-0 grid w-full" style={{ transform: `translateY(${row.start}px)`, gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: GAP, paddingBottom: GAP }}>
             {projects.slice(row.index * columns, row.index * columns + columns).map((p) => (
-              <ProjectCard key={p.id} project={p} selected={selected.has(p.id)} onSelect={(e) => onSelect(p.id, e)} onOpen={() => onOpen(p.id)} onTag={onTag} />
+              <ProjectCard key={p.id} project={p} selected={selected.has(p.id)} onSelect={(e) => onSelect(p.id, e)} onOpen={() => onOpen(p.id)} onTag={onTag} actions={actions} />
             ))}
           </div>
         ))}

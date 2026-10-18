@@ -1,7 +1,8 @@
 import { QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { getBackend } from '@/lib/backend';
-import type { ListQuery, Project, UpdateMetadata } from '@/lib/types';
+import { kickThumbQueue, useThumbs } from '@/lib/thumbs/queue';
+import type { ListQuery, Project, ProjectSummary, UpdateMetadata } from '@/lib/types';
 
 export const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 10_000, retry: false, refetchOnWindowFocus: false } } });
 
@@ -14,6 +15,7 @@ export const keys = {
   tree: (rootId: string) => ['tree', rootId] as const,
   stats: ['stats'] as const,
   ignore: ['ignore'] as const,
+  thumbStats: ['thumbStats'] as const,
 };
 
 export const useAppInfo = () => useQuery({ queryKey: keys.appInfo, queryFn: async () => (await getBackend()).appInfo(), staleTime: Infinity });
@@ -31,6 +33,13 @@ export function invalidateLibrary(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ['tree'] });
   qc.invalidateQueries({ queryKey: keys.stats });
   qc.invalidateQueries({ queryKey: keys.roots });
+  qc.invalidateQueries({ queryKey: keys.thumbStats });
+}
+
+/** Patches one project in every cached list and detail query (favorite toggles, thumbnails). */
+export function patchProject(qc: QueryClient, id: string, patch: Partial<ProjectSummary> & Partial<Project>) {
+  qc.setQueriesData<ProjectSummary[]>({ queryKey: ['projects'] }, (list) => list?.map((p) => (p.id === id ? { ...p, ...patch } : p)));
+  qc.setQueryData<Project>(keys.project(id), (p) => (p ? { ...p, ...patch } : p));
 }
 
 /** Subscribes once to backend events and keeps the query cache fresh. */
@@ -39,15 +48,68 @@ export function useBackendEvents(onScan?: (rootId: string, found: number) => voi
   useEffect(() => {
     let dead = false;
     const unlisten: Array<() => void> = [];
+    let flush: ReturnType<typeof setTimeout> | null = null;
     getBackend().then(async (b) => {
-      const a = await b.onLibraryChanged(() => invalidateLibrary(qc));
-      const c = await b.onProjectChanged((e) => { qc.invalidateQueries({ queryKey: keys.project(e.projectId) }); qc.invalidateQueries({ queryKey: ['projects'] }); qc.invalidateQueries({ queryKey: ['tags'] }); });
+      const a = await b.onLibraryChanged((e) => {
+        invalidateLibrary(qc);
+        if (e.reason === 'rename' && e.oldId) qc.removeQueries({ queryKey: keys.project(e.oldId) });
+        if (e.reason === 'delete' && e.oldId) qc.removeQueries({ queryKey: keys.project(e.oldId) });
+        if (e.reason === 'thumbs_cleared') useThumbs.setState({ fresh: {} });
+        void kickThumbQueue();
+      });
+      const c = await b.onProjectChanged((e) => { qc.invalidateQueries({ queryKey: keys.project(e.projectId) }); qc.invalidateQueries({ queryKey: ['projects'] }); qc.invalidateQueries({ queryKey: ['tags'] }); qc.invalidateQueries({ queryKey: keys.stats }); void kickThumbQueue(); });
       const s = await b.onScanProgress((p) => onScan?.(p.root_id, p.projects_found));
       if (dead) { a(); c(); s(); } else unlisten.push(a, c, s);
     });
-    return () => { dead = true; unlisten.forEach((u) => u()); };
+    // Thumbnails: patch cards as PNGs land, and refetch lists once a batch settles.
+    import('@/lib/thumbs/queue').then(({ startThumbnails }) => {
+      if (dead) return;
+      startThumbnails((projectId, key) => {
+        patchProject(qc, projectId, { thumb: key });
+        if (flush) clearTimeout(flush);
+        flush = setTimeout(() => { qc.invalidateQueries({ queryKey: keys.thumbStats }); }, 800);
+      });
+    });
+    return () => { dead = true; unlisten.forEach((u) => u()); if (flush) clearTimeout(flush); };
   }, [qc, onScan]);
 }
+
+/** Favorite toggle, optimistic in every list. */
+export function useSetFavorite() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, favorite }: { id: string; favorite: boolean }) => (await getBackend()).setFavorite(id, favorite),
+    onMutate: ({ id, favorite }) => { patchProject(qc, id, { favorite }); },
+    onError: (_e, { id, favorite }) => { patchProject(qc, id, { favorite: !favorite }); },
+    onSettled: () => { qc.invalidateQueries({ queryKey: keys.stats }); },
+  });
+}
+
+export function useRenameProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => (await getBackend()).renameProject(id, name),
+    onSuccess: (project, { id }) => { qc.removeQueries({ queryKey: keys.project(id) }); qc.setQueryData(keys.project(project.id), project); invalidateLibrary(qc); },
+  });
+}
+
+export function useDeleteProject() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => (await getBackend()).deleteProject(id),
+    onSuccess: (_r, id) => { qc.removeQueries({ queryKey: keys.project(id) }); invalidateLibrary(qc); },
+  });
+}
+
+export function useDeleteFile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, relPath }: { id: string; relPath: string }) => (await getBackend()).deleteFile(id, relPath),
+    onSuccess: (project, { id }) => { if (project) qc.setQueryData(keys.project(id), project); else qc.removeQueries({ queryKey: keys.project(id) }); invalidateLibrary(qc); },
+  });
+}
+
+export const useThumbStats = () => useQuery({ queryKey: keys.thumbStats, queryFn: async () => (await getBackend()).thumbStats(), refetchInterval: (q) => ((q.state.data?.pending ?? 0) > 0 ? 3000 : false) });
 
 /** Optimistic metadata update: the list and the project reflect the change at once; on failure the cache rolls back. */
 export function useUpdateMetadata() {

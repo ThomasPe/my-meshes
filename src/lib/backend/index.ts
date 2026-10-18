@@ -1,4 +1,4 @@
-import type { AppInfo, FolderNode, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SyncMode, TagCount, UpdateMetadata } from '@/lib/types';
+import type { AppInfo, FolderNode, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata } from '@/lib/types';
 
 export type Unlisten = () => void;
 
@@ -23,6 +23,17 @@ export interface Backend {
   pickFolder(): Promise<string | null>;
   getIgnorePatterns(): Promise<string[]>;
   setIgnorePatterns(patterns: string[]): Promise<string[]>;
+  setFavorite(projectId: string, favorite: boolean): Promise<Project>;
+  renameProject(projectId: string, newName: string): Promise<Project>;
+  deleteProject(projectId: string): Promise<void>;
+  deleteFile(projectId: string, relPath: string): Promise<Project | null>;
+  thumbQueue(limit?: number): Promise<ThumbJob[]>;
+  thumbStats(): Promise<ThumbStats>;
+  storeThumbnail(projectId: string, png: ArrayBuffer): Promise<string>;
+  storeEmbeddedThumbnail(projectId: string): Promise<string>;
+  thumbnailFailed(projectId: string, reason: string): Promise<void>;
+  readThumbnail(key: string): Promise<ArrayBuffer>;
+  clearThumbnails(): Promise<void>;
   onScanProgress(cb: (p: ScanProgress) => void): Promise<Unlisten>;
   onLibraryChanged(cb: (e: LibraryChanged) => void): Promise<Unlisten>;
   onProjectChanged(cb: (e: { projectId: string }) => void): Promise<Unlisten>;

@@ -1,7 +1,8 @@
 // In-memory backend for browser mode (vite dev / Playwright UI tests). Same contract as
 // the Tauri commands, including error codes, so UI tests exercise real flows.
 import type { Backend, Unlisten } from './index';
-import type { AppError, FileEntry, FileKind, FolderNode, LibraryChanged, LibraryRoot, ListQuery, Project, ProjectSummary, ScanProgress, SidecarStamp, TagCount, UpdateMetadata } from '@/lib/types';
+import { generate3mf, generateObj, generateStl } from '@/lib/mesh/generate';
+import type { AppError, FileEntry, FileKind, FolderNode, LibraryChanged, LibraryRoot, ListQuery, Project, ProjectSummary, ScanProgress, SidecarStamp, TagCount, ThumbJob, UpdateMetadata } from '@/lib/types';
 
 const kindOf = (name: string): FileKind => {
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
@@ -11,10 +12,10 @@ const kindOf = (name: string): FileKind => {
   if (['zip', '7z', 'rar'].includes(ext)) return 'attachment';
   return 'other';
 };
-const f = (name: string, size: number, daysAgo = 10): FileEntry => ({ rel_path: name, name, kind: kindOf(name), size, modified: new Date(Date.now() - daysAgo * 864e5).toISOString() });
+const f = (name: string, size: number, daysAgo = 10): FileEntry => ({ rel_path: name, name, kind: kindOf(name), size, modified: new Date(Date.now() - daysAgo * 864e5).toISOString(), slicer: name.endsWith('.3mf') && /plate|tower/.test(name) ? 'PrusaSlicer' : null, embedded_thumbnail: false });
 const MB = 1024 * 1024;
 
-type MockProject = Project & { has_sidecar: boolean };
+type MockProject = Project & { has_sidecar: boolean; thumbKey?: string | null };
 const err = (code: AppError['code'], message: string): AppError => ({ code, message });
 
 function mk(root_id: string, rel_path: string, title: string, o: Partial<MockProject> & { files: FileEntry[]; daysAgo?: number }): MockProject {
@@ -43,8 +44,34 @@ function mk(root_id: string, rel_path: string, title: string, o: Partial<MockPro
     warnings: o.warnings ?? [],
     offline: o.offline ?? false,
     has_sidecar: has,
+    favorite: o.favorite ?? false,
+    added: new Date(Date.now() - ((o.daysAgo ?? 7) + 30) * 864e5).toISOString(),
+    thumb: null,
+    slicer: files.find((x) => x.slicer)?.slicer ?? null,
   };
 }
+
+/** Mirrors the engine's thumbnail source choice (thumbs.rs). */
+function thumbSourceOf(p: MockProject): ThumbJob | null {
+  const renderable = p.files.filter((x) => x.kind === 'model' && /\.(stl|obj|3mf)$/i.test(x.name)).sort((a, b) => b.size - a.size)[0];
+  if (renderable) return { project_id: p.id, rel_path: renderable.rel_path, source: 'render' };
+  const img = p.files.find((x) => x.kind === 'image');
+  return img ? { project_id: p.id, rel_path: img.rel_path, source: 'image' } : null;
+}
+
+async function generateImage(seed: number): Promise<ArrayBuffer> {
+  const c = document.createElement('canvas');
+  c.width = 256; c.height = 192;
+  const ctx = c.getContext('2d')!;
+  const g = ctx.createLinearGradient(0, 0, 256, 192);
+  g.addColorStop(0, `hsl(${(seed * 47) % 360} 60% 70%)`);
+  g.addColorStop(1, `hsl(${(seed * 47 + 90) % 360} 60% 40%)`);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 256, 192);
+  const blob = await new Promise<Blob>((res) => c.toBlob((b) => res(b!), 'image/png'));
+  return blob.arrayBuffer();
+}
+
+const BAD_NAME = /[\\/:*?"<>|]/;
 
 export function createMockBackend(): Backend {
   const roots: LibraryRoot[] = [
@@ -53,10 +80,10 @@ export function createMockBackend(): Backend {
   ];
   const projects: MockProject[] = [
     mk('r1', 'Projects/Gridfinity/Baseplates', 'Gridfinity Baseplates', { creator: 'Zach Freedman', license: 'CC-BY-NC-SA-4.0', source_url: 'https://thangs.com/designer/ZackFreedman', tags: ['gridfinity', 'organizer'], material: 'PLA', supports_required: false, description: 'Parametric baseplates for the Gridfinity storage system.', files: [f('Baseplate_2x2.stl', 6.1 * MB), f('Baseplate_3x3.stl', 13.4 * MB), f('Baseplate_4x4.stl', 23.9 * MB), f('plate.3mf', 4 * MB), f('photo_desk.png', 0.7 * MB), f('README.md', 2048), f('original_download.zip', 41 * MB)], daysAgo: 3 }),
-    mk('r1', 'Projects/Calibration/Benchy', 'Low-Poly Benchy', { creator: 'CreativeTools', license: 'CC-BY-4.0', tags: ['benchmark'], material: 'PLA', files: [f('benchy_lowpoly.stl', 3.1 * MB)], daysAgo: 9 }),
+    mk('r1', 'Projects/Calibration/Benchy', 'Low-Poly Benchy', { creator: 'CreativeTools', license: 'CC-BY-4.0', tags: ['benchmark'], material: 'PLA', favorite: true, files: [f('benchy_lowpoly.stl', 3.1 * MB)], daysAgo: 9 }),
     mk('r1', 'Projects/Robotics/Arm v4', 'Robotic Arm v4', { creator: 'ExampleCreator', license: 'GPL-3.0', source_url: 'https://www.printables.com/model/123456', tags: ['robotics', 'functional'], material: 'PETG', supports_required: true, description: '6-axis desktop arm.', files: [f('base.stl', 18 * MB), f('shoulder.stl', 22 * MB), f('upper_arm.stl', 31 * MB), f('forearm.stl', 27 * MB), f('wrist.3mf', 9 * MB), f('BOM.pdf', 1.2 * MB), f('assembly.jpg', 3.4 * MB), f('firmware.zip', 84 * MB)], daysAgo: 1 }),
     mk('r1', 'Projects/Decor/Vase', 'Decorative Vase', { creator: 'Lena Hofer', tags: ['vase', 'decor'], has_sidecar: false, files: [f('vase_twist.stl', 9.8 * MB)], daysAgo: 20 }),
-    mk('r1', 'Projects/Desk/Phone Stand', 'Phone Stand', { creator: 'PrintTools', license: 'CC0-1.0', tags: ['desk', 'functional'], material: 'PLA', files: [f('stand_body.stl', 4.1 * MB), f('stand_foot.stl', 1.4 * MB)], daysAgo: 30 }),
+    mk('r1', 'Projects/Desk/Phone Stand', 'Phone Stand', { creator: 'PrintTools', license: 'CC0-1.0', tags: ['desk', 'functional'], material: 'PLA', favorite: true, files: [f('stand_body.obj', 4.1 * MB), f('stand_foot.stl', 1.4 * MB)], daysAgo: 30 }),
     mk('r2', 'Props/Helmets/MK2', 'Cosplay Helmet', { creator: 'Props Workshop', license: 'Personal use', tags: ['cosplay', 'props'], material: 'PLA', supports_required: true, offline: true, files: [f('helmet_part1.stl', 72 * MB), f('helmet_part2.stl', 70 * MB), f('visor.stl', 18 * MB)], daysAgo: 60 }),
     mk('r1', 'Projects/Desk/Cable Clips', 'Cable Clips', { creator: 'Maker Mia', tags: ['cable', 'organizer'], material: 'TPU', has_sidecar: false, files: [f('clip_6mm.stl', 0.4 * MB), f('clip_8mm.stl', 0.4 * MB), f('clip_10mm.stl', 0.4 * MB)], daysAgo: 0 }),
     mk('r1', 'Projects/Tabletop/Dice Tower', 'Dice Tower', { creator: 'TableTop Forge', license: 'CC-BY-NC-SA-4.0', tags: ['tabletop', 'gaming'], material: 'PLA', files: [f('tower.3mf', 31 * MB)], daysAgo: 45 }),
@@ -70,9 +97,11 @@ export function createMockBackend(): Backend {
     projects.push(mk('r1', `Projects/Misc/Part ${String(i).padStart(2, '0')}`, `Misc Part ${i}`, { creator: i % 3 ? 'Various' : null, tags: i % 2 ? ['misc'] : ['misc', 'spare'], has_sidecar: i % 4 !== 0, files: [f(`part_${i}.stl`, (i % 7 + 1) * MB)], daysAgo: 130 + i }));
   }
   let ignore = ['.git', '__MACOSX', '.DS_Store', 'Thumbs.db', '*.gcode'];
+  const thumbs = new Map<string, ArrayBuffer>(); // key -> png
+  const failed = new Set<string>();
   const listeners = { scan: new Set<(p: ScanProgress) => void>(), lib: new Set<(e: LibraryChanged) => void>(), proj: new Set<(e: { projectId: string }) => void>() };
   const sub = <T>(set: Set<(x: T) => void>, cb: (x: T) => void): Promise<Unlisten> => { set.add(cb); return Promise.resolve(() => set.delete(cb)); };
-  const summary = (p: MockProject): ProjectSummary => ({ id: p.id, root_id: p.root_id, rel_path: p.rel_path, title: p.title, creator: p.creator, tags: p.tags, thumbnail: p.thumbnail, file_count: p.files.length, model_count: p.model_count, total_bytes: p.total_bytes, modified: p.modified, has_sidecar: p.has_sidecar, offline: p.offline });
+  const summary = (p: MockProject): ProjectSummary => ({ id: p.id, root_id: p.root_id, rel_path: p.rel_path, title: p.title, creator: p.creator, tags: p.tags, thumbnail: p.thumbnail, file_count: p.files.length, model_count: p.model_count, total_bytes: p.total_bytes, modified: p.modified, has_sidecar: p.has_sidecar, offline: p.offline, favorite: p.favorite, added: p.added, thumb: p.thumb, slicer: p.slicer });
   const delay = (ms = 30) => new Promise((r) => setTimeout(r, ms));
   const find = (id: string) => { const p = projects.find((x) => x.id === id); if (!p) throw err('not_found', `project not found: ${id}`); return p; };
 
@@ -111,13 +140,14 @@ export function createMockBackend(): Backend {
       let list = projects.slice();
       if (q.root_id) list = list.filter((p) => p.root_id === q.root_id);
       if (q.path_prefix) list = list.filter((p) => p.rel_path === q.path_prefix || p.rel_path.startsWith(q.path_prefix + '/'));
+      if (q.favorites) list = list.filter((p) => p.favorite);
       for (const t of q.tags ?? []) list = list.filter((p) => p.tags.includes(t.toLowerCase()));
       if (q.text?.trim()) {
         const terms = q.text.toLowerCase().split(/\s+/).filter(Boolean);
         list = list.filter((p) => { const hay = [p.title, p.creator ?? '', p.description ?? '', ...p.tags, ...p.files.map((x) => x.name)].join(' ').toLowerCase(); return terms.every((t) => hay.split(/[^a-z0-9äöüß]+/i).some((w) => w.startsWith(t))); });
       }
       const sort = q.sort ?? 'modified';
-      list.sort((a, b) => sort === 'title' ? a.title.localeCompare(b.title) : sort === 'creator' ? (a.creator ?? '~').localeCompare(b.creator ?? '~') : sort === 'size' ? b.total_bytes - a.total_bytes : b.modified.localeCompare(a.modified));
+      list.sort((a, b) => sort === 'title' ? a.title.localeCompare(b.title) : sort === 'creator' ? (a.creator ?? '~').localeCompare(b.creator ?? '~') : sort === 'size' ? b.total_bytes - a.total_bytes : sort === 'added' ? b.added.localeCompare(a.added) : b.modified.localeCompare(a.modified));
       if (q.limit) list = list.slice(q.offset ?? 0, (q.offset ?? 0) + q.limit);
       return list.map(summary);
     },
@@ -137,8 +167,21 @@ export function createMockBackend(): Backend {
       const build = (prefix: string, n: N): FolderNode[] => [...n.children.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([name, c]) => { const rel = prefix ? `${prefix}/${name}` : name; return { name, rel_path: rel, project_count: c.count, children: build(rel, c) }; });
       return build('', root);
     },
-    async libraryStats(rootId) { const l = projects.filter((p) => !rootId || p.root_id === rootId); return { projects: l.length, totalBytes: l.reduce((a, p) => a + p.total_bytes, 0) }; },
-    async readProjectFile() { throw err('mock', 'no file contents in browser mode'); },
+    async libraryStats(rootId) { const l = projects.filter((p) => !rootId || p.root_id === rootId); return { projects: l.length, totalBytes: l.reduce((a, p) => a + p.total_bytes, 0), favorites: projects.filter((p) => p.favorite).length }; },
+    // Browser mode has no disk: synthesize plausible bytes per extension so parsers, viewer and thumbnails run for real.
+    async readProjectFile(projectId, relPath) {
+      const p = find(projectId);
+      const file = p.files.find((x) => x.rel_path === relPath);
+      if (!file) throw err('not_found', relPath);
+      const seed = [...relPath].reduce((a, c) => a + c.charCodeAt(0), 0);
+      const tri = Math.min(20000, Math.max(200, Math.round(file.size / 4096)));
+      const ext = relPath.split('.').pop()?.toLowerCase();
+      if (ext === 'stl') return generateStl(tri, seed);
+      if (ext === 'obj') return generateObj(tri, seed);
+      if (ext === '3mf') return generate3mf();
+      if (file.kind === 'image') return generateImage(seed);
+      throw err('mock', 'no file contents in browser mode');
+    },
     async updateMetadata(projectId, u: UpdateMetadata) {
       await delay(120);
       const p = find(projectId);
@@ -160,6 +203,74 @@ export function createMockBackend(): Backend {
     },
     async revealProject() {},
     async openProjectFile() {},
+    async setFavorite(projectId, favorite) { const p = find(projectId); p.favorite = favorite; listeners.proj.forEach((cb) => cb({ projectId })); return { ...p }; },
+    async renameProject(projectId, newName) {
+      await delay(80);
+      const p = find(projectId);
+      const name = newName.trim();
+      if (!name || name === '.' || name === '..' || BAD_NAME.test(name) || /[. ]$/.test(name)) throw err('invalid_name', `invalid name: ${newName}`);
+      const parent = p.rel_path.includes('/') ? p.rel_path.slice(0, p.rel_path.lastIndexOf('/') + 1) : '';
+      const newRel = parent + name;
+      if (newRel === p.rel_path) return { ...p };
+      if (projects.some((x) => x.root_id === p.root_id && x.rel_path.toLowerCase() === newRel.toLowerCase() && x !== p)) throw err('already_exists', `a file or folder named ${name} already exists`);
+      const oldId = p.id;
+      p.rel_path = newRel; p.id = `${p.root_id}:${newRel}`;
+      if (!p.has_sidecar) p.title = name;
+      listeners.lib.forEach((cb) => cb({ rootId: p.root_id, report: null, reason: 'rename', oldId, newId: p.id }));
+      return { ...p };
+    },
+    async deleteProject(projectId) {
+      await delay(80);
+      const i = projects.findIndex((x) => x.id === projectId);
+      if (i < 0) throw err('not_found', projectId);
+      const [p] = projects.splice(i, 1);
+      listeners.lib.forEach((cb) => cb({ rootId: p!.root_id, report: null, reason: 'delete', oldId: projectId }));
+    },
+    async deleteFile(projectId, relPath) {
+      await delay(60);
+      const p = find(projectId);
+      if (relPath.endsWith('project.yaml')) throw err('not_allowed', 'project.yaml is managed by the app');
+      const i = p.files.findIndex((x) => x.rel_path === relPath);
+      if (i < 0) throw err('not_found', relPath);
+      p.files.splice(i, 1);
+      p.model_count = p.files.filter((x) => x.kind === 'model').length;
+      p.total_bytes = p.files.reduce((a, x) => a + x.size, 0);
+      if (p.model_count === 0 && !p.has_sidecar) {
+        projects.splice(projects.indexOf(p), 1);
+        listeners.lib.forEach((cb) => cb({ rootId: p.root_id, report: null, reason: 'delete', oldId: projectId }));
+        return null;
+      }
+      listeners.proj.forEach((cb) => cb({ projectId }));
+      return { ...p };
+    },
+    async thumbQueue(limit = 50) {
+      const jobs: ThumbJob[] = [];
+      for (const p of projects) {
+        if (p.offline || p.thumb || failed.has(p.id)) continue;
+        const job = thumbSourceOf(p);
+        if (job) jobs.push(job);
+        if (jobs.length >= limit) break;
+      }
+      return jobs;
+    },
+    async thumbStats() {
+      const withSource = projects.filter((p) => !p.offline && thumbSourceOf(p));
+      const done = withSource.filter((p) => p.thumb).length;
+      const f = withSource.filter((p) => !p.thumb && failed.has(p.id)).length;
+      return { pending: withSource.length - done - f, done, failed: f };
+    },
+    async storeThumbnail(projectId, png) {
+      const p = find(projectId);
+      const key = `${projectId.replace(/[^a-z0-9]/gi, '_')}.png`;
+      thumbs.set(key, png);
+      p.thumb = key;
+      failed.delete(projectId);
+      return key;
+    },
+    async storeEmbeddedThumbnail(projectId) { throw err('not_allowed', `${projectId}: no embedded preview in browser mode`); },
+    async thumbnailFailed(projectId) { failed.add(projectId); },
+    async readThumbnail(key) { const b = thumbs.get(key); if (!b) throw err('not_found', key); return b.slice(0); },
+    async clearThumbnails() { thumbs.clear(); failed.clear(); for (const p of projects) p.thumb = null; listeners.lib.forEach((cb) => cb({ rootId: null, report: null, reason: 'thumbs_cleared' })); },
     async pickFolder() { return 'E:\\More Models'; },
     async getIgnorePatterns() { return ignore.slice(); },
     async setIgnorePatterns(p) { ignore = p.slice(); return ignore.slice(); },

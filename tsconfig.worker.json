@@ -4,5 +4,5 @@
     "lib": ["ES2022", "WebWorker"], "strict": true, "noEmit": true, "skipLibCheck": true, "isolatedModules": true,
     "baseUrl": ".", "paths": { "@/*": ["src/*"] }, "types": []
   },
-  "include": ["src/workers/**/*.ts", "src/lib/stl-parse.ts"]
+  "include": ["src/workers/**/*.ts", "src/lib/mesh/**/*.ts", "src/lib/thumbs/render.ts"]
 }

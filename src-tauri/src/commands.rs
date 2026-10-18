@@ -1,10 +1,12 @@
 use crate::state::{self, AppState};
-use meshkeep_engine::model::{FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, ScanReport, SyncMode, TagCount};
+use meshkeep_engine::model::{
+    FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, ScanReport, SyncMode, TagCount, ThumbJob, ThumbStats,
+};
 use meshkeep_engine::{EngineError, UpdateMetadata};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
-use tauri::ipc::Response;
+use tauri::ipc::{InvokeBody, Request, Response};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
@@ -30,6 +32,9 @@ impl From<EngineError> for AppError {
             EngineError::Index(_) => "index",
             EngineError::Serde(_) => "serde",
             EngineError::Watch(_) => "watch",
+            EngineError::InvalidName(_) => "invalid_name",
+            EngineError::AlreadyExists(_) => "already_exists",
+            EngineError::NotAllowed(_) => "not_allowed",
         };
         AppError {
             code,
@@ -171,12 +176,19 @@ pub fn folder_tree(state: State<AppState>, root_id: String) -> CmdResult<Vec<Fol
 pub struct LibraryStats {
     projects: u32,
     total_bytes: u64,
+    favorites: u32,
 }
 
 #[tauri::command]
 pub fn library_stats(state: State<AppState>, root_id: Option<String>) -> CmdResult<LibraryStats> {
-    let (projects, total_bytes) = state.engine.lock().unwrap().count(root_id.as_deref())?;
-    Ok(LibraryStats { projects, total_bytes })
+    let engine = state.engine.lock().unwrap();
+    let (projects, total_bytes) = engine.count(root_id.as_deref())?;
+    let favorites = engine.favorite_count()?;
+    Ok(LibraryStats {
+        projects,
+        total_bytes,
+        favorites,
+    })
 }
 
 /// Raw bytes of a file inside a project (models for the viewer, images). No JSON, no base64.
@@ -257,4 +269,145 @@ pub fn set_ignore_patterns(state: State<AppState>, patterns: Vec<String>) -> Cmd
     let mut engine = state.engine.lock().unwrap();
     engine.set_ignore_patterns(patterns)?;
     Ok(engine.ignore_patterns().to_vec())
+}
+
+// ---- favorites, rename, delete ---------------------------------------------------------
+
+#[tauri::command]
+pub fn set_favorite(app: AppHandle, state: State<AppState>, project_id: String, favorite: bool) -> CmdResult<Project> {
+    let project = { state.engine.lock().unwrap().set_favorite(&project_id, favorite)? };
+    let _ = app.emit("project://changed", serde_json::json!({ "projectId": project.id }));
+    Ok(project)
+}
+
+#[tauri::command]
+pub fn rename_project(app: AppHandle, state: State<AppState>, project_id: String, new_name: String) -> CmdResult<Project> {
+    let project = { state.engine.lock().unwrap().rename_project(&project_id, &new_name)? };
+    let _ = app.emit(
+        "library://changed",
+        serde_json::json!({ "rootId": project.root_id, "report": serde_json::Value::Null, "reason": "rename", "oldId": project_id, "newId": project.id }),
+    );
+    Ok(project)
+}
+
+/// Moves the project directory to the OS trash (IMP-5).
+#[tauri::command]
+pub fn delete_project(app: AppHandle, state: State<AppState>, project_id: String) -> CmdResult<()> {
+    let root_id = {
+        let mut engine = state.engine.lock().unwrap();
+        let p = engine.get_project(&project_id)?;
+        engine.delete_project(&project_id)?;
+        p.root_id
+    };
+    let _ = app.emit(
+        "library://changed",
+        serde_json::json!({ "rootId": root_id, "report": serde_json::Value::Null, "reason": "delete", "oldId": project_id }),
+    );
+    Ok(())
+}
+
+/// Moves one file to the OS trash. `None` when the project vanished with it.
+#[tauri::command]
+pub fn delete_file(app: AppHandle, state: State<AppState>, project_id: String, rel_path: String) -> CmdResult<Option<Project>> {
+    let (root_id, project) = {
+        let mut engine = state.engine.lock().unwrap();
+        let p = engine.get_project(&project_id)?;
+        (p.root_id, engine.delete_file(&project_id, &rel_path)?)
+    };
+    match &project {
+        Some(p) => {
+            let _ = app.emit("project://changed", serde_json::json!({ "projectId": p.id }));
+        }
+        None => {
+            let _ = app.emit(
+                "library://changed",
+                serde_json::json!({ "rootId": root_id, "report": serde_json::Value::Null, "reason": "delete", "oldId": project_id }),
+            );
+        }
+    }
+    Ok(project)
+}
+
+// ---- thumbnails ----------------------------------------------------------------------
+
+#[tauri::command]
+pub fn thumb_queue(state: State<AppState>, limit: Option<u32>) -> CmdResult<Vec<ThumbJob>> {
+    Ok(state.engine.lock().unwrap().thumb_queue(limit.unwrap_or(50))?)
+}
+
+#[tauri::command]
+pub fn thumb_stats(state: State<AppState>) -> CmdResult<ThumbStats> {
+    Ok(state.engine.lock().unwrap().thumb_stats()?)
+}
+
+/// Raw PNG bytes in the request body; the project id travels URL-encoded in a header
+/// (headers must be ASCII, folder names need not be).
+#[tauri::command]
+pub fn store_thumbnail(state: State<AppState>, request: Request<'_>) -> CmdResult<String> {
+    let project_id = request
+        .headers()
+        .get("x-project-id")
+        .and_then(|v| v.to_str().ok())
+        .map(percent_decode)
+        .ok_or(AppError {
+            code: "shell",
+            message: "missing x-project-id header".into(),
+        })?;
+    let InvokeBody::Raw(png) = request.body() else {
+        return Err(AppError {
+            code: "shell",
+            message: "thumbnail body must be raw bytes".into(),
+        });
+    };
+    Ok(state.engine.lock().unwrap().store_thumbnail(&project_id, png)?)
+}
+
+#[tauri::command]
+pub fn store_embedded_thumbnail(state: State<AppState>, project_id: String) -> CmdResult<String> {
+    Ok(state.engine.lock().unwrap().store_embedded_thumbnail(&project_id)?)
+}
+
+#[tauri::command]
+pub fn thumbnail_failed(state: State<AppState>, project_id: String, reason: String) -> CmdResult<()> {
+    Ok(state.engine.lock().unwrap().thumbnail_failed(&project_id, &reason)?)
+}
+
+#[tauri::command]
+pub async fn read_thumbnail(app: AppHandle, key: String) -> CmdResult<Response> {
+    let path = { app.state::<AppState>().engine.lock().unwrap().thumbnail_path(&key)? };
+    let bytes = tauri::async_runtime::spawn_blocking(move || std::fs::read(path))
+        .await
+        .map_err(|e| AppError {
+            code: "shell",
+            message: e.to_string(),
+        })??;
+    Ok(Response::new(bytes))
+}
+
+#[tauri::command]
+pub fn clear_thumbnails(app: AppHandle, state: State<AppState>) -> CmdResult<()> {
+    state.engine.lock().unwrap().clear_thumbnails()?;
+    let _ = app.emit(
+        "library://changed",
+        serde_json::json!({ "rootId": serde_json::Value::Null, "report": serde_json::Value::Null, "reason": "thumbs_cleared" }),
+    );
+    Ok(())
+}
+
+fn percent_decode(s: &str) -> String {
+    let bytes = s.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let Ok(v) = u8::from_str_radix(&s[i + 1..i + 3], 16) {
+                out.push(v);
+                i += 3;
+                continue;
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
 }

@@ -24,8 +24,8 @@ automated end-to-end check against the real desktop app (see `spec/04-quality.md
       verdicts pass. Table in ADR-0001.
 - [x] Decide visual direction: D Gallery (ADR-0002 accepted).
 - [x] **0.5 Click dummy review:** accepted as is. Component library decided: shadcn/ui + Tailwind 4 (ADR-0002).
-- [ ] Answer the remaining items in `docs/open-questions.md` (Q4, Q5, Q10 before
-      Epic 2; Q15 before the Store listing).
+- [x] Answer the remaining items in `docs/open-questions.md` (all decided 2026-10-18;
+      name: Meshkeep).
 
 ## Phase 1: MVP, a local library manager with read, write and preview
 
@@ -33,8 +33,10 @@ automated end-to-end check against the real desktop app (see `spec/04-quality.md
 
 Decided (Q18): phase 1 ships in three deliveries. **D1 Walking skeleton** (done: roots,
 scan, grid and list, search, tags, inspector, STL viewer, settings). **D2 Daily driver**
-(rendered thumbnails, 3MF and OBJ preview, favorites and recent imports, poll mode, safe
-delete, rename): after D2 the author's real library goes live on it. **D3 Store-ready**
+(done 2026-10-18: rendered thumbnails with a background queue and cache, 3MF and OBJ
+preview, slicer-3MF badge with embedded preview, favorites and recent additions, poll
+mode with intervals, safe delete to trash, rename): the author's real library can go live
+on it. **D3 Store-ready**
 (import with staging and inbox, collections and smart collections, onboarding, MSIX
 pipeline with the updater disabled, Store assets).
 
@@ -74,25 +76,31 @@ pipeline with the updater disabled, Store assets).
 ### Epic 2: Library engine
 - [x] **Library roots** (LIB-1).
 - [x] **Scanner** (LIB-2): recursive, ignore list, never writes.
-- [~] **Watcher** (LIB-3) done (debounced, whole-root rescan); **poll mode** (LIB-4) is a
-      setting without a timer yet.
+- [x] **Watcher** (LIB-3) done (debounced, whole-root rescan); **poll mode** (LIB-4) with a
+      per-root interval (1 min to 3 h) and a 30 s due-check in the shell.
 - [x] **Offline handling** (LIB-5).
 - [ ] **Sync status & background activity** (LIB-6, LIB-7, APP-7).
 - [x] **Sidecar read/write** (META-1..4): parsing, lazy creation, optimistic save,
       conflict detection with reload/overwrite dialog.
-- [ ] **Project rename = directory rename** (META-5).
+- [x] **Project rename = directory rename** (META-5): Windows-safe name validation,
+      collision check before touching disk, favorites and thumbnail follow the new id.
 
 ### Epic 3: Preview & thumbnails
-- [~] **3D viewport** (VIEW-1): STL via worker, render on demand; OBJ and progressive
-      loading pending.
-- [ ] **3MF support** (VIEW-2): geometry, embedded thumbnail, metadata.
-- [ ] **Thumbnail queue** (VIEW-3) with configurable storage location.
-- [ ] **Image viewer & open-with-OS** (VIEW-5).
-- [ ] **GPU fallback** (VIEW-6).
+- [~] **3D viewport** (VIEW-1): STL, OBJ and 3MF parsed in a worker, render on demand;
+      progressive loading of very large files pending.
+- [x] **3MF support** (VIEW-2): geometry incl. components and build transforms, embedded
+      preview extracted by the engine, slicer detection (PrusaSlicer, Bambu/Orca) as a badge.
+- [~] **Thumbnail queue** (VIEW-3): engine-driven queue, worker rendering with main-thread
+      fallback, PNG cache in app data keyed per project + source file, invalidated by
+      size/mtime; status bar progress; "clear cache" in settings. Per-project `.cache`
+      location (user setting) pending.
+- [ ] **Image viewer & open-with-OS** (VIEW-5): open-with-OS done, built-in viewer pending.
+- [~] **GPU fallback** (VIEW-6): placeholders plus a status-bar notice when no WebGL is
+      available anywhere; viewer shows a message instead of crashing.
 
 ### Epic 4: Browsing & organization
-- [~] **Sidebar navigation** (NAV-1): roots, folder tree and tags; Recent/Favorites/Inbox
-      views pending.
+- [~] **Sidebar navigation** (NAV-1): roots, folder tree, tags, Recent additions and
+      Favorites done; Inbox pending (D3).
 - [x] **Grid view** (NAV-2) virtualized with zoom slider.
 - [x] **List view** (NAV-3) with sortable columns.
 - [~] **Search & filters** (NAV-4 done via FTS5; NAV-5 tags and folders done, other
@@ -104,12 +112,13 @@ pipeline with the updater disabled, Store assets).
 - [ ] **Staging area & archive import** (IMP-1, IMP-2).
 - [ ] **Inbox** (IMP-3).
 - [ ] **Passive sync of OS drops; archives as attachments** (IMP-4).
-- [ ] **Safe delete to trash** (IMP-5).
+- [x] **Safe delete to trash** (IMP-5): whole project or single file, confirmation dialog,
+      `Delete` key; a project whose last model goes leaves the library.
 - [ ] **Drag-out to other applications** (IMP-6).
 
 ### Epic 6: Settings
-- [~] **Settings module** (APP-4): roots, sync mode, ignore patterns, theme, language
-      done; thumbnail location, intervals and notifications pending.
+- [~] **Settings module** (APP-4): roots, sync mode with poll interval, ignore patterns,
+      preview cache, theme, language done; thumbnail location and notifications pending.
 
 ## Phase 2: Quality of life
 

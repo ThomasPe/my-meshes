@@ -1,7 +1,8 @@
 import { useTranslation } from 'react-i18next';
 import type { ScanState } from '@/App';
 import { formatBytes, formatDate } from '@/lib/format';
-import { useLibraryStats, useRoots } from '@/lib/queries';
+import { useLibraryStats, useRoots, useThumbStats } from '@/lib/queries';
+import { useThumbs } from '@/lib/thumbs/queue';
 import { useUi } from '@/lib/store';
 import { cn } from '@/lib/utils';
 
@@ -12,6 +13,10 @@ export function StatusBar({ scanning }: { scanning: ScanState }) {
   const selected = useUi((s) => s.selected);
   const first = roots.data?.[0];
   const busy = Object.entries(scanning);
+  const thumbStats = useThumbStats();
+  const thumbs = useThumbs();
+  const pending = thumbs.running ? thumbs.pending : thumbStats.data?.pending ?? 0;
+  const total = pending + (thumbs.running ? thumbs.done : thumbStats.data?.done ?? 0);
 
   return (
     <footer className="flex items-center gap-5 overflow-hidden whitespace-nowrap border-t border-border bg-panel px-5 text-xs font-semibold text-muted-foreground tabular" data-testid="statusbar">
@@ -28,6 +33,8 @@ export function StatusBar({ scanning }: { scanning: ScanState }) {
         <span>{t('status.noRoots')}</span>
       )}
       <span className="ml-auto flex gap-5">
+        {pending > 0 && !thumbs.unavailable && <span className="flex items-center gap-2" data-testid="status-thumbs"><Dot className="animate-pulse bg-accent-foreground" />{t('status.thumbs', { done: total - pending, total })}</span>}
+        {thumbs.unavailable && <span className="text-warning" title={thumbs.unavailable} data-testid="status-thumbs-unavailable">{t('status.thumbsUnavailable')}</span>}
         {selected.length > 0 && <span data-testid="status-selected">{t('library.selected', { count: selected.length })}</span>}
         {stats.data && <span>{t('status.total', { count: stats.data.projects, size: formatBytes(stats.data.totalBytes, i18n.language) })}</span>}
       </span>

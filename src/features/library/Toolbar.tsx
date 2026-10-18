@@ -7,7 +7,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useUi } from '@/lib/store';
 import type { SortKey } from '@/lib/types';
 
-export function Toolbar({ title, count, onRescan, scanning }: { title: string; count: number; onRescan?: () => void; scanning?: boolean }) {
+export function Toolbar({ title, count, onRescan, scanning, sortLocked }: { title: string; count: number; onRescan?: () => void; scanning?: boolean; sortLocked?: boolean }) {
   const { t } = useTranslation();
   const { tags, removeTag, text, setText, sort, setSort, view, setView, tile, setTile } = useUi();
   return (
@@ -23,10 +23,11 @@ export function Toolbar({ title, count, onRescan, scanning }: { title: string; c
         <span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-accent px-3 text-[13px] font-bold text-accent-foreground">“{text}”<button type="button" aria-label="clear search" onClick={() => setText('')} className="rounded-full p-0.5 opacity-70 hover:bg-black/10 hover:opacity-100"><X className="size-3.5" /></button></span>
       )}
       <div className="ml-auto flex items-center gap-2">
-        <Select value={sort} onValueChange={(v) => setSort(v as SortKey)}>
+        <Select value={sortLocked ? 'added' : sort} onValueChange={(v) => setSort(v as SortKey)} disabled={sortLocked}>
           <SelectTrigger size="sm" data-testid="sort"><span className="text-muted-foreground">{t('library.sort')}</span><SelectValue /></SelectTrigger>
           <SelectContent>
             <SelectItem value="modified">{t('library.sortModified')}</SelectItem>
+            <SelectItem value="added">{t('library.sortAdded')}</SelectItem>
             <SelectItem value="title">{t('library.sortTitle')}</SelectItem>
             <SelectItem value="creator">{t('library.sortCreator')}</SelectItem>
             <SelectItem value="size">{t('library.sortSize')}</SelectItem>

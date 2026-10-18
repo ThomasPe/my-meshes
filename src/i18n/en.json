@@ -1,6 +1,13 @@
 {
-  "app": { "name": "Meshkeep" },
-  "nav": { "library": "Library", "settings": "Settings", "search": "Search library…", "theme": "Toggle theme" },
+  "app": {
+    "name": "Meshkeep"
+  },
+  "nav": {
+    "library": "Library",
+    "settings": "Settings",
+    "search": "Search library…",
+    "theme": "Toggle theme"
+  },
   "welcome": {
     "title": "Your 3D models, organized like a photo library",
     "lead": "Meshkeep indexes the STL, OBJ and 3MF files already on your disks. Nothing is uploaded, nothing is moved without asking, and your metadata lives next to your files.",
@@ -38,10 +45,22 @@
     "files_other": "{{count}} files",
     "selected_one": "{{count}} selected",
     "selected_other": "{{count}} selected",
-    "columns": { "title": "Title", "creator": "Creator", "tags": "Tags", "files": "Files", "size": "Size", "modified": "Modified" },
+    "columns": {
+      "title": "Title",
+      "creator": "Creator",
+      "tags": "Tags",
+      "files": "Files",
+      "size": "Size",
+      "modified": "Modified"
+    },
     "hint": "Select a project to see its details here. Double-click opens it.",
     "topTags": "Top tags",
-    "creators": "Creators"
+    "creators": "Creators",
+    "recent": "Recent additions",
+    "favorites": "Favorites",
+    "sortAdded": "Date added",
+    "emptyFavorites": "Star a project to see it here.",
+    "slicerProject": "slicer"
   },
   "inspector": {
     "open": "Open",
@@ -63,7 +82,8 @@
     "files": "Files",
     "notSet": "not set",
     "offlineHint": "{{path}} is not reachable. The project stays in the library and comes back when the drive reconnects.",
-    "warnings": "Scanner notes"
+    "warnings": "Scanner notes",
+    "added": "Added"
   },
   "project": {
     "back": "Library",
@@ -90,12 +110,18 @@
     "loading": "Loading {{name}}…",
     "triangles": "{{count}} triangles",
     "noModels": "No model files in this project.",
-    "unsupported": "Preview for {{ext}} comes later; STL for now.",
+    "unsupported": "Preview for {{ext}} comes later; STL, OBJ and 3MF work today.",
     "conflictTitle": "project.yaml changed on disk",
     "conflictBody": "Someone edited this file while you were working. Reload to see the external changes, or overwrite them with yours.",
     "reload": "Reload",
     "overwrite": "Overwrite",
-    "fileRole": { "model": "model", "image": "image", "document": "document", "attachment": "attachment", "other": "file" },
+    "fileRole": {
+      "model": "model",
+      "image": "image",
+      "document": "document",
+      "attachment": "attachment",
+      "other": "file"
+    },
     "attachmentHint": "Archives inside a project are kept as opaque backups. They are never extracted or browsed."
   },
   "settings": {
@@ -107,8 +133,16 @@
     "removeTitle": "Remove {{path}} from the library?",
     "removeBody": "Its projects disappear from the app. Nothing on disk is deleted; project.yaml files stay where they are.",
     "rescan": "Rescan",
-    "mode": { "watch": "Watch events", "poll": "Poll", "manual": "Manual only" },
-    "status": { "online": "online", "offline": "offline, kept", "unknown": "unknown" },
+    "mode": {
+      "watch": "Watch events",
+      "poll": "Poll",
+      "manual": "Manual only"
+    },
+    "status": {
+      "online": "online",
+      "offline": "offline, kept",
+      "unknown": "unknown"
+    },
     "lastScan": "last scan {{when}}",
     "neverScanned": "not scanned yet",
     "ignore": "Ignore patterns",
@@ -116,7 +150,11 @@
     "addPattern": "add pattern, Enter",
     "appearance": "Appearance",
     "theme": "Theme",
-    "themes": { "light": "Light", "dark": "Dark", "system": "System" },
+    "themes": {
+      "light": "Light",
+      "dark": "Dark",
+      "system": "System"
+    },
     "language": "Language",
     "about": "About",
     "version": "Version",
@@ -127,7 +165,15 @@
     "scanFailed": "Scan failed: {{message}}",
     "rootAdded": "Added {{path}}. Scanning…",
     "rootRemoved": "Removed {{path}}",
-    "patternSaved": "Ignore patterns saved"
+    "patternSaved": "Ignore patterns saved",
+    "every": "every",
+    "minutes_one": "{{count}} minute",
+    "minutes_other": "{{count}} minutes",
+    "previews": "Previews",
+    "previewsHint": "Rendered in the background and cached in the data folder; never written into your library.",
+    "clearThumbs": "Clear cache",
+    "thumbsCleared": "Preview cache cleared, rendering again…",
+    "thumbSummary": "{{done}} rendered · {{pending}} pending · {{failed}} failed"
   },
   "status": {
     "watching": "Watching {{path}}",
@@ -136,7 +182,9 @@
     "synced": "synced {{when}}",
     "offline": "{{path}} offline",
     "noRoots": "No library folder yet",
-    "total": "{{count}} projects · {{size}}"
+    "total": "{{count}} projects · {{size}}",
+    "thumbs": "Rendering previews {{done}}/{{total}}",
+    "thumbsUnavailable": "previews unavailable (no WebGL)"
   },
   "errors": {
     "sidecar_conflict": "project.yaml changed on disk. Reload before saving.",
@@ -144,7 +192,35 @@
     "not_found": "Not found. The library may have changed; try a rescan.",
     "root_exists": "This folder is already a library root.",
     "not_a_directory": "That path is not a folder.",
-    "generic": "Something went wrong: {{message}}"
+    "generic": "Something went wrong: {{message}}",
+    "invalid_name": "That name is not allowed as a folder name.",
+    "already_exists": "A file or folder with that name already exists.",
+    "not_allowed": "This action is not allowed here."
   },
-  "common": { "cancel": "Cancel", "close": "Close", "retry": "Retry", "loading": "Loading…" }
+  "common": {
+    "cancel": "Cancel",
+    "close": "Close",
+    "retry": "Retry",
+    "loading": "Loading…"
+  },
+  "favorites": {
+    "add": "Add to favorites",
+    "remove": "Remove from favorites"
+  },
+  "actions": {
+    "rename": "Rename",
+    "renameTitle": "Rename project folder",
+    "renameBody": "The folder on disk is renamed. Tags and metadata in project.yaml are kept.",
+    "folderName": "Folder name",
+    "renamed": "Renamed to {{name}}",
+    "delete": "Delete",
+    "deleteTitle": "Move “{{name}}” to the trash?",
+    "deleteBody": "The whole project folder goes to the recycle bin. You can restore it from there.",
+    "moveToTrash": "Move to trash",
+    "deleted": "“{{name}}” moved to trash",
+    "deleteFileTitle": "Move “{{name}}” to the trash?",
+    "deleteFileBody": "Only this file is moved. The project keeps its other files and metadata.",
+    "fileDeleted": "{{name}} moved to trash",
+    "projectGone": "The folder no longer contains a model and left the library."
+  }
 }

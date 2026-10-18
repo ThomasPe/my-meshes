@@ -52,6 +52,7 @@ pub fn run() {
             state::seed_test_fixture(app.handle());
             state::start_watchers(app.handle());
             state::spawn_watch_loop(app.handle().clone(), watch_rx);
+            state::spawn_poll_loop(app.handle().clone());
             Ok(())
         })
         .invoke_handler(tauri::generate_handler![
@@ -73,6 +74,17 @@ pub fn run() {
             commands::pick_folder,
             commands::get_ignore_patterns,
             commands::set_ignore_patterns,
+            commands::set_favorite,
+            commands::rename_project,
+            commands::delete_project,
+            commands::delete_file,
+            commands::thumb_queue,
+            commands::thumb_stats,
+            commands::store_thumbnail,
+            commands::store_embedded_thumbnail,
+            commands::thumbnail_failed,
+            commands::read_thumbnail,
+            commands::clear_thumbnails,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Meshkeep");

@@ -4,7 +4,8 @@
 export type SyncMode = 'watch' | 'poll' | 'manual';
 export type RootStatus = 'online' | 'offline' | 'unknown';
 export type FileKind = 'model' | 'image' | 'document' | 'attachment' | 'other';
-export type SortKey = 'modified' | 'title' | 'creator' | 'size';
+export type SortKey = 'modified' | 'title' | 'creator' | 'size' | 'added';
+export type ThumbSource = 'render' | 'image' | 'embedded';
 
 export interface LibraryRoot {
   id: string;
@@ -22,6 +23,8 @@ export interface FileEntry {
   kind: FileKind;
   size: number;
   modified: string;
+  slicer: string | null;
+  embedded_thumbnail: boolean;
 }
 
 export type SidecarState = { state: 'missing' } | { state: 'ok' } | { state: 'malformed'; message: string };
@@ -52,6 +55,10 @@ export interface Project {
   sidecar_stamp: SidecarStamp | null;
   warnings: string[];
   offline: boolean;
+  favorite: boolean;
+  added: string;
+  thumb: string | null;
+  slicer: string | null;
 }
 
 export interface ProjectSummary {
@@ -68,6 +75,10 @@ export interface ProjectSummary {
   modified: string;
   has_sidecar: boolean;
   offline: boolean;
+  favorite: boolean;
+  added: string;
+  thumb: string | null;
+  slicer: string | null;
 }
 
 export interface ListQuery {
@@ -75,6 +86,7 @@ export interface ListQuery {
   path_prefix?: string | null;
   tags?: string[];
   text?: string | null;
+  favorites?: boolean;
   sort?: SortKey;
   limit?: number | null;
   offset?: number | null;
@@ -133,10 +145,23 @@ export interface AppInfo {
 export interface LibraryStats {
   projects: number;
   totalBytes: number;
+  favorites: number;
+}
+
+export interface ThumbJob {
+  project_id: string;
+  rel_path: string;
+  source: ThumbSource;
+}
+
+export interface ThumbStats {
+  pending: number;
+  done: number;
+  failed: number;
 }
 
 export interface AppError {
-  code: 'sidecar_conflict' | 'sidecar_invalid' | 'root_offline' | 'not_found' | 'root_exists' | 'not_a_directory' | 'invalid_pattern' | 'io' | 'index' | 'serde' | 'watch' | 'shell' | 'mock';
+  code: 'sidecar_conflict' | 'sidecar_invalid' | 'root_offline' | 'not_found' | 'root_exists' | 'not_a_directory' | 'invalid_pattern' | 'invalid_name' | 'already_exists' | 'not_allowed' | 'io' | 'index' | 'serde' | 'watch' | 'shell' | 'mock';
   message: string;
 }
 
@@ -144,4 +169,4 @@ export function isAppError(e: unknown): e is AppError {
   return typeof e === 'object' && e !== null && 'code' in e && 'message' in e;
 }
 
-export type LibraryChanged = { rootId: string; report: ScanReport | null; reason: 'scan' | 'watch' | 'root_removed'; error?: string };
+export type LibraryChanged = { rootId: string | null; report: ScanReport | null; reason: 'scan' | 'watch' | 'poll' | 'root_removed' | 'rename' | 'delete' | 'thumbs_cleared'; error?: string; oldId?: string; newId?: string };

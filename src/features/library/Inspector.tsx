@@ -1,17 +1,18 @@
-import { CloudOff, ExternalLink, Eye, FolderOpen } from 'lucide-react';
+import { CloudOff, ExternalLink, Eye, FolderOpen, Pencil, Star, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import type { ProjectActions } from '@/features/library/ProjectMenu';
 import { TagEditor } from '@/features/library/TagEditor';
 import { Thumb } from '@/features/library/Thumb';
-import { getBackend } from '@/lib/backend';
 import { reportError } from '@/lib/errors';
 import { formatBytes, formatDate, initials } from '@/lib/format';
 import { useProject, useRoots, useUpdateMetadata } from '@/lib/queries';
 import { navigate } from '@/lib/router';
 import type { ProjectSummary, TagCount } from '@/lib/types';
+import { cn } from '@/lib/utils';
 
 interface Props {
   selectedIds: string[];
@@ -19,9 +20,10 @@ interface Props {
   tagCounts: TagCount[];
   filterTitle: string;
   onTag: (tag: string) => void;
+  actions: ProjectActions;
 }
 
-export function Inspector({ selectedIds, visible, tagCounts, filterTitle, onTag }: Props) {
+export function Inspector({ selectedIds, visible, tagCounts, filterTitle, onTag, actions }: Props) {
   const { t, i18n } = useTranslation();
   const id = selectedIds.length === 1 ? selectedIds[0]! : null;
   const project = useProject(id);
@@ -67,6 +69,7 @@ export function Inspector({ selectedIds, visible, tagCounts, filterTitle, onTag 
   const root = roots.data?.find((r) => r.id === p.root_id);
   const dirPath = root ? `${root.path}${p.rel_path ? (root.path.includes('\\') ? '\\' : '/') + p.rel_path.replace(/\//g, root.path.includes('\\') ? '\\' : '/') : ''}` : p.rel_path;
   const sidecarBadge = p.sidecar.state === 'ok' ? <Badge variant="success">{t('inspector.sidecarOk')}</Badge> : p.sidecar.state === 'malformed' ? <Badge variant="warning" title={p.sidecar.message}>{t('inspector.sidecarMalformed')}</Badge> : <Badge variant="outline">{t('inspector.sidecarMissing')}</Badge>;
+  const summary: ProjectSummary = { id: p.id, root_id: p.root_id, rel_path: p.rel_path, title: p.title, creator: p.creator, tags: p.tags, thumbnail: p.thumbnail, file_count: p.files.length, model_count: p.model_count, total_bytes: p.total_bytes, modified: p.modified, has_sidecar: p.sidecar.state === 'ok', offline: p.offline, favorite: p.favorite, added: p.added, thumb: p.thumb, slicer: p.slicer };
 
   const saveTags = (tags: string[]) => {
     update.mutate({ id: p.id, update: { tags, expected_stamp: p.sidecar_stamp ?? null } }, {
@@ -78,12 +81,22 @@ export function Inspector({ selectedIds, visible, tagCounts, filterTitle, onTag 
   return (
     <ScrollArea className="h-full border-l border-border bg-panel" data-testid="inspector">
       <div className="p-5">
-        <Thumb className="mb-3.5 aspect-[5/3] rounded-[10px]">{p.offline && <Badge variant="outline" className="absolute right-2.5 top-2.5"><CloudOff />{t('library.offline')}</Badge>}</Thumb>
-        <h2 className="text-xl font-extrabold tracking-tight text-balance" data-testid="inspector-title">{p.title}</h2>
+        <Thumb thumb={p.thumb} projectId={p.id} className="mb-3.5 aspect-[5/3] overflow-hidden rounded-[10px]">
+          <span className="absolute right-2.5 top-2.5 flex gap-1">
+            {p.offline && <Badge variant="outline"><CloudOff />{t('library.offline')}</Badge>}
+            {p.slicer && <Badge variant="accent" title={p.slicer}>{t('library.slicerProject')}</Badge>}
+          </span>
+        </Thumb>
+        <div className="flex items-start gap-2">
+          <h2 className="min-w-0 flex-1 text-xl font-extrabold tracking-tight text-balance" data-testid="inspector-title">{p.title}</h2>
+          <Button size="icon-sm" variant="ghost" aria-pressed={p.favorite} aria-label={p.favorite ? t('favorites.remove') : t('favorites.add')} title={p.favorite ? t('favorites.remove') : t('favorites.add')} data-testid="inspector-favorite" onClick={() => actions.toggleFavorite(summary)} className={cn(p.favorite && 'text-warning')}><Star className={cn(p.favorite && 'fill-current')} /></Button>
+        </div>
         <div className="mb-3 break-all text-xs font-semibold text-muted-foreground">{dirPath}</div>
         <div className="mb-3 flex flex-wrap gap-2">
           <Button size="sm" onClick={() => navigate({ page: 'project', id: p.id })} data-testid="inspector-open"><Eye />{t('inspector.open')}</Button>
-          <Button size="sm" variant="outline" disabled={p.offline} onClick={() => getBackend().then((b) => b.revealProject(p.id)).catch(reportError)} title={t('inspector.reveal')}><FolderOpen />{t('inspector.reveal')}</Button>
+          <Button size="sm" variant="outline" disabled={p.offline} onClick={() => actions.reveal(summary)} title={t('inspector.reveal')}><FolderOpen />{t('inspector.reveal')}</Button>
+          <Button size="icon-sm" variant="outline" disabled={p.offline || p.rel_path === ''} onClick={() => actions.rename(summary)} title={t('actions.rename')} aria-label={t('actions.rename')} data-testid="inspector-rename"><Pencil /></Button>
+          <Button size="icon-sm" variant="outline" disabled={p.offline || p.rel_path === ''} onClick={() => actions.remove(summary)} title={t('actions.delete')} aria-label={t('actions.delete')} data-testid="inspector-delete" className="text-destructive hover:text-destructive"><Trash2 /></Button>
         </div>
         {p.offline && root && <p className="mb-3 rounded-[10px] bg-warning-soft p-3 text-xs font-semibold text-warning">{t('inspector.offlineHint', { path: root.path })}</p>}
         <dl className="grid grid-cols-[92px_minmax(0,1fr)] gap-x-3 gap-y-2 text-[13px]">
@@ -92,6 +105,7 @@ export function Inspector({ selectedIds, visible, tagCounts, filterTitle, onTag 
           <dt className="text-muted-foreground">{t('inspector.source')}</dt><dd className="truncate font-semibold">{p.source_url ? <a className="inline-flex items-center gap-1 text-primary hover:underline" href={p.source_url} target="_blank" rel="noreferrer">{p.source_url.replace(/^https?:\/\/(www\.)?/, '')}<ExternalLink className="size-3" /></a> : <span className="text-muted-foreground">{t('inspector.notSet')}</span>}</dd>
           <dt className="text-muted-foreground">{t('inspector.material')}</dt><dd className="truncate font-semibold">{p.material ?? <span className="text-muted-foreground">{t('project.any')}</span>}{p.supports_required != null && <span className="text-muted-foreground"> · {p.supports_required ? t('inspector.supports') : t('inspector.noSupports')}</span>}</dd>
           <dt className="text-muted-foreground">{t('inspector.modified')}</dt><dd className="font-semibold">{formatDate(p.modified, i18n.language)}</dd>
+          <dt className="text-muted-foreground">{t('inspector.added')}</dt><dd className="font-semibold">{formatDate(p.added, i18n.language)}</dd>
           <dt className="text-muted-foreground">{t('inspector.sidecar')}</dt><dd>{sidecarBadge}</dd>
         </dl>
         <Section title={t('inspector.tags')}>

@@ -7,9 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getBackend } from '@/lib/backend';
 import { isAppError, type FileEntry } from '@/lib/types';
-import StlWorker from '@/workers/stl-worker?worker';
-
-const SUPPORTED = new Set(['stl']);
+import { PREVIEWABLE } from '@/lib/mesh';
+import MeshWorker from '@/workers/mesh-worker?worker';
 
 /** Three.js viewport for one model file. Loads bytes through the backend, parses in a worker, renders on demand. */
 export function Viewer({ projectId, files, offline }: { projectId: string; files: FileEntry[]; offline: boolean }) {
@@ -67,7 +66,7 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
     const file = models.find((m) => m.rel_path === current);
     if (!file) return;
     const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
-    if (!SUPPORTED.has(ext)) { setStatus({ kind: 'unsupported', text: t('project.unsupported', { ext: ext.toUpperCase() }) }); return; }
+    if (!PREVIEWABLE.has(ext)) { setStatus({ kind: 'unsupported', text: t('project.unsupported', { ext: ext.toUpperCase() }) }); return; }
     if (offline) { setStatus({ kind: 'error', text: t('errors.root_offline') }); return; }
     let cancelled = false;
     setStatus({ kind: 'loading', text: t('project.loading', { name: file.name }) });
@@ -75,10 +74,10 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
       const b = await getBackend();
       const buf = await b.readProjectFile(projectId, file.rel_path);
       const parsed = await new Promise<{ positions: Float32Array; normals: Float32Array; triangles: number }>((res, rej) => {
-        const w = new StlWorker();
+        const w = new MeshWorker();
         w.onmessage = (e) => { w.terminate(); e.data.ok ? res(e.data) : rej(new Error(e.data.error)); };
         w.onerror = (e) => { w.terminate(); rej(e.error ?? new Error(e.message)); };
-        w.postMessage({ buffer: buf }, [buf]);
+        w.postMessage({ buffer: buf, ext }, [buf]);
       });
       if (cancelled) return;
       if (s.mesh) { s.scene.remove(s.mesh); s.mesh.geometry.dispose(); }

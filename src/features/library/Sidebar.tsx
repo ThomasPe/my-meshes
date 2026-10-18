@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Folder, HardDrive, LayoutGrid, Plus, Tag } from 'lucide-react';
+import { ChevronDown, ChevronRight, Clock, Folder, HardDrive, LayoutGrid, Plus, Star, Tag } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -32,6 +32,12 @@ export function Sidebar() {
           <h3 className="mb-1.5 px-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t('nav.library')}</h3>
           <button type="button" data-testid="filter-all" className={cn(itemClass, filter.kind === 'all' && activeClass)} onClick={() => setFilter({ kind: 'all' })}>
             <LayoutGrid />{t('library.all')}<span className="ml-auto text-xs tabular text-muted-foreground">{stats.data?.projects ?? ''}</span>
+          </button>
+          <button type="button" data-testid="filter-recent" className={cn(itemClass, filter.kind === 'recent' && activeClass)} onClick={() => setFilter({ kind: 'recent' })}>
+            <Clock />{t('library.recent')}
+          </button>
+          <button type="button" data-testid="filter-favorites" className={cn(itemClass, filter.kind === 'favorites' && activeClass)} onClick={() => setFilter({ kind: 'favorites' })}>
+            <Star />{t('library.favorites')}<span className="ml-auto text-xs tabular text-muted-foreground" data-testid="favorites-count">{stats.data?.favorites ?? ''}</span>
           </button>
         </section>
         <section>

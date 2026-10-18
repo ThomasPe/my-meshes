@@ -7,6 +7,7 @@
 //! - Sidecar writes are atomic (temp file + rename) and refuse to overwrite external changes.
 //! - A missing root is reported as offline; its projects are never deleted from the index.
 
+pub mod collections;
 pub mod error;
 pub mod hash;
 pub mod index;
@@ -14,8 +15,10 @@ pub mod model;
 pub mod roots;
 pub mod scan;
 pub mod sidecar;
+pub mod threemf;
+pub mod thumbs;
 pub mod watch;
 
 mod engine;
-pub use engine::{Engine, ScanProgress, UpdateMetadata};
+pub use engine::{Deleter, Engine, ScanProgress, UpdateMetadata};
 pub use error::{EngineError, Result};

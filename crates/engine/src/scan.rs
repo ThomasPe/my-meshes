@@ -8,6 +8,7 @@
 use crate::error::{EngineError, Result};
 use crate::model::{FileEntry, FileKind, Project, SidecarState, SIDECAR_FILE_NAME};
 use crate::sidecar;
+use crate::threemf;
 use globset::{Glob, GlobSet, GlobSetBuilder};
 use std::path::{Component, Path};
 use time::OffsetDateTime;
@@ -110,6 +111,11 @@ fn dir_has_project_marker(dir: &Path, ignore: &IgnoreMatcher, root: &Path) -> st
     Ok(false)
 }
 
+/// Whether `dir` still qualifies as a project (directly contains a model or a sidecar).
+pub fn is_project_dir(dir: &Path, ignore: &IgnoreMatcher, root: &Path) -> bool {
+    dir_has_project_marker(dir, ignore, root).unwrap_or(false)
+}
+
 /// Collects every file beneath `project_dir` into a project. Does not write anything.
 pub fn read_project(root_id: &str, root: &Path, project_dir: &Path, ignore: &IgnoreMatcher, out: &mut ScanOutcome) -> Result<Project> {
     let rel_dir = project_dir.strip_prefix(root).unwrap_or(Path::new(""));
@@ -167,12 +173,25 @@ pub fn read_project(root_id: &str, root: &Path, project_dir: &Path, ignore: &Ign
             newest = modified;
         }
         total += meta.len();
+        let (slicer, embedded_thumbnail) = if kind == FileKind::Model && name.to_ascii_lowercase().ends_with(".3mf") {
+            match threemf::inspect(path) {
+                Ok(info) => (info.slicer, info.thumbnail_entry.is_some()),
+                Err(e) => {
+                    warnings.push(format!("{rel_in_project}: not a readable 3MF ({e})"));
+                    (None, false)
+                }
+            }
+        } else {
+            (None, false)
+        };
         files.push(FileEntry {
             rel_path: rel_in_project,
             name,
             kind,
             size: meta.len(),
             modified,
+            slicer,
+            embedded_thumbnail,
         });
     }
     out.files += files.len() as u32;
@@ -193,11 +212,19 @@ pub fn read_project(root_id: &str, root: &Path, project_dir: &Path, ignore: &Ign
     let md = sidecar.as_ref().map(|s| s.metadata.clone()).unwrap_or_default();
     let pr = sidecar.as_ref().map(|s| s.printing.clone()).unwrap_or_default();
     let model_count = files.iter().filter(|f| f.kind == FileKind::Model).count() as u32;
+    let dir_meta = std::fs::metadata(project_dir).ok();
     if newest == OffsetDateTime::UNIX_EPOCH {
-        if let Ok(m) = std::fs::metadata(project_dir) {
-            newest = modified_of(&m);
+        if let Some(m) = &dir_meta {
+            newest = modified_of(m);
         }
     }
+    // "Added" is when the directory appeared: creation time where the file system has one
+    // (NTFS, APFS), otherwise the directory's own mtime.
+    let added = dir_meta
+        .as_ref()
+        .and_then(|m| m.created().ok().map(OffsetDateTime::from).or_else(|| Some(modified_of(m))))
+        .unwrap_or(newest);
+    let slicer = files.iter().find_map(|f| f.slicer.clone());
     Ok(Project {
         id: Project::make_id(root_id, &rel_path),
         root_id: root_id.to_string(),
@@ -219,6 +246,10 @@ pub fn read_project(root_id: &str, root: &Path, project_dir: &Path, ignore: &Ign
         sidecar_stamp: None,
         warnings,
         offline: false,
+        favorite: false,
+        added,
+        thumb: None,
+        slicer,
     })
 }
 
@@ -312,6 +343,29 @@ mod tests {
         assert_eq!(only.sidecar, SidecarState::Ok);
         assert_eq!(arm.sidecar, SidecarState::Missing);
         assert_eq!(arm.title, "Arm v4");
+        assert!(arm.added != OffsetDateTime::UNIX_EPOCH);
+    }
+
+    #[test]
+    fn slicer_3mf_is_detected_and_bad_3mf_is_a_warning() {
+        let t = tempfile::tempdir().unwrap();
+        let r = t.path();
+        touch(&r.join("P/part.stl"), 10);
+        crate::threemf::tests::write_3mf(
+            &r.join("P/plate.3mf"),
+            &[
+                ("Metadata/Slic3r_PE.config", b"x"),
+                ("Metadata/thumbnail.png", crate::threemf::tests::TINY_PNG),
+            ],
+        );
+        touch(&r.join("P/broken.3mf"), 20);
+        let out = scan_root("r1", r, &ScanOptions::default(), |_| {}).unwrap();
+        let p = &out.projects[0];
+        assert_eq!(p.slicer.as_deref(), Some("PrusaSlicer"));
+        let plate = p.files.iter().find(|f| f.name == "plate.3mf").unwrap();
+        assert!(plate.embedded_thumbnail);
+        assert_eq!(p.model_count, 3);
+        assert!(p.warnings.iter().any(|w| w.contains("broken.3mf")), "{:?}", p.warnings);
     }
 
     #[test]

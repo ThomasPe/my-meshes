@@ -77,6 +77,12 @@ pub struct FileEntry {
     pub size: u64,
     #[serde(with = "time::serde::rfc3339")]
     pub modified: OffsetDateTime,
+    /// For 3MF files written by a slicer: which one (e.g. "PrusaSlicer", "Bambu Studio / OrcaSlicer").
+    #[serde(default)]
+    pub slicer: Option<String>,
+    /// 3MF with an embedded preview image (used as the thumbnail without rendering).
+    #[serde(default)]
+    pub embedded_thumbnail: bool,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
@@ -197,6 +203,51 @@ pub struct Project {
     /// Non-fatal findings from the scanner, e.g. a nested project.yaml.
     pub warnings: Vec<String>,
     pub offline: bool,
+    /// User favorite (stored in `collections.json`, not in the sidecar).
+    #[serde(default)]
+    pub favorite: bool,
+    /// When the project directory appeared on disk (creation time, falling back to modified).
+    #[serde(default = "epoch", with = "time::serde::rfc3339")]
+    pub added: OffsetDateTime,
+    /// Cache key of the rendered/extracted thumbnail, `None` until generated or when stale.
+    #[serde(default)]
+    pub thumb: Option<String>,
+    /// Slicer badge, derived from the first slicer-written 3MF in the project.
+    #[serde(default)]
+    pub slicer: Option<String>,
+}
+
+pub(crate) fn epoch() -> OffsetDateTime {
+    OffsetDateTime::UNIX_EPOCH
+}
+
+/// Where a project's thumbnail comes from.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ThumbSource {
+    /// Render the model file in `rel_path` (STL, OBJ, 3MF).
+    Render,
+    /// Use the image file in `rel_path` (sidecar `thumbnail:` or the project's own photo).
+    Image,
+    /// Extract the preview embedded in the 3MF in `rel_path`; no rendering needed.
+    Embedded,
+}
+
+/// One pending thumbnail. The shell/frontend renders `Render` and `Image` jobs; the engine
+/// handles `Embedded` on its own (`Engine::store_embedded_thumbnail`).
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ThumbJob {
+    pub project_id: String,
+    pub rel_path: String,
+    pub source: ThumbSource,
+}
+
+/// Rough shape of the thumbnail backlog for the status bar.
+#[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
+pub struct ThumbStats {
+    pub pending: u32,
+    pub done: u32,
+    pub failed: u32,
 }
 
 impl Project {
@@ -225,6 +276,14 @@ pub struct ProjectSummary {
     pub modified: OffsetDateTime,
     pub has_sidecar: bool,
     pub offline: bool,
+    #[serde(default)]
+    pub favorite: bool,
+    #[serde(default = "epoch", with = "time::serde::rfc3339")]
+    pub added: OffsetDateTime,
+    #[serde(default)]
+    pub thumb: Option<String>,
+    #[serde(default)]
+    pub slicer: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -239,6 +298,9 @@ pub struct ListQuery {
     /// Full-text search over title, creator, description, tags, file names.
     #[serde(default)]
     pub text: Option<String>,
+    /// Only favorites.
+    #[serde(default)]
+    pub favorites: bool,
     #[serde(default)]
     pub sort: SortKey,
     #[serde(default)]
@@ -255,6 +317,8 @@ pub enum SortKey {
     Title,
     Creator,
     Size,
+    /// Newest additions first (directory creation time).
+    Added,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

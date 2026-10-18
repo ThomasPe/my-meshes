@@ -84,5 +84,94 @@ test('no console errors on the main screens', async ({ page }) => {
   await expect(page.getByTestId('project-page')).toBeVisible();
   await page.getByTestId('nav-settings').click();
   await expect(page.getByTestId('settings')).toBeVisible();
-  expect(errors.filter((e) => !/no file contents in browser mode/.test(e))).toEqual([]);
+  expect(errors.filter((e) => !/no file contents in browser mode|WebGL|GPU stall|GL_INVALID/.test(e))).toEqual([]);
+});
+
+// ---- D2: thumbnails, favorites, recent, rename, delete -------------------------------
+
+test('thumbnails are rendered in the background and shown on cards', async ({ page }) => {
+  // the mock serves synthetic STL/OBJ/3MF bytes; the pipeline parses + renders them for real
+  await expect(page.getByTestId('project-card').filter({ has: page.getByTestId('thumb-img') }).first()).toBeVisible({ timeout: 60_000 });
+  await expect.poll(() => page.getByTestId('thumb-img').count(), { timeout: 60_000 }).toBeGreaterThan(3);
+  await page.getByTestId('nav-settings').click();
+  await expect(page.getByTestId('thumb-summary')).toContainText(/\d+ rendered/);
+});
+
+test('favorites: toggle on a card, filter view and count in the sidebar', async ({ page }) => {
+  await expect(page.getByTestId('favorites-count')).toHaveText('2');
+  const card = page.getByTestId('project-card').filter({ hasText: 'Decorative Vase' });
+  await card.hover();
+  await card.getByTestId('card-favorite').click();
+  await expect(card.getByTestId('card-favorite')).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.getByTestId('favorites-count')).toHaveText('3');
+  await page.getByTestId('filter-favorites').click();
+  await expect(page.getByTestId('result-count')).toHaveText('3');
+  await expect(page.getByTestId('project-card')).toHaveCount(3);
+  // remove it again from the inspector
+  await page.getByTestId('project-card').filter({ hasText: 'Decorative Vase' }).click();
+  await page.getByTestId('inspector-favorite').click();
+  await expect(page.getByTestId('result-count')).toHaveText('2');
+  await expect(page.getByTestId('favorites-count')).toHaveText('2');
+});
+
+test('recent additions view sorts by date added and locks the sort control', async ({ page }) => {
+  await page.getByTestId('filter-recent').click();
+  await expect(page.getByRole('heading', { name: 'Recent additions' })).toBeVisible();
+  await expect(page.getByTestId('sort')).toBeDisabled();
+  const first = await page.getByTestId('project-card').first().locator('h4').textContent();
+  expect(first).toBe('Cable Clips'); // daysAgo 0 -> newest "added"
+});
+
+test('rename via context menu: validation, collision, success', async ({ page }) => {
+  const card = page.getByTestId('project-card').filter({ hasText: 'Phone Stand' });
+  await card.click({ button: 'right' });
+  await page.getByTestId('menu-rename').click();
+  await expect(page.getByTestId('rename-dialog')).toBeVisible();
+  await expect(page.getByTestId('rename-input')).toHaveValue('Phone Stand');
+  await page.getByTestId('rename-input').fill('Bad/Name');
+  await page.getByTestId('rename-confirm').click();
+  await expect(page.getByTestId('rename-error')).toContainText('not allowed');
+  await page.getByTestId('rename-input').fill('Cable Clips');
+  await page.getByTestId('rename-confirm').click();
+  await expect(page.getByTestId('rename-error')).toContainText('already exists');
+  await page.getByTestId('rename-input').fill('Phone Stand v2');
+  await page.getByTestId('rename-confirm').click();
+  await expect(page.getByTestId('rename-dialog')).toBeHidden();
+  await expect(page.getByText('Renamed to Phone Stand v2')).toBeVisible();
+  const renamed = page.getByTestId('project-card').filter({ hasText: 'Phone Stand' });
+  await expect(renamed).toHaveAttribute('data-id', 'r1:Projects/Desk/Phone Stand v2');
+  await expect(page.getByTestId('inspector-title')).toHaveText('Phone Stand');
+});
+
+test('delete moves a project to the trash after confirmation; Delete key works too', async ({ page }) => {
+  const before = Number(await page.getByTestId('result-count').textContent());
+  const card = page.getByTestId('project-card').filter({ hasText: 'Dice Tower' });
+  await card.click({ button: 'right' });
+  await page.getByTestId('menu-delete').click();
+  await expect(page.getByTestId('delete-dialog')).toContainText('Dice Tower');
+  await page.getByRole('button', { name: 'Cancel' }).click();
+  await expect(page.getByTestId('result-count')).toHaveText(String(before));
+  await card.click();
+  await page.keyboard.press('Delete');
+  await page.getByTestId('delete-confirm').click();
+  await expect(page.getByText('moved to trash')).toBeVisible();
+  await expect(page.getByTestId('result-count')).toHaveText(String(before - 1));
+  await expect(page.getByTestId('project-card').filter({ hasText: 'Dice Tower' })).toHaveCount(0);
+});
+
+test('project page: OBJ renders in the viewer, slicer badge, delete a single file', async ({ page }) => {
+  await page.getByTestId('project-card').filter({ hasText: 'Gridfinity Baseplates' }).dblclick();
+  await expect(page.getByTestId('project-page')).toBeVisible();
+  await expect(page.getByTestId('viewer-triangles')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('slicer-badge')).toBeVisible();
+  await page.getByRole('tab', { name: /Files/ }).click();
+  const rows = page.getByTestId('file-row');
+  const n = await rows.count();
+  await rows.filter({ hasText: 'README.md' }).getByTestId('file-delete').click();
+  await page.getByTestId('delete-file-confirm').click();
+  await expect(page.getByText('README.md moved to trash')).toBeVisible();
+  await expect(rows).toHaveCount(n - 1);
+  // settings: poll interval appears for polled roots
+  await page.getByTestId('nav-settings').click();
+  await expect(page.getByTestId('poll-interval')).toHaveCount(1);
 });

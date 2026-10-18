@@ -1,5 +1,5 @@
 // Minimal STL parser (binary + ASCII). Used inside a Web Worker; no DOM access.
-export interface ParsedMesh { positions: Float32Array; normals: Float32Array; triangles: number }
+import type { ParsedMesh } from './types';
 
 export function parseStl(buffer: ArrayBuffer): ParsedMesh {
   if (buffer.byteLength >= 84) {

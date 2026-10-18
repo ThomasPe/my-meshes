@@ -7,7 +7,8 @@ are binding. This file is the operating manual.
 
 - **Shell:** Tauri 2 (`src-tauri/`), Rust 2021. Commands are thin wrappers over the engine.
 - **Engine:** `crates/engine` (`meshkeep-engine`), shell-agnostic. Scanner, sidecars, SQLite
-  index with FTS5, watcher, hashing. No Tauri imports allowed here.
+  index with FTS5, watcher, hashing, 3MF inspection, thumbnail cache bookkeeping, favorites
+  (`collections.json`), rename and trash-delete. No Tauri imports allowed here.
 - **Frontend:** React 19 + TypeScript + Vite 7, Tailwind CSS 4, shadcn-style components in
   `src/components/ui` (copied source, Radix primitives), TanStack Query + Virtual, zustand,
   i18next, Three.js. Visual direction D "Gallery" (ADR-0002); tokens in `src/styles/globals.css`.
@@ -37,9 +38,15 @@ npm run tauri:build:e2e && npm run test:e2e   # real-app E2E (Windows/macOS/Linu
    with explicit capabilities; no `fs` plugin exposure.
 5. **Every user-facing string goes through `t()`**, and `de.json` mirrors `en.json`
    (a unit test enforces parity).
-6. **Heavy work stays off the UI thread:** geometry parsing in Web Workers, hashing and
+6. **Heavy work stays off the UI thread:** geometry parsing and thumbnail rendering in Web
+   Workers (main-thread fallback only where a webview has no WebGL in workers), hashing and
    scanning in Rust. Render the viewport on demand, not in a free-running loop.
 7. **Stable selectors:** interactive elements that tests touch carry `data-testid`.
+8. **Deletes go to the OS trash** (`trash` crate), never `remove_dir_all`, and only after a
+   confirmation in the UI. Tests inject a plain remover via `Engine::set_deleter`.
+9. **Thumbnails are a cache, never library content.** PNGs live in `<data dir>/thumbs/`,
+   keyed per project + source file, invalidated by source size/mtime (see
+   `docs/spec/02-domain-model.md`). The frontend reads them through `read_thumbnail` only.
 
 ## Definition of done for a backlog item
 
@@ -59,8 +66,10 @@ behaviour: engine unit test > UI test in browser mode > real-app E2E.
 `--test-mode` or `MESHKEEP_TEST_MODE=1` isolates app data (`MESHKEEP_DATA_DIR` or a temp
 dir), seeds and scans `MESHKEEP_FIXTURE_ROOT` if set, and lets `MESHKEEP_PICK_FOLDER`
 answer the native folder picker. `fixtures/library` is the deterministic sample library:
-tiny ASCII STLs, one proper sidecar, one malformed sidecar, one nested sidecar, an
-attachment, ignored files.
+tiny ASCII STLs, an OBJ, a PrusaSlicer-style 3MF with an embedded preview, one proper
+sidecar, one malformed sidecar, one nested sidecar, an attachment, ignored files.
+Browser mode (`npm run dev`, Playwright) uses the mock backend, which synthesizes STL, OBJ,
+3MF and image bytes so parsers, viewer and the thumbnail pipeline run for real there too.
 
 ## Conventions
 
@@ -80,9 +89,11 @@ attachment, ignored files.
 | Area | Path |
 |---|---|
 | Spec, backlog, ADRs, mockups, click dummy | `docs/` |
-| Engine | `crates/engine/src/{scan,sidecar,index,watch,roots,engine}.rs` |
+| Engine | `crates/engine/src/{scan,sidecar,index,watch,roots,collections,threemf,thumbs,engine}.rs` |
 | Shell commands and events | `src-tauri/src/{commands,state}.rs` |
 | Backend facade (Tauri vs mock) | `src/lib/backend/` |
+| Mesh parsers (STL, OBJ, 3MF) and workers | `src/lib/mesh/`, `src/workers/{mesh,thumb}-worker.ts` |
+| Thumbnail pipeline (queue, renderer, object-URL cache) | `src/lib/thumbs/` |
 | Screens | `src/features/{welcome,library,project,settings}` |
 | Design tokens | `src/styles/globals.css` |
 | i18n | `src/i18n/{en,de}.json` |

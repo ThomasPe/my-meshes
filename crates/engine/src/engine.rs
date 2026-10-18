@@ -1,15 +1,18 @@
 //! The facade the application shell talks to. One instance per app; not thread-safe by
 //! itself (wrap in a mutex in the shell), but every operation is short except `scan_root`.
 
+use crate::collections::CollectionsStore;
 use crate::error::{EngineError, Result};
-use crate::index::Index;
+use crate::index::{Index, ThumbSourceState};
 use crate::model::{
     FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, RootStatus, ScanReport, Sidecar, SidecarStamp, SyncMode, TagCount,
+    ThumbJob, ThumbSource, ThumbStats,
 };
 use crate::roots::RootsStore;
 use crate::scan::{self, IgnoreMatcher, ScanOptions};
 use crate::sidecar;
 use crate::watch::{RootWatcher, WatchEvent};
+use crate::{threemf, thumbs};
 use std::path::{Component, Path, PathBuf};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -41,11 +44,21 @@ pub struct UpdateMetadata {
     pub force: bool,
 }
 
+/// How files leave a library. The default moves them to the OS trash / recycle bin
+/// (IMP-5); tests inject a plain remove.
+pub type Deleter = Box<dyn Fn(&Path) -> std::io::Result<()> + Send>;
+
+fn trash_deleter() -> Deleter {
+    Box::new(|p: &Path| trash::delete(p).map_err(|e| std::io::Error::other(e.to_string())))
+}
+
 pub struct Engine {
     data_dir: PathBuf,
     roots: RootsStore,
     index: Index,
+    collections: CollectionsStore,
     scan_opts: ScanOptions,
+    deleter: Deleter,
 }
 
 impl Engine {
@@ -53,16 +66,24 @@ impl Engine {
         std::fs::create_dir_all(data_dir).map_err(crate::error::io_err(data_dir))?;
         let roots = RootsStore::open(data_dir)?;
         let index = Index::open(&data_dir.join("index.sqlite"))?;
+        let collections = CollectionsStore::open(data_dir)?;
         Ok(Engine {
             data_dir: data_dir.to_path_buf(),
             roots,
             index,
+            collections,
             scan_opts: ScanOptions::default(),
+            deleter: trash_deleter(),
         })
     }
 
     pub fn data_dir(&self) -> &Path {
         &self.data_dir
+    }
+
+    /// Replaces the trash-based deleter (tests, or a future "delete permanently" setting).
+    pub fn set_deleter(&mut self, deleter: Deleter) {
+        self.deleter = deleter;
     }
 
     pub fn ignore_patterns(&self) -> &[String] {
@@ -108,6 +129,21 @@ impl Engine {
         })
     }
 
+    /// Roots in poll mode whose interval has elapsed since the last scan (LIB-4). The shell
+    /// calls this on a timer and scans what comes back.
+    pub fn poll_due(&self, now: OffsetDateTime) -> Vec<String> {
+        self.roots
+            .list()
+            .iter()
+            .filter(|r| r.mode == SyncMode::Poll && r.status != RootStatus::Offline)
+            .filter(|r| match r.last_scan_at {
+                None => true,
+                Some(last) => now - last >= Duration::from_secs(r.poll_interval_secs.max(30)),
+            })
+            .map(|r| r.id.clone())
+            .collect()
+    }
+
     // ---- scanning ---------------------------------------------------------------------
 
     /// Full scan of one root; replaces its index rows. A missing directory marks the root
@@ -115,7 +151,7 @@ impl Engine {
     pub fn scan_root(&mut self, id: &str, mut progress: impl FnMut(ScanProgress)) -> Result<ScanReport> {
         let root = self.root(id)?;
         let started = Instant::now();
-        let outcome = match scan::scan_root(&root.id, &root.path, &self.scan_opts, |n| {
+        let mut outcome = match scan::scan_root(&root.id, &root.path, &self.scan_opts, |n| {
             progress(ScanProgress {
                 root_id: id.to_string(),
                 projects_found: n,
@@ -129,6 +165,9 @@ impl Engine {
             }
             Err(e) => return Err(e),
         };
+        for p in &mut outcome.projects {
+            p.favorite = self.collections.is_favorite(&p.id);
+        }
         self.index.rebuild_root(id, &outcome.projects)?;
         self.roots.update(id, |r| {
             r.status = RootStatus::Online;
@@ -187,6 +226,10 @@ impl Engine {
         self.index.count(root_id)
     }
 
+    pub fn favorite_count(&self) -> Result<u32> {
+        self.index.favorite_count()
+    }
+
     pub fn project_dir(&self, p: &Project) -> Result<PathBuf> {
         let root = self.root(&p.root_id)?;
         Ok(if p.rel_path.is_empty() {
@@ -194,6 +237,17 @@ impl Engine {
         } else {
             root.path.join(&p.rel_path)
         })
+    }
+
+    fn online_project(&self, id: &str) -> Result<Project> {
+        let p = self
+            .index
+            .project(id)?
+            .ok_or_else(|| EngineError::ProjectNotFound(id.to_string()))?;
+        if p.offline {
+            return Err(EngineError::RootOffline(self.root(&p.root_id)?.path));
+        }
+        Ok(p)
     }
 
     /// Absolute path of a file inside a project. Refuses anything that escapes the project.
@@ -221,19 +275,100 @@ impl Engine {
         Ok(full)
     }
 
+    // ---- favorites --------------------------------------------------------------------
+
+    pub fn set_favorite(&mut self, project_id: &str, favorite: bool) -> Result<Project> {
+        let _ = self
+            .index
+            .project(project_id)?
+            .ok_or_else(|| EngineError::ProjectNotFound(project_id.to_string()))?;
+        self.collections.set_favorite(project_id, favorite)?;
+        self.index.set_favorite(project_id, favorite)?;
+        self.get_project(project_id)
+    }
+
+    // ---- thumbnails -------------------------------------------------------------------
+
+    pub fn thumb_queue(&self, limit: u32) -> Result<Vec<ThumbJob>> {
+        self.index.thumb_queue(limit)
+    }
+
+    pub fn thumb_stats(&self) -> Result<ThumbStats> {
+        self.index.thumb_stats()
+    }
+
+    /// Absolute path of a cached thumbnail; the key is validated, never joined blindly.
+    pub fn thumbnail_path(&self, key: &str) -> Result<PathBuf> {
+        let path = thumbs::path_for(&self.data_dir, key)?;
+        if !path.is_file() {
+            return Err(EngineError::Io {
+                path,
+                source: std::io::Error::new(std::io::ErrorKind::NotFound, "thumbnail not found"),
+            });
+        }
+        Ok(path)
+    }
+
+    fn thumb_source_now(&self, project_id: &str) -> Result<ThumbSourceState> {
+        self.index
+            .thumb_source(project_id)?
+            .ok_or_else(|| EngineError::ProjectNotFound(format!("{project_id} has no thumbnail source")))
+    }
+
+    /// Stores a PNG rendered by the frontend for the project's current source. Returns the key.
+    pub fn store_thumbnail(&mut self, project_id: &str, png: &[u8]) -> Result<String> {
+        let src = self.thumb_source_now(project_id)?;
+        let key = thumbs::key_for(project_id, &src.rel_path);
+        thumbs::write(&self.data_dir, &key, png)?;
+        self.index.set_thumb(project_id, &src, Some(&key), None)?;
+        Ok(key)
+    }
+
+    /// For `ThumbSource::Embedded`: pulls the preview out of the 3MF and caches it. Falls back
+    /// to recording a failure (so the frontend can render instead) when the entry is unusable.
+    pub fn store_embedded_thumbnail(&mut self, project_id: &str) -> Result<String> {
+        let src = self.thumb_source_now(project_id)?;
+        if src.source != ThumbSource::Embedded {
+            return Err(EngineError::NotAllowed(format!(
+                "{project_id}: thumbnail source is not an embedded preview"
+            )));
+        }
+        let file = self.resolve_file(project_id, &src.rel_path)?;
+        let info = threemf::inspect(&file)?;
+        let entry = info
+            .thumbnail_entry
+            .ok_or_else(|| EngineError::NotAllowed(format!("{}: no embedded preview", src.rel_path)))?;
+        let png = threemf::read_entry(&file, &entry)?;
+        let key = thumbs::key_for(project_id, &src.rel_path);
+        thumbs::write(&self.data_dir, &key, &png)?;
+        self.index.set_thumb(project_id, &src, Some(&key), None)?;
+        Ok(key)
+    }
+
+    /// Records that this source cannot be thumbnailed right now (parse error, no WebGL...).
+    /// Not retried until the source file changes.
+    pub fn thumbnail_failed(&mut self, project_id: &str, reason: &str) -> Result<()> {
+        let src = self.thumb_source_now(project_id)?;
+        self.index.set_thumb(project_id, &src, None, Some(reason))
+    }
+
+    /// Drops the whole cache; everything re-enters the queue.
+    pub fn clear_thumbnails(&mut self) -> Result<()> {
+        self.index.clear_thumbs()?;
+        let dir = thumbs::cache_dir(&self.data_dir);
+        if dir.is_dir() {
+            std::fs::remove_dir_all(&dir).map_err(crate::error::io_err(&dir))?;
+        }
+        Ok(())
+    }
+
     // ---- writing ----------------------------------------------------------------------
 
     /// Applies a metadata change: writes (or lazily creates) project.yaml atomically, then
     /// re-reads the project directory and refreshes the index row. Optimistic UI lives in
     /// the frontend; this is the authoritative step that can fail with `SidecarConflict`.
     pub fn update_metadata(&mut self, project_id: &str, upd: UpdateMetadata) -> Result<Project> {
-        let current = self
-            .index
-            .project(project_id)?
-            .ok_or_else(|| EngineError::ProjectNotFound(project_id.to_string()))?;
-        if current.offline {
-            return Err(EngineError::RootOffline(self.root(&current.root_id)?.path));
-        }
+        let current = self.online_project(project_id)?;
         let dir = self.project_dir(&current)?;
         let (mut sc, on_disk) = match sidecar::read(&dir) {
             Ok(Some((sc, stamp))) => (sc, Some(stamp)),
@@ -291,15 +426,140 @@ impl Engine {
             sc.printing.notes = non_empty(v);
         }
         sidecar::write(&dir, &sc, if upd.force { current_stamp(&dir) } else { on_disk })?;
+        self.reindex_dir(&current.root_id, &dir)
+    }
 
-        let root = self.root(&current.root_id)?;
+    /// Re-reads one project directory and refreshes its index row.
+    fn reindex_dir(&mut self, root_id: &str, dir: &Path) -> Result<Project> {
+        let root = self.root(root_id)?;
         let ignore = IgnoreMatcher::new(&self.scan_opts.ignore)?;
         let mut out = scan::ScanOutcome::default();
-        let mut fresh = scan::read_project(&root.id, &root.path, &dir, &ignore, &mut out)?;
+        let mut fresh = scan::read_project(&root.id, &root.path, dir, &ignore, &mut out)?;
+        fresh.favorite = self.collections.is_favorite(&fresh.id);
         self.index.upsert_project(&fresh)?;
-        fresh.sidecar_stamp = sidecar::read(&dir).ok().flatten().map(|(_, s)| s);
+        fresh.sidecar_stamp = sidecar::read(dir).ok().flatten().map(|(_, s)| s);
+        // the cached thumbnail (if still valid for this file state) is known only to the index
+        fresh.thumb = self.index.project(&fresh.id)?.and_then(|p| p.thumb);
         Ok(fresh)
     }
+
+    /// Renames the project directory (META-5). Collisions are detected before anything is
+    /// touched; favorites and the cached thumbnail follow the project to its new id.
+    pub fn rename_project(&mut self, project_id: &str, new_name: &str) -> Result<Project> {
+        let new_name = validate_dir_name(new_name)?;
+        let current = self.online_project(project_id)?;
+        if current.rel_path.is_empty() {
+            return Err(EngineError::NotAllowed("the library root itself cannot be renamed".into()));
+        }
+        let old_dir = self.project_dir(&current)?;
+        let parent = old_dir
+            .parent()
+            .ok_or_else(|| EngineError::NotAllowed("project has no parent directory".into()))?
+            .to_path_buf();
+        let new_dir = parent.join(&new_name);
+        let old_name = old_dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        if old_name == new_name {
+            return self.get_project(project_id);
+        }
+        let case_only = old_name.eq_ignore_ascii_case(&new_name);
+        if new_dir.exists() && !case_only {
+            return Err(EngineError::AlreadyExists(new_name));
+        }
+        std::fs::rename(&old_dir, &new_dir).map_err(crate::error::io_err(&old_dir))?;
+
+        let new_rel = match current.rel_path.rsplit_once('/') {
+            Some((parent_rel, _)) => format!("{parent_rel}/{new_name}"),
+            None => new_name.clone(),
+        };
+        let new_id = Project::make_id(&current.root_id, &new_rel);
+        self.collections.rename(project_id, &new_id)?;
+        self.index.rename_thumb(project_id, &new_id)?;
+        self.index.remove_project(project_id)?;
+        self.reindex_dir(&current.root_id, &new_dir)
+    }
+
+    /// Moves the whole project directory to the trash (IMP-5) and forgets it.
+    pub fn delete_project(&mut self, project_id: &str) -> Result<()> {
+        let current = self.online_project(project_id)?;
+        if current.rel_path.is_empty() {
+            return Err(EngineError::NotAllowed(
+                "the library root itself cannot be deleted; remove it in settings".into(),
+            ));
+        }
+        let dir = self.project_dir(&current)?;
+        (self.deleter)(&dir).map_err(|e| EngineError::Io {
+            path: dir.clone(),
+            source: e,
+        })?;
+        self.collections.forget(project_id)?;
+        self.index.remove_project(project_id)?;
+        Ok(())
+    }
+
+    /// Moves one file of a project to the trash. Returns the refreshed project, or `None`
+    /// when the directory no longer qualifies as a project (no model, no sidecar) and was
+    /// dropped from the index.
+    pub fn delete_file(&mut self, project_id: &str, rel: &str) -> Result<Option<Project>> {
+        let current = self.online_project(project_id)?;
+        if Path::new(rel)
+            .file_name()
+            .map(|n| n == crate::model::SIDECAR_FILE_NAME)
+            .unwrap_or(false)
+        {
+            return Err(EngineError::NotAllowed("project.yaml is managed by the app".into()));
+        }
+        let path = self.resolve_file(project_id, rel)?;
+        (self.deleter)(&path).map_err(|e| EngineError::Io {
+            path: path.clone(),
+            source: e,
+        })?;
+        let dir = self.project_dir(&current)?;
+        let still_project = {
+            let ignore = IgnoreMatcher::new(&self.scan_opts.ignore)?;
+            let root = self.root(&current.root_id)?;
+            scan::is_project_dir(&dir, &ignore, &root.path)
+        };
+        if still_project {
+            Ok(Some(self.reindex_dir(&current.root_id, &dir)?))
+        } else {
+            self.collections.forget(project_id)?;
+            self.index.remove_project(project_id)?;
+            Ok(None)
+        }
+    }
+}
+
+/// Windows-safe directory names (the stricter platform wins so libraries stay portable).
+fn validate_dir_name(name: &str) -> Result<String> {
+    let n = name.trim();
+    if n.is_empty() {
+        return Err(EngineError::InvalidName("name is empty".into()));
+    }
+    if n == "." || n == ".." {
+        return Err(EngineError::InvalidName(n.into()));
+    }
+    if n.chars()
+        .any(|c| matches!(c, '/' | '\\' | ':' | '*' | '?' | '"' | '<' | '>' | '|') || c.is_control())
+    {
+        return Err(EngineError::InvalidName(format!(
+            "{n}: contains / \\ : * ? \" < > | or control characters"
+        )));
+    }
+    if n.ends_with('.') || n.ends_with(' ') {
+        return Err(EngineError::InvalidName(format!("{n}: must not end with a dot or space")));
+    }
+    if n.len() > 200 {
+        return Err(EngineError::InvalidName("name is longer than 200 bytes".into()));
+    }
+    let upper = n.split('.').next().unwrap_or("").to_ascii_uppercase();
+    const RESERVED: &[&str] = &[
+        "CON", "PRN", "AUX", "NUL", "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9", "LPT1", "LPT2", "LPT3", "LPT4",
+        "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    ];
+    if RESERVED.contains(&upper.as_str()) {
+        return Err(EngineError::InvalidName(format!("{n} is reserved on Windows")));
+    }
+    Ok(n.to_string())
 }
 
 fn non_empty(v: String) -> Option<String> {
@@ -324,4 +584,17 @@ fn stamp_of(m: &std::fs::Metadata) -> SidecarStamp {
 }
 fn current_stamp(dir: &Path) -> Option<SidecarStamp> {
     std::fs::metadata(sidecar::sidecar_path(dir)).ok().map(|m| stamp_of(&m))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::validate_dir_name;
+
+    #[test]
+    fn dir_names() {
+        assert_eq!(validate_dir_name("  Arm v5 ").unwrap(), "Arm v5");
+        for bad in ["", ".", "..", "a/b", "a\\b", "x:", "q?", "trailing.", "CON", "nul.txt"] {
+            assert!(validate_dir_name(bad).is_err(), "{bad:?} should be rejected");
+        }
+    }
 }

@@ -30,6 +30,12 @@ pub enum EngineError {
     Pattern(String),
     #[error("watch error: {0}")]
     Watch(String),
+    #[error("invalid name: {0}")]
+    InvalidName(String),
+    #[error("a file or folder named {0} already exists")]
+    AlreadyExists(String),
+    #[error("not allowed: {0}")]
+    NotAllowed(String),
 }
 
 pub type Result<T> = std::result::Result<T, EngineError>;
