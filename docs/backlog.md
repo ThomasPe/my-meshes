@@ -2,7 +2,7 @@
 
 Derived from the specification in `docs/spec/`. Items reference requirement IDs (LIB-1,
 META-2, …). The application shell is decided: **Tauri 2 with a Rust engine**
-(ADR-0001). The visual direction is D Gallery (ADR-0002); the component library is confirmed during the scaffold.
+(ADR-0001). The visual direction is D Gallery with shadcn/ui on Tailwind 4 (ADR-0002).
 
 Legend: every item is done only when its acceptance criteria are verified by an
 automated end-to-end check against the real desktop app (see `spec/04-quality.md`).
@@ -23,7 +23,7 @@ automated end-to-end check against the real desktop app (see `spec/04-quality.md
       1M-triangle mesh, 20 thumbnails in 660 ms with a 20 ms worst UI frame gap, all
       verdicts pass. Table in ADR-0001.
 - [x] Decide visual direction: D Gallery (ADR-0002 accepted).
-- [ ] **0.5 Click dummy review.** Walk through `docs/clickdummy/index.html` on all screens; collect changes to layout, wording and flows before the spike. Confirm the component library (Mantine default) during the scaffold.
+- [x] **0.5 Click dummy review:** accepted as is. Component library decided: shadcn/ui + Tailwind 4 (ADR-0002).
 - [ ] Answer the remaining items in `docs/open-questions.md` (Q4, Q5, Q10 before
       Epic 2; Q15 before the Store listing).
 
@@ -52,8 +52,8 @@ automated end-to-end check against the real desktop app (see `spec/04-quality.md
       (change, run targeted tests, inspect artifacts, fix, rerun) and the Rust/TS
       conventions; thin per-tool wrappers (Copilot, Claude Code) pointing at it.
 - [ ] **UI foundation.** Port the click dummy's tokens and shell (sidebar, main,
-      inspector, status bar) to the chosen component library; light/dark/system; i18n
-      wiring with en + de.
+      inspector, status bar) to shadcn/ui + Tailwind 4; light/dark/system; i18n wiring
+      with en + de.
 - [ ] **Logging.** Structured logging from engine and frontend to a rotating file in
       app-data (`tauri-plugin-log` or `tracing` + file appender).
 - [ ] **CI.** GitHub Actions on `windows-latest`: `cargo clippy`/`cargo test`, lint,

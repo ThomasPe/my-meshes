@@ -1,6 +1,6 @@
 # ADR-0002: UI framework and visual direction
 
-- Status: **accepted** 2026-10-17: **D Gallery** as the visual direction. Component library to be confirmed against the click dummy (Mantine is the default candidate; see Decision).
+- Status: **accepted** 2026-10-17 (direction D Gallery); component library decided 2026-10-18: **shadcn/ui on Tailwind CSS 4** (see Decision).
 - Date: 2026-10-17
 - Related: ADR-0001 (shell). Every option below works in Electron and Tauri.
 
@@ -103,11 +103,30 @@ collections with smart collection editor, activity, settings). It is plain HTML,
 and vanilla JavaScript with hash routing; its tokens (`:root` block) are the seed for
 the real design system.
 
-Component library: **Mantine** is the default candidate for D (rich component set
-including tree, tabs, combobox, notifications and modals; token-based theming; React).
-Confirm or replace it during the scaffold once the dummy has been reviewed; shadcn/ui
-with a 14 px radius token remains the fallback if Mantine's styling model fights the
-dummy's look.
+Component library (decided 2026-10-18): **shadcn/ui on Tailwind CSS 4, React 19**.
+Mantine was the alternative. shadcn wins on four points that matter here:
+
+1. The components are copied into the repo; the Gallery look (14 px radius, soft
+   shadows, pill chips, teal accent) is a token change, not a fight with a theme engine.
+2. Coding agents are most fluent in Tailwind + shadcn; this project is built mostly by
+   agents, so idiomatic first-try output is worth more than a larger built-in catalog.
+3. The click dummy is already CSS-custom-property and utility based; porting it to
+   Tailwind classes and shadcn primitives is mechanical.
+4. No runtime UI dependency whose major versions can change the look.
+
+What shadcn lacks and how it is filled:
+
+| Need | Library |
+|---|---|
+| Folder tree (sidebar) | Custom tree on Radix primitives (keyboard navigation, counters, offline marker, drop targets are app-specific anyway) |
+| Virtualized grid and list (10,000+ items) | TanStack Virtual |
+| Resizable sidebar / inspector | `react-resizable-panels` |
+| Toasts | `sonner` (shadcn's default) |
+| Command palette (Ctrl+K) | shadcn `Command` (cmdk) |
+| Icons | `lucide-react` |
+
+Mantine would be the choice for a closed system with forms, notifications and modals from
+one vendor and minimal assembly; that is not this project's constraint.
 
 ## Consequences
 
