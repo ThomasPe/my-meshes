@@ -29,63 +29,68 @@ automated end-to-end check against the real desktop app (see `spec/04-quality.md
 
 ## Phase 1: MVP, a local library manager with read, write and preview
 
+`[~]` = partially done, see the note.
+
 ### Epic 1: Scaffold & foundation (Tauri 2 + Rust)
-- [ ] **Repository layout.** Cargo workspace with `crates/engine` (shell-agnostic
+- [x] **Repository layout.** Cargo workspace with `crates/engine` (shell-agnostic
       library) and `src-tauri` (commands, events, capabilities); `src/` Vite +
       TypeScript frontend; `pnpm` or `npm` decided in Q17. `tauri dev` gives hot
       reload; `tauri build` produces the NSIS installer.
-- [ ] **Engine skeleton.** Crate with modules for roots, scan, watch, index, sidecar,
+- [x] **Engine skeleton.** (archive/hash modules minimal; `notify-debouncer-full`, `rusqlite` bundled FTS5, `serde_yaml_ng`, `globset`, `walkdir` chosen) Crate with modules for roots, scan, watch, index, sidecar,
       hash, archive; `cargo test` with fixture libraries under `fixtures/`. Candidate
       crates, to be verified at scaffold time: `notify` (+ polling backend), `rusqlite`
       with `bundled` and FTS5, `sha2` + `rayon`, `zip`, a maintained serde YAML crate,
       `walkdir`/`ignore` for scanning with glob ignores, `trash` for safe delete.
-- [ ] **Typed API.** Commands and events defined once (Rust structs with `serde`,
-      TypeScript types generated, e.g. via `specta`/`tauri-specta`); every command
-      covered by a Tauri capability; no `fs` plugin exposure to the frontend beyond
-      what registered roots need.
-- [ ] **Test harness.** Vitest for frontend logic; Playwright against the UI in a
+- [x] **Typed API.** Commands and events over `serde` structs; TypeScript types mirrored by
+      hand in `src/lib/types.ts` (generation via specta is a later refinement); no `fs`
+      plugin exposed to the frontend; raw binary IPC for file reads.
+- [x] **Test harness.** Vitest for frontend logic; Playwright against the UI in a
       browser with a mocked API; WebdriverIO + `tauri-driver` launching the real app in
       a deterministic test mode (`--test-mode` flag: temp app-data, fixture roots,
       updater off); failure artifacts (screenshots, logs, engine trace) kept; smoke
       test "window becomes interactive".
-- [ ] **Agent workflow.** `AGENTS.md` with the rules from the spec, the test loop
+- [x] **Agent workflow.** `AGENTS.md`, with thin pointers for Copilot and Claude Code. `AGENTS.md` with the rules from the spec, the test loop
       (change, run targeted tests, inspect artifacts, fix, rerun) and the Rust/TS
       conventions; thin per-tool wrappers (Copilot, Claude Code) pointing at it.
-- [ ] **UI foundation.** Port the click dummy's tokens and shell (sidebar, main,
-      inspector, status bar) to shadcn/ui + Tailwind 4; light/dark/system; i18n wiring
-      with en + de.
-- [ ] **Logging.** Structured logging from engine and frontend to a rotating file in
+- [x] **UI foundation.** Tokens and shell ported from the click dummy to Tailwind 4 +
+      shadcn-style components; light/dark/system; i18n en + de with a parity test.
+- [x] **Logging.** `tauri-plugin-log` to stdout and the app log dir. Structured logging from engine and frontend to a rotating file in
       app-data (`tauri-plugin-log` or `tracing` + file appender).
-- [ ] **CI.** GitHub Actions on `windows-latest`: `cargo clippy`/`cargo test`, lint,
-      Vitest, Playwright (browser), WebDriver smoke; NSIS installer artifact on tag.
+- [x] **CI.** `.github/workflows/ci.yml`: engine (fmt, clippy, test) and frontend
+      (typecheck, Vitest, Playwright UI) on Linux; e2e build + WebDriver E2E + release
+      build on Windows. Installer-on-tag still to do.
 - [ ] **Auto-update** (APP-9) via `tauri-plugin-updater` with signed manifests for
       private builds; compiled out of Store builds.
 - [ ] **MSIX packaging** (APP-11): scripted `MakeAppx` + `AppxManifest.xml` in CI with
       a Partner-Center-matching identity; side-load test on a clean VM.
 
 ### Epic 2: Library engine
-- [ ] **Library roots** (LIB-1).
-- [ ] **Scanner** (LIB-2): recursive, ignore list, never writes.
-- [ ] **Watcher** (LIB-3) and **fallback sync modes** (LIB-4).
-- [ ] **Offline handling** (LIB-5).
+- [x] **Library roots** (LIB-1).
+- [x] **Scanner** (LIB-2): recursive, ignore list, never writes.
+- [~] **Watcher** (LIB-3) done (debounced, whole-root rescan); **poll mode** (LIB-4) is a
+      setting without a timer yet.
+- [x] **Offline handling** (LIB-5).
 - [ ] **Sync status & background activity** (LIB-6, LIB-7, APP-7).
-- [ ] **Sidecar read/write** (META-1..4): parsing, lazy creation, optimistic save,
-      conflict detection.
+- [x] **Sidecar read/write** (META-1..4): parsing, lazy creation, optimistic save,
+      conflict detection with reload/overwrite dialog.
 - [ ] **Project rename = directory rename** (META-5).
 
 ### Epic 3: Preview & thumbnails
-- [ ] **3D viewport** (VIEW-1) for STL/OBJ with progressive loading off the UI thread.
+- [~] **3D viewport** (VIEW-1): STL via worker, render on demand; OBJ and progressive
+      loading pending.
 - [ ] **3MF support** (VIEW-2): geometry, embedded thumbnail, metadata.
 - [ ] **Thumbnail queue** (VIEW-3) with configurable storage location.
 - [ ] **Image viewer & open-with-OS** (VIEW-5).
 - [ ] **GPU fallback** (VIEW-6).
 
 ### Epic 4: Browsing & organization
-- [ ] **Sidebar navigation** (NAV-1) incl. folder tree.
-- [ ] **Grid view** (NAV-2) virtualized with zoom slider.
-- [ ] **List view** (NAV-3) with sortable columns.
-- [ ] **Search & filters** (NAV-4, NAV-5).
-- [ ] **Detail view** (NAV-6).
+- [~] **Sidebar navigation** (NAV-1): roots, folder tree and tags; Recent/Favorites/Inbox
+      views pending.
+- [x] **Grid view** (NAV-2) virtualized with zoom slider.
+- [x] **List view** (NAV-3) with sortable columns.
+- [~] **Search & filters** (NAV-4 done via FTS5; NAV-5 tags and folders done, other
+      attributes pending).
+- [x] **Detail view** (NAV-6): inspector and project page.
 - [ ] **Collections & smart collections** (NAV-7, NAV-8) persisted in `collections.json`.
 
 ### Epic 5: Import & file operations
@@ -96,8 +101,8 @@ automated end-to-end check against the real desktop app (see `spec/04-quality.md
 - [ ] **Drag-out to other applications** (IMP-6).
 
 ### Epic 6: Settings
-- [ ] **Settings module** (APP-4): roots, ignore patterns, thumbnail location, sync
-      intervals, theme, language, notifications.
+- [~] **Settings module** (APP-4): roots, sync mode, ignore patterns, theme, language
+      done; thumbnail location, intervals and notifications pending.
 
 ## Phase 2: Quality of life
 

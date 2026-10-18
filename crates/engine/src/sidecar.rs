@@ -6,8 +6,8 @@
 //!   read; if the file changed meanwhile the write is refused with `SidecarConflict`.
 
 use crate::error::{io_err, EngineError, Result};
-use crate::model::{Sidecar, SIDECAR_FILE_NAME};
 pub use crate::model::SidecarStamp;
+use crate::model::{Sidecar, SIDECAR_FILE_NAME};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::SystemTime;
@@ -23,7 +23,10 @@ impl StampExt for SidecarStamp {
             .and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
             .map(|d| d.as_nanos() as i128)
             .unwrap_or(0);
-        SidecarStamp { mtime_unix_nanos: mtime, size: m.len() }
+        SidecarStamp {
+            mtime_unix_nanos: mtime,
+            size: m.len(),
+        }
     }
 }
 
@@ -94,10 +97,20 @@ mod tests {
     #[test]
     fn refuses_to_overwrite_external_change() {
         let dir = tempfile::tempdir().unwrap();
-        let sc = Sidecar { metadata: Metadata { title: Some("A".into()), ..Default::default() }, ..Default::default() };
+        let sc = Sidecar {
+            metadata: Metadata {
+                title: Some("A".into()),
+                ..Default::default()
+            },
+            ..Default::default()
+        };
         let stamp = write(dir.path(), &sc, None).unwrap();
         // external edit with a different size guarantees a different stamp even on coarse mtimes
-        fs::write(dir.path().join("project.yaml"), "schema: 1\nmetadata:\n  title: Edited elsewhere with more bytes\n").unwrap();
+        fs::write(
+            dir.path().join("project.yaml"),
+            "schema: 1\nmetadata:\n  title: Edited elsewhere with more bytes\n",
+        )
+        .unwrap();
         let err = write(dir.path(), &sc, Some(stamp)).unwrap_err();
         assert!(matches!(err, EngineError::SidecarConflict));
         // and a stale "no sidecar" belief is refused as well

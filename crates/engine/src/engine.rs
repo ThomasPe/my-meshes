@@ -3,7 +3,9 @@
 
 use crate::error::{EngineError, Result};
 use crate::index::Index;
-use crate::model::{FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, RootStatus, ScanReport, Sidecar, SidecarStamp, SyncMode, TagCount};
+use crate::model::{
+    FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, RootStatus, ScanReport, Sidecar, SidecarStamp, SyncMode, TagCount,
+};
 use crate::roots::RootsStore;
 use crate::scan::{self, IgnoreMatcher, ScanOptions};
 use crate::sidecar;
@@ -51,7 +53,12 @@ impl Engine {
         std::fs::create_dir_all(data_dir).map_err(crate::error::io_err(data_dir))?;
         let roots = RootsStore::open(data_dir)?;
         let index = Index::open(&data_dir.join("index.sqlite"))?;
-        Ok(Engine { data_dir: data_dir.to_path_buf(), roots, index, scan_opts: ScanOptions::default() })
+        Ok(Engine {
+            data_dir: data_dir.to_path_buf(),
+            roots,
+            index,
+            scan_opts: ScanOptions::default(),
+        })
     }
 
     pub fn data_dir(&self) -> &Path {
@@ -108,7 +115,12 @@ impl Engine {
     pub fn scan_root(&mut self, id: &str, mut progress: impl FnMut(ScanProgress)) -> Result<ScanReport> {
         let root = self.root(id)?;
         let started = Instant::now();
-        let outcome = match scan::scan_root(&root.id, &root.path, &self.scan_opts, |n| progress(ScanProgress { root_id: id.to_string(), projects_found: n })) {
+        let outcome = match scan::scan_root(&root.id, &root.path, &self.scan_opts, |n| {
+            progress(ScanProgress {
+                root_id: id.to_string(),
+                projects_found: n,
+            })
+        }) {
             Ok(o) => o,
             Err(EngineError::RootOffline(p)) => {
                 self.roots.update(id, |r| r.status = RootStatus::Offline)?;
@@ -122,7 +134,14 @@ impl Engine {
             r.status = RootStatus::Online;
             r.last_scan_at = Some(OffsetDateTime::now_utc());
         })?;
-        Ok(ScanReport { root_id: id.to_string(), projects: outcome.projects.len() as u32, files: outcome.files, ignored: outcome.ignored, warnings: outcome.warnings, millis: started.elapsed().as_millis() })
+        Ok(ScanReport {
+            root_id: id.to_string(),
+            projects: outcome.projects.len() as u32,
+            files: outcome.files,
+            ignored: outcome.ignored,
+            warnings: outcome.warnings,
+            millis: started.elapsed().as_millis(),
+        })
     }
 
     /// Reacts to watcher events. Coarse but correct for now: any change under a root
@@ -144,7 +163,10 @@ impl Engine {
     }
 
     pub fn get_project(&self, id: &str) -> Result<Project> {
-        let mut p = self.index.project(id)?.ok_or_else(|| EngineError::ProjectNotFound(id.to_string()))?;
+        let mut p = self
+            .index
+            .project(id)?
+            .ok_or_else(|| EngineError::ProjectNotFound(id.to_string()))?;
         if !p.offline {
             if let Ok(Some((_, stamp))) = sidecar::read(&self.project_dir(&p)?) {
                 p.sidecar_stamp = Some(stamp);
@@ -167,20 +189,34 @@ impl Engine {
 
     pub fn project_dir(&self, p: &Project) -> Result<PathBuf> {
         let root = self.root(&p.root_id)?;
-        Ok(if p.rel_path.is_empty() { root.path } else { root.path.join(&p.rel_path) })
+        Ok(if p.rel_path.is_empty() {
+            root.path
+        } else {
+            root.path.join(&p.rel_path)
+        })
     }
 
     /// Absolute path of a file inside a project. Refuses anything that escapes the project.
     pub fn resolve_file(&self, project_id: &str, rel: &str) -> Result<PathBuf> {
-        let p = self.index.project(project_id)?.ok_or_else(|| EngineError::ProjectNotFound(project_id.to_string()))?;
+        let p = self
+            .index
+            .project(project_id)?
+            .ok_or_else(|| EngineError::ProjectNotFound(project_id.to_string()))?;
         let rel_path = Path::new(rel);
-        if rel_path.is_absolute() || rel_path.components().any(|c| matches!(c, Component::ParentDir | Component::Prefix(_) | Component::RootDir)) {
+        if rel_path.is_absolute()
+            || rel_path
+                .components()
+                .any(|c| matches!(c, Component::ParentDir | Component::Prefix(_) | Component::RootDir))
+        {
             return Err(EngineError::ProjectNotFound(format!("{project_id}/{rel}")));
         }
         let dir = self.project_dir(&p)?;
         let full = dir.join(rel_path);
         if !full.is_file() {
-            return Err(EngineError::Io { path: full, source: std::io::Error::new(std::io::ErrorKind::NotFound, "file not found") });
+            return Err(EngineError::Io {
+                path: full,
+                source: std::io::Error::new(std::io::ErrorKind::NotFound, "file not found"),
+            });
         }
         Ok(full)
     }
@@ -191,7 +227,10 @@ impl Engine {
     /// re-reads the project directory and refreshes the index row. Optimistic UI lives in
     /// the frontend; this is the authoritative step that can fail with `SidecarConflict`.
     pub fn update_metadata(&mut self, project_id: &str, upd: UpdateMetadata) -> Result<Project> {
-        let current = self.index.project(project_id)?.ok_or_else(|| EngineError::ProjectNotFound(project_id.to_string()))?;
+        let current = self
+            .index
+            .project(project_id)?
+            .ok_or_else(|| EngineError::ProjectNotFound(project_id.to_string()))?;
         if current.offline {
             return Err(EngineError::RootOffline(self.root(&current.root_id)?.path));
         }
@@ -203,7 +242,10 @@ impl Engine {
                 if !upd.force {
                     return Err(EngineError::SidecarInvalid(msg));
                 }
-                (Sidecar::default(), std::fs::metadata(sidecar::sidecar_path(&dir)).ok().map(|m| stamp_of(&m)))
+                (
+                    Sidecar::default(),
+                    std::fs::metadata(sidecar::sidecar_path(&dir)).ok().map(|m| stamp_of(&m)),
+                )
             }
             Err(e) => return Err(e),
         };
@@ -211,13 +253,27 @@ impl Engine {
             return Err(EngineError::SidecarConflict);
         }
         let md = &mut sc.metadata;
-        if let Some(v) = upd.title { md.title = non_empty(v); }
-        if let Some(v) = upd.creator { md.creator = non_empty(v); }
-        if let Some(v) = upd.license { md.license = non_empty(v); }
-        if let Some(v) = upd.source_url { md.source_url = non_empty(v); }
-        if let Some(v) = upd.description { md.description = non_empty(v); }
+        if let Some(v) = upd.title {
+            md.title = non_empty(v);
+        }
+        if let Some(v) = upd.creator {
+            md.creator = non_empty(v);
+        }
+        if let Some(v) = upd.license {
+            md.license = non_empty(v);
+        }
+        if let Some(v) = upd.source_url {
+            md.source_url = non_empty(v);
+        }
+        if let Some(v) = upd.description {
+            md.description = non_empty(v);
+        }
         if let Some(tags) = upd.tags {
-            let mut clean: Vec<String> = tags.into_iter().map(|t| t.trim().to_lowercase()).filter(|t| !t.is_empty()).collect();
+            let mut clean: Vec<String> = tags
+                .into_iter()
+                .map(|t| t.trim().to_lowercase())
+                .filter(|t| !t.is_empty())
+                .collect();
             clean.sort();
             clean.dedup();
             md.tags = clean;
@@ -225,9 +281,15 @@ impl Engine {
         if md.created.is_none() {
             md.created = Some(OffsetDateTime::now_utc().date().to_string());
         }
-        if let Some(v) = upd.recommended_material { sc.printing.recommended_material = non_empty(v); }
-        if let Some(v) = upd.supports_required { sc.printing.supports_required = Some(v); }
-        if let Some(v) = upd.notes { sc.printing.notes = non_empty(v); }
+        if let Some(v) = upd.recommended_material {
+            sc.printing.recommended_material = non_empty(v);
+        }
+        if let Some(v) = upd.supports_required {
+            sc.printing.supports_required = Some(v);
+        }
+        if let Some(v) = upd.notes {
+            sc.printing.notes = non_empty(v);
+        }
         sidecar::write(&dir, &sc, if upd.force { current_stamp(&dir) } else { on_disk })?;
 
         let root = self.root(&current.root_id)?;
@@ -242,11 +304,23 @@ impl Engine {
 
 fn non_empty(v: String) -> Option<String> {
     let t = v.trim();
-    if t.is_empty() { None } else { Some(t.to_string()) }
+    if t.is_empty() {
+        None
+    } else {
+        Some(t.to_string())
+    }
 }
 fn stamp_of(m: &std::fs::Metadata) -> SidecarStamp {
-    let mtime = m.modified().ok().and_then(|t| t.duration_since(std::time::SystemTime::UNIX_EPOCH).ok()).map(|d| d.as_nanos() as i128).unwrap_or(0);
-    SidecarStamp { mtime_unix_nanos: mtime, size: m.len() }
+    let mtime = m
+        .modified()
+        .ok()
+        .and_then(|t| t.duration_since(std::time::SystemTime::UNIX_EPOCH).ok())
+        .map(|d| d.as_nanos() as i128)
+        .unwrap_or(0);
+    SidecarStamp {
+        mtime_unix_nanos: mtime,
+        size: m.len(),
+    }
 }
 fn current_stamp(dir: &Path) -> Option<SidecarStamp> {
     std::fs::metadata(sidecar::sidecar_path(dir)).ok().map(|m| stamp_of(&m))

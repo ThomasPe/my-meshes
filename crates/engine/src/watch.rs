@@ -30,12 +30,17 @@ impl RootWatcher {
                 paths.sort();
                 paths.dedup();
                 if !paths.is_empty() {
-                    let _ = tx.send(WatchEvent { root_id: rid.clone(), paths });
+                    let _ = tx.send(WatchEvent {
+                        root_id: rid.clone(),
+                        paths,
+                    });
                 }
             }
         })
         .map_err(|e| EngineError::Watch(e.to_string()))?;
-        debouncer.watch(path, RecursiveMode::Recursive).map_err(|e| EngineError::Watch(e.to_string()))?;
+        debouncer
+            .watch(path, RecursiveMode::Recursive)
+            .map_err(|e| EngineError::Watch(e.to_string()))?;
         Ok(RootWatcher { _debouncer: debouncer })
     }
 }
@@ -54,6 +59,10 @@ mod tests {
         std::fs::write(dir.path().join("P/part.stl"), b"x").unwrap();
         let ev = rx.recv_timeout(Duration::from_secs(5)).expect("watch event");
         assert_eq!(ev.root_id, "r1");
-        assert!(ev.paths.iter().any(|p| p.ends_with("part.stl") || p.ends_with("P")), "{:?}", ev.paths);
+        assert!(
+            ev.paths.iter().any(|p| p.ends_with("part.stl") || p.ends_with("P")),
+            "{:?}",
+            ev.paths
+        );
     }
 }

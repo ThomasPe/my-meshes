@@ -3,7 +3,11 @@ use std::path::PathBuf;
 #[derive(Debug, thiserror::Error)]
 pub enum EngineError {
     #[error("I/O error at {path}: {source}")]
-    Io { path: PathBuf, #[source] source: std::io::Error },
+    Io {
+        path: PathBuf,
+        #[source]
+        source: std::io::Error,
+    },
     #[error("root not found: {0}")]
     RootNotFound(String),
     #[error("root is offline: {0}")]

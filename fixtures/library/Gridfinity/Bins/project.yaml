@@ -1,0 +1,13 @@
+schema: 1
+metadata:
+  title: Gridfinity Bins
+  creator: Zach Freedman
+  license: CC-BY-NC-SA-4.0
+  source_url: https://thangs.com/designer/ZackFreedman
+  tags:
+    - gridfinity
+    - organizer
+  description: Standard bins with label tab.
+printing:
+  recommended_material: PLA
+  supports_required: false

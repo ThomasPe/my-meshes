@@ -76,7 +76,10 @@ impl Index {
     /// Replaces all rows of a root with the given projects, in one transaction.
     pub fn rebuild_root(&mut self, root_id: &str, projects: &[Project]) -> Result<()> {
         let tx = self.conn.transaction()?;
-        tx.execute("DELETE FROM projects_fts WHERE id IN (SELECT id FROM projects WHERE root_id = ?1)", params![root_id])?;
+        tx.execute(
+            "DELETE FROM projects_fts WHERE id IN (SELECT id FROM projects WHERE root_id = ?1)",
+            params![root_id],
+        )?;
         tx.execute("DELETE FROM projects WHERE root_id = ?1", params![root_id])?;
         for p in projects {
             Self::insert_project(&tx, p)?;
@@ -112,7 +115,8 @@ impl Index {
              VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19)",
             params![p.id, p.root_id, p.rel_path, p.title, p.creator, p.license, p.source_url, p.description, p.material, p.supports_required.map(|b| b as i32), p.thumbnail, p.total_bytes as i64, p.files.len() as i64, p.model_count as i64, ts(&p.modified), state, msg, serde_json::to_string(&p.warnings).unwrap_or_default(), p.offline as i32],
         )?;
-        let mut fs_stmt = tx.prepare_cached("INSERT INTO files (project_id, rel_path, name, kind, size, modified) VALUES (?1,?2,?3,?4,?5,?6)")?;
+        let mut fs_stmt =
+            tx.prepare_cached("INSERT INTO files (project_id, rel_path, name, kind, size, modified) VALUES (?1,?2,?3,?4,?5,?6)")?;
         for f in &p.files {
             fs_stmt.execute(params![p.id, f.rel_path, f.name, kind_str(f.kind), f.size as i64, ts(&f.modified)])?;
         }
@@ -122,18 +126,31 @@ impl Index {
         }
         tx.execute(
             "INSERT INTO projects_fts (id, title, creator, description, tags, filenames) VALUES (?1,?2,?3,?4,?5,?6)",
-            params![p.id, p.title, p.creator, p.description, p.tags.join(" "), p.files.iter().map(|f| f.name.as_str()).collect::<Vec<_>>().join(" ")],
+            params![
+                p.id,
+                p.title,
+                p.creator,
+                p.description,
+                p.tags.join(" "),
+                p.files.iter().map(|f| f.name.as_str()).collect::<Vec<_>>().join(" ")
+            ],
         )?;
         Ok(())
     }
 
     pub fn mark_root_offline(&mut self, root_id: &str, offline: bool) -> Result<()> {
-        self.conn.execute("UPDATE projects SET offline = ?2 WHERE root_id = ?1", params![root_id, offline as i32])?;
+        self.conn.execute(
+            "UPDATE projects SET offline = ?2 WHERE root_id = ?1",
+            params![root_id, offline as i32],
+        )?;
         Ok(())
     }
 
     pub fn remove_root(&mut self, root_id: &str) -> Result<()> {
-        self.conn.execute("DELETE FROM projects_fts WHERE id IN (SELECT id FROM projects WHERE root_id = ?1)", params![root_id])?;
+        self.conn.execute(
+            "DELETE FROM projects_fts WHERE id IN (SELECT id FROM projects WHERE root_id = ?1)",
+            params![root_id],
+        )?;
         self.conn.execute("DELETE FROM projects WHERE root_id = ?1", params![root_id])?;
         Ok(())
     }
@@ -179,18 +196,30 @@ impl Index {
             .optional()?;
         let Some(mut p) = row else { return Ok(None) };
         p.tags = self.tags_of(id)?;
-        let mut st = self.conn.prepare_cached("SELECT rel_path, name, kind, size, modified FROM files WHERE project_id = ?1 ORDER BY rel_path")?;
+        let mut st = self
+            .conn
+            .prepare_cached("SELECT rel_path, name, kind, size, modified FROM files WHERE project_id = ?1 ORDER BY rel_path")?;
         p.files = st
             .query_map(params![id], |r| {
-                Ok(FileEntry { rel_path: r.get(0)?, name: r.get(1)?, kind: kind_parse(&r.get::<_, String>(2)?), size: r.get::<_, i64>(3)? as u64, modified: parse_ts(&r.get::<_, String>(4)?) })
+                Ok(FileEntry {
+                    rel_path: r.get(0)?,
+                    name: r.get(1)?,
+                    kind: kind_parse(&r.get::<_, String>(2)?),
+                    size: r.get::<_, i64>(3)? as u64,
+                    modified: parse_ts(&r.get::<_, String>(4)?),
+                })
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
         Ok(Some(p))
     }
 
     fn tags_of(&self, id: &str) -> Result<Vec<String>> {
-        let mut st = self.conn.prepare_cached("SELECT tag FROM tags WHERE project_id = ?1 ORDER BY tag")?;
-        let tags = st.query_map(params![id], |r| r.get(0))?.collect::<std::result::Result<Vec<_>, _>>()?;
+        let mut st = self
+            .conn
+            .prepare_cached("SELECT tag FROM tags WHERE project_id = ?1 ORDER BY tag")?;
+        let tags = st
+            .query_map(params![id], |r| r.get(0))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
         Ok(tags)
     }
 
@@ -200,7 +229,11 @@ impl Index {
         let mut args: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
         if let Some(text) = q.text.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
             // prefix match on every term, so typing feels instant
-            let fts = text.split_whitespace().map(|t| format!("\"{}\"*", t.replace('"', ""))).collect::<Vec<_>>().join(" ");
+            let fts = text
+                .split_whitespace()
+                .map(|t| format!("\"{}\"*", t.replace('"', "")))
+                .collect::<Vec<_>>()
+                .join(" ");
             sql.push_str(" JOIN projects_fts f ON f.id = p.id");
             where_.push("projects_fts MATCH ?".into());
             args.push(Box::new(fts));
@@ -212,7 +245,10 @@ impl Index {
         if let Some(prefix) = q.path_prefix.as_deref().filter(|p| !p.is_empty()) {
             where_.push("(p.rel_path = ? OR p.rel_path LIKE ? ESCAPE '\\')".into());
             args.push(Box::new(prefix.to_string()));
-            args.push(Box::new(format!("{}/%", prefix.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_"))));
+            args.push(Box::new(format!(
+                "{}/%",
+                prefix.replace('\\', "\\\\").replace('%', "\\%").replace('_', "\\_")
+            )));
         }
         for tag in &q.tags {
             where_.push("EXISTS (SELECT 1 FROM tags t WHERE t.project_id = p.id AND t.tag = ?)".into());
@@ -262,7 +298,14 @@ impl Index {
         let mut st = self.conn.prepare(
             "SELECT t.tag, COUNT(*) FROM tags t JOIN projects p ON p.id = t.project_id WHERE (?1 IS NULL OR p.root_id = ?1) GROUP BY t.tag ORDER BY COUNT(*) DESC, t.tag",
         )?;
-        let rows = st.query_map(params![root_id], |r| Ok(TagCount { tag: r.get(0)?, count: r.get::<_, i64>(1)? as u32 }))?.collect::<std::result::Result<Vec<_>, _>>()?;
+        let rows = st
+            .query_map(params![root_id], |r| {
+                Ok(TagCount {
+                    tag: r.get(0)?,
+                    count: r.get::<_, i64>(1)? as u32,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
         Ok(rows)
     }
 
@@ -277,7 +320,9 @@ impl Index {
     /// Folder tree of one root, derived from project paths (every ancestor directory appears).
     pub fn folder_tree(&self, root_id: &str) -> Result<Vec<FolderNode>> {
         let mut st = self.conn.prepare("SELECT rel_path FROM projects WHERE root_id = ?1")?;
-        let paths: Vec<String> = st.query_map(params![root_id], |r| r.get(0))?.collect::<std::result::Result<Vec<_>, _>>()?;
+        let paths: Vec<String> = st
+            .query_map(params![root_id], |r| r.get(0))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
         #[derive(Default)]
         struct Node {
             count: u32,
@@ -299,8 +344,17 @@ impl Index {
             n.children
                 .iter()
                 .map(|(name, child)| {
-                    let rel = if prefix.is_empty() { name.clone() } else { format!("{prefix}/{name}") };
-                    FolderNode { name: name.clone(), rel_path: rel.clone(), project_count: child.count, children: build(&rel, child) }
+                    let rel = if prefix.is_empty() {
+                        name.clone()
+                    } else {
+                        format!("{prefix}/{name}")
+                    };
+                    FolderNode {
+                        name: name.clone(),
+                        rel_path: rel.clone(),
+                        project_count: child.count,
+                        children: build(&rel, child),
+                    }
                 })
                 .collect()
         }
@@ -327,7 +381,16 @@ mod tests {
             material: None,
             supports_required: None,
             thumbnail: None,
-            files: files.iter().map(|f| FileEntry { rel_path: f.to_string(), name: f.to_string(), kind: FileKind::from_extension(f.rsplit('.').next().unwrap()), size: 10, modified: OffsetDateTime::UNIX_EPOCH }).collect(),
+            files: files
+                .iter()
+                .map(|f| FileEntry {
+                    rel_path: f.to_string(),
+                    name: f.to_string(),
+                    kind: FileKind::from_extension(f.rsplit('.').next().unwrap()),
+                    size: 10,
+                    modified: OffsetDateTime::UNIX_EPOCH,
+                })
+                .collect(),
             total_bytes: 10 * files.len() as u64,
             model_count: files.iter().filter(|f| f.ends_with(".stl")).count() as u32,
             modified: OffsetDateTime::UNIX_EPOCH,
@@ -341,22 +404,52 @@ mod tests {
     #[test]
     fn rebuild_list_search_and_tree() {
         let mut ix = Index::open_in_memory().unwrap();
-        ix.rebuild_root("r1", &[
-            proj("a", "Gridfinity/Bins", "Gridfinity Bins", &["gridfinity", "organizer"], &["bin_1x1.stl"]),
-            proj("b", "Gridfinity/Lids", "Lids", &["gridfinity"], &["lid.stl"]),
-            proj("c", "Robotics/Arm", "Robotic Arm v4", &["robotics"], &["base.stl", "bom.pdf"]),
-        ]).unwrap();
+        ix.rebuild_root(
+            "r1",
+            &[
+                proj(
+                    "a",
+                    "Gridfinity/Bins",
+                    "Gridfinity Bins",
+                    &["gridfinity", "organizer"],
+                    &["bin_1x1.stl"],
+                ),
+                proj("b", "Gridfinity/Lids", "Lids", &["gridfinity"], &["lid.stl"]),
+                proj("c", "Robotics/Arm", "Robotic Arm v4", &["robotics"], &["base.stl", "bom.pdf"]),
+            ],
+        )
+        .unwrap();
         assert_eq!(ix.count(None).unwrap().0, 3);
         let all = ix.list(&ListQuery::default()).unwrap();
         assert_eq!(all.len(), 3);
-        let grid = ix.list(&ListQuery { tags: vec!["gridfinity".into()], ..Default::default() }).unwrap();
+        let grid = ix
+            .list(&ListQuery {
+                tags: vec!["gridfinity".into()],
+                ..Default::default()
+            })
+            .unwrap();
         assert_eq!(grid.len(), 2);
-        let search = ix.list(&ListQuery { text: Some("robo".into()), ..Default::default() }).unwrap();
+        let search = ix
+            .list(&ListQuery {
+                text: Some("robo".into()),
+                ..Default::default()
+            })
+            .unwrap();
         assert_eq!(search.len(), 1);
         assert_eq!(search[0].title, "Robotic Arm v4");
-        let by_file = ix.list(&ListQuery { text: Some("bom".into()), ..Default::default() }).unwrap();
+        let by_file = ix
+            .list(&ListQuery {
+                text: Some("bom".into()),
+                ..Default::default()
+            })
+            .unwrap();
         assert_eq!(by_file.len(), 1);
-        let under = ix.list(&ListQuery { path_prefix: Some("Gridfinity".into()), ..Default::default() }).unwrap();
+        let under = ix
+            .list(&ListQuery {
+                path_prefix: Some("Gridfinity".into()),
+                ..Default::default()
+            })
+            .unwrap();
         assert_eq!(under.len(), 2);
         let tree = ix.folder_tree("r1").unwrap();
         assert_eq!(tree.len(), 2);
@@ -370,7 +463,8 @@ mod tests {
         assert_eq!(full.files.len(), 2);
         assert_eq!(full.tags, vec!["robotics"]);
         // rebuild replaces
-        ix.rebuild_root("r1", &[proj("a", "Gridfinity/Bins", "Bins", &[], &["bin.stl"])]).unwrap();
+        ix.rebuild_root("r1", &[proj("a", "Gridfinity/Bins", "Bins", &[], &["bin.stl"])])
+            .unwrap();
         assert_eq!(ix.count(None).unwrap().0, 1);
         ix.mark_root_offline("r1", true).unwrap();
         assert!(ix.list(&ListQuery::default()).unwrap()[0].offline);

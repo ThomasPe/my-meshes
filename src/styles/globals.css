@@ -1,0 +1,119 @@
+@import "tailwindcss";
+@import "tw-animate-css";
+
+@custom-variant dark (&:is(.dark *));
+
+/* Design tokens, direction D "Gallery" (docs/decisions/0002-ui-framework.md), ported from
+   docs/clickdummy/index.html. Light first; .dark on <html> switches. */
+:root {
+  --background: #f4f5f7;
+  --foreground: #111827;
+  --card: #ffffff;
+  --card-foreground: #111827;
+  --popover: #ffffff;
+  --popover-foreground: #111827;
+  --primary: #0f8b8d;
+  --primary-foreground: #ffffff;
+  --secondary: #eef0f3;
+  --secondary-foreground: #374151;
+  --muted: #eef0f3;
+  --muted-foreground: #6b7280;
+  --accent: #e0f2f2;
+  --accent-foreground: #0f8b8d;
+  --destructive: #dc2626;
+  --border: #e5e7eb;
+  --input: #e5e7eb;
+  --ring: #0f8b8d;
+  --panel: #ffffff;
+  --thumb: #334155;
+  --thumb-bg-from: #e0f2f2;
+  --thumb-bg-to: #f4f5f7;
+  --success: #16a34a;
+  --success-soft: #dcfce7;
+  --warning: #d97706;
+  --warning-soft: #fef3c7;
+  --radius: 0.875rem;
+  --shadow-card: 0 1px 2px rgb(17 24 39 / 0.06), 0 6px 16px rgb(17 24 39 / 0.06);
+  --shadow-card-hover: 0 2px 4px rgb(17 24 39 / 0.08), 0 14px 28px rgb(17 24 39 / 0.10);
+  --font-sans: "Manrope", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, Consolas, monospace;
+}
+
+.dark {
+  --background: #0f1115;
+  --foreground: #f3f4f6;
+  --card: #1b1f27;
+  --card-foreground: #f3f4f6;
+  --popover: #1b1f27;
+  --popover-foreground: #f3f4f6;
+  --primary: #2dd4bf;
+  --primary-foreground: #0f1115;
+  --secondary: #232834;
+  --secondary-foreground: #d1d5db;
+  --muted: #232834;
+  --muted-foreground: #9ca3af;
+  --accent: rgb(45 212 191 / 0.14);
+  --accent-foreground: #2dd4bf;
+  --destructive: #f87171;
+  --border: #262b35;
+  --input: #343a46;
+  --ring: #2dd4bf;
+  --panel: #161920;
+  --thumb: #e5e7eb;
+  --thumb-bg-from: rgb(45 212 191 / 0.12);
+  --thumb-bg-to: #161920;
+  --success: #4ade80;
+  --success-soft: rgb(74 222 128 / 0.15);
+  --warning: #fbbf24;
+  --warning-soft: rgb(251 191 36 / 0.15);
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.3), 0 6px 16px rgb(0 0 0 / 0.3);
+  --shadow-card-hover: 0 2px 4px rgb(0 0 0 / 0.4), 0 14px 28px rgb(0 0 0 / 0.45);
+}
+
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --color-panel: var(--panel);
+  --color-thumb: var(--thumb);
+  --color-success: var(--success);
+  --color-success-soft: var(--success-soft);
+  --color-warning: var(--warning);
+  --color-warning-soft: var(--warning-soft);
+  --radius-sm: calc(var(--radius) - 6px);
+  --radius-md: calc(var(--radius) - 4px);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) + 4px);
+  --shadow-card: var(--shadow-card);
+  --shadow-card-hover: var(--shadow-card-hover);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+}
+
+@layer base {
+  * { @apply border-border outline-ring/50; }
+  html, body, #root { height: 100%; }
+  body { @apply bg-background text-foreground font-sans text-[14px] antialiased overflow-hidden; }
+  button { cursor: pointer; }
+  ::selection { background: color-mix(in oklab, var(--primary) 25%, transparent); }
+}
+
+@utility thumb-bg { background: linear-gradient(160deg, var(--thumb-bg-from), var(--thumb-bg-to)); }
+@utility shadow-card { box-shadow: var(--shadow-card); }
+@utility shadow-card-hover { box-shadow: var(--shadow-card-hover); }
+@utility tabular { font-variant-numeric: tabular-nums; }

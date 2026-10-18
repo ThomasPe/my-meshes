@@ -1,0 +1,11 @@
+{
+  "app": {
+    "withGlobalTauri": true,
+    "security": {
+      "capabilities": [
+        "default",
+        { "identifier": "e2e", "description": "WebdriverIO plugins, e2e builds only", "windows": ["main"], "permissions": ["wdio:default", "wdio-webdriver:default"] }
+      ]
+    }
+  }
+}

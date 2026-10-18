@@ -13,7 +13,18 @@ use std::path::{Component, Path};
 use time::OffsetDateTime;
 use walkdir::WalkDir;
 
-pub const DEFAULT_IGNORE: &[&str] = &[".git", "__MACOSX", ".DS_Store", "Thumbs.db", "node_modules", ".cache", ".mymeshes", "*.gcode", "*.bgcode", "*.tmp"];
+pub const DEFAULT_IGNORE: &[&str] = &[
+    ".git",
+    "__MACOSX",
+    ".DS_Store",
+    "Thumbs.db",
+    "node_modules",
+    ".cache",
+    ".mymeshes",
+    "*.gcode",
+    "*.bgcode",
+    "*.tmp",
+];
 
 #[derive(Debug, Clone)]
 pub struct ScanOptions {
@@ -22,7 +33,9 @@ pub struct ScanOptions {
 
 impl Default for ScanOptions {
     fn default() -> Self {
-        ScanOptions { ignore: DEFAULT_IGNORE.iter().map(|s| s.to_string()).collect() }
+        ScanOptions {
+            ignore: DEFAULT_IGNORE.iter().map(|s| s.to_string()).collect(),
+        }
     }
 }
 
@@ -44,7 +57,9 @@ impl IgnoreMatcher {
         for p in patterns {
             b.add(Glob::new(p).map_err(|e| EngineError::Pattern(format!("{p}: {e}")))?);
         }
-        Ok(IgnoreMatcher { set: b.build().map_err(|e| EngineError::Pattern(e.to_string()))? })
+        Ok(IgnoreMatcher {
+            set: b.build().map_err(|e| EngineError::Pattern(e.to_string()))?,
+        })
     }
     /// Patterns match against the file/dir name and against the path relative to the root.
     pub fn is_ignored(&self, rel: &Path) -> bool {
@@ -142,17 +157,30 @@ pub fn read_project(root_id: &str, root: &Path, project_dir: &Path, ignore: &Ign
                 continue;
             }
         };
-        let kind = path.extension().and_then(|e| e.to_str()).map(FileKind::from_extension).unwrap_or(FileKind::Other);
+        let kind = path
+            .extension()
+            .and_then(|e| e.to_str())
+            .map(FileKind::from_extension)
+            .unwrap_or(FileKind::Other);
         let modified = modified_of(&meta);
         if modified > newest {
             newest = modified;
         }
         total += meta.len();
-        files.push(FileEntry { rel_path: rel_in_project, name, kind, size: meta.len(), modified });
+        files.push(FileEntry {
+            rel_path: rel_in_project,
+            name,
+            kind,
+            size: meta.len(),
+            modified,
+        });
     }
     out.files += files.len() as u32;
 
-    let dir_name = project_dir.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_else(|| root.to_string_lossy().into_owned());
+    let dir_name = project_dir
+        .file_name()
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_else(|| root.to_string_lossy().into_owned());
     let (sidecar, state) = match sidecar::read(project_dir) {
         Ok(Some((sc, _))) => (Some(sc), SidecarState::Ok),
         Ok(None) => (None, SidecarState::Missing),
@@ -229,7 +257,8 @@ pub fn scan_root(root_id: &str, root: &Path, opts: &ScanOptions, mut progress: i
         };
         if is_project {
             let project = read_project(root_id, root, dir, &ignore, &mut out)?;
-            out.warnings.extend(project.warnings.iter().map(|w| format!("{}: {w}", project.rel_path)));
+            out.warnings
+                .extend(project.warnings.iter().map(|w| format!("{}: {w}", project.rel_path)));
             out.projects.push(project);
             progress(out.projects.len() as u32);
             walker.skip_current_dir();
@@ -268,7 +297,10 @@ mod tests {
         let out = scan_root("r1", r, &ScanOptions::default(), |_| {}).unwrap();
         let mut names: Vec<_> = out.projects.iter().map(|p| p.rel_path.clone()).collect();
         names.sort();
-        assert_eq!(names, vec!["Gridfinity/Bins", "Gridfinity/Lids", "Props/empty-but-sidecar", "Robotics/Arm v4"]);
+        assert_eq!(
+            names,
+            vec!["Gridfinity/Bins", "Gridfinity/Lids", "Props/empty-but-sidecar", "Robotics/Arm v4"]
+        );
         let arm = out.projects.iter().find(|p| p.rel_path == "Robotics/Arm v4").unwrap();
         assert_eq!(arm.model_count, 2, "{:?}", arm.files);
         assert!(arm.files.iter().any(|f| f.kind == FileKind::Attachment));

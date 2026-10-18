@@ -1,0 +1,60 @@
+import { ChevronLeft, CloudOff, FolderOpen } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
+import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { FilesTable } from '@/features/project/FilesTable';
+import { MetadataForm } from '@/features/project/MetadataForm';
+import { Viewer } from '@/features/project/Viewer';
+import { getBackend } from '@/lib/backend';
+import { reportError } from '@/lib/errors';
+import { formatBytes, initials } from '@/lib/format';
+import { useProject, useRoots } from '@/lib/queries';
+import { routeHref } from '@/lib/router';
+
+export function ProjectPage({ id }: { id: string }) {
+  const { t, i18n } = useTranslation();
+  const project = useProject(id);
+  const roots = useRoots();
+  if (project.isPending) return <div className="p-6 text-sm text-muted-foreground">{t('common.loading')}</div>;
+  if (project.isError || !project.data) return <div className="p-6"><p className="text-sm text-destructive">{t('errors.not_found')}</p><Button asChild variant="outline" className="mt-3"><a href={routeHref({ page: 'library' })}>{t('project.back')}</a></Button></div>;
+  const p = project.data;
+  const root = roots.data?.find((r) => r.id === p.root_id);
+  return (
+    <div className="h-full overflow-auto" data-testid="project-page">
+      <div className="mx-auto grid max-w-[1200px] gap-5 px-6 pb-10 pt-5">
+        <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold text-muted-foreground">
+          <a href={routeHref({ page: 'library' })} className="inline-flex items-center gap-1 hover:text-primary" data-testid="back"><ChevronLeft className="size-4" />{t('project.back')}</a>
+          {root && <><span>/</span><span>{root.path}</span></>}
+          {p.rel_path.split('/').filter(Boolean).map((seg, i) => <span key={i} className="contents"><span>/</span><span>{seg}</span></span>)}
+        </div>
+        <div className="flex flex-wrap items-start gap-3.5">
+          <div className="grid min-w-[200px] flex-1 gap-1">
+            <h1 className="text-2xl font-extrabold tracking-tight" data-testid="project-title">{p.title}</h1>
+            <div className="flex flex-wrap items-center gap-2.5 text-[13px] font-semibold text-muted-foreground">
+              {p.creator ? <><span className="grid size-5 place-items-center rounded-full bg-accent text-[9px] font-extrabold text-accent-foreground">{initials(p.creator)}</span>{p.creator}</> : t('library.unknownCreator')}
+              <span>·</span><span>{t('library.files', { count: p.files.length })} · {formatBytes(p.total_bytes, i18n.language)}</span>
+              {p.offline && <Badge variant="outline"><CloudOff />{t('library.offline')}</Badge>}
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <Button variant="outline" disabled={p.offline} onClick={() => getBackend().then((b) => b.revealProject(p.id)).catch(reportError)}><FolderOpen />{t('inspector.reveal')}</Button>
+          </div>
+        </div>
+        <Tabs defaultValue="overview">
+          <TabsList>
+            <TabsTrigger value="overview">{t('project.overview')}</TabsTrigger>
+            <TabsTrigger value="files">{t('project.files')} <span className="text-muted-foreground">{p.files.length}</span></TabsTrigger>
+          </TabsList>
+          <TabsContent value="overview" className="mt-4">
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)]">
+              <Viewer projectId={p.id} files={p.files} offline={p.offline} />
+              <div className="rounded-2xl bg-card p-5 shadow-card"><MetadataForm project={p} onReload={() => void project.refetch()} /></div>
+            </div>
+          </TabsContent>
+          <TabsContent value="files" className="mt-4"><FilesTable projectId={p.id} files={p.files} offline={p.offline} /></TabsContent>
+        </Tabs>
+      </div>
+    </div>
+  );
+}

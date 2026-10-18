@@ -28,7 +28,11 @@ impl RootsStore {
         fs::create_dir_all(data_dir).map_err(io_err(data_dir))?;
         let path = data_dir.join("roots.json");
         let roots = match fs::read_to_string(&path) {
-            Ok(text) => serde_json::from_str::<RootsFile>(&text).map_err(|e| EngineError::Serde(format!("roots.json: {e}")))?.roots,
+            Ok(text) => {
+                serde_json::from_str::<RootsFile>(&text)
+                    .map_err(|e| EngineError::Serde(format!("roots.json: {e}")))?
+                    .roots
+            }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Vec::new(),
             Err(e) => return Err(EngineError::Io { path, source: e }),
         };
@@ -66,14 +70,22 @@ impl RootsStore {
     }
 
     pub fn remove(&mut self, id: &str) -> Result<LibraryRoot> {
-        let idx = self.roots.iter().position(|r| r.id == id).ok_or_else(|| EngineError::RootNotFound(id.to_string()))?;
+        let idx = self
+            .roots
+            .iter()
+            .position(|r| r.id == id)
+            .ok_or_else(|| EngineError::RootNotFound(id.to_string()))?;
         let root = self.roots.remove(idx);
         self.save()?;
         Ok(root)
     }
 
     pub fn update(&mut self, id: &str, f: impl FnOnce(&mut LibraryRoot)) -> Result<LibraryRoot> {
-        let root = self.roots.iter_mut().find(|r| r.id == id).ok_or_else(|| EngineError::RootNotFound(id.to_string()))?;
+        let root = self
+            .roots
+            .iter_mut()
+            .find(|r| r.id == id)
+            .ok_or_else(|| EngineError::RootNotFound(id.to_string()))?;
         f(root);
         let out = root.clone();
         self.save()?;
@@ -89,7 +101,11 @@ impl RootsStore {
     }
 
     fn save(&self) -> Result<()> {
-        let text = serde_json::to_string_pretty(&RootsFile { schema: 1, roots: self.roots.clone() }).map_err(|e| EngineError::Serde(e.to_string()))?;
+        let text = serde_json::to_string_pretty(&RootsFile {
+            schema: 1,
+            roots: self.roots.clone(),
+        })
+        .map_err(|e| EngineError::Serde(e.to_string()))?;
         let tmp = self.path.with_extension("json.tmp");
         fs::write(&tmp, text).map_err(io_err(&tmp))?;
         fs::rename(&tmp, &self.path).map_err(io_err(&self.path))

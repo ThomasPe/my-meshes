@@ -1,0 +1,86 @@
+solid baseplate
+  facet normal 0 0 1
+    outer loop
+      vertex 0 0 0
+      vertex 84 0 0
+      vertex 84 84 0
+    endloop
+  endfacet
+  facet normal 0 0 1
+    outer loop
+      vertex 0 0 0
+      vertex 84 84 0
+      vertex 0 84 0
+    endloop
+  endfacet
+  facet normal 0 0 1
+    outer loop
+      vertex 0 0 84
+      vertex 84 84 84
+      vertex 84 0 84
+    endloop
+  endfacet
+  facet normal 0 0 1
+    outer loop
+      vertex 0 0 84
+      vertex 0 84 84
+      vertex 84 84 84
+    endloop
+  endfacet
+  facet normal 0 0 1
+    outer loop
+      vertex 0 0 0
+      vertex 0 0 84
+      vertex 84 0 84
+    endloop
+  endfacet
+  facet normal 0 0 1
+    outer loop
+      vertex 0 0 0
+      vertex 84 0 84
+      vertex 84 0 0
+    endloop
+  endfacet
+  facet normal 0 0 1
+    outer loop
+      vertex 84 0 0
+      vertex 84 0 84
+      vertex 84 84 84
+    endloop
+  endfacet
+  facet normal 0 0 1
+    outer loop
+      vertex 84 0 0
+      vertex 84 84 84
+      vertex 84 84 0
+    endloop
+  endfacet
+  facet normal 0 0 1
+    outer loop
+      vertex 84 84 0
+      vertex 84 84 84
+      vertex 0 84 84
+    endloop
+  endfacet
+  facet normal 0 0 1
+    outer loop
+      vertex 84 84 0
+      vertex 0 84 84
+      vertex 0 84 0
+    endloop
+  endfacet
+  facet normal 0 0 1
+    outer loop
+      vertex 0 84 0
+      vertex 0 84 84
+      vertex 0 0 84
+    endloop
+  endfacet
+  facet normal 0 0 1
+    outer loop
+      vertex 0 84 0
+      vertex 0 0 84
+      vertex 0 0 0
+    endloop
+  endfacet
+endsolid baseplate
