@@ -19,3 +19,4 @@
 
 - [ADR-0001 Application shell / tech stack](decisions/0001-tech-stack.md)
 - [ADR-0002 UI framework and visual direction](decisions/0002-ui-framework.md)
+- [ADR-0003 MCP server for agent access to the library](decisions/0003-mcp-server.md)

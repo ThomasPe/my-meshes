@@ -137,5 +137,24 @@ pipeline with the updater disabled, Store assets).
 - [ ] **Custom thumbnails** (VIEW-4).
 - [ ] **Frameless title bar** (APP-10), if confirmed.
 
+### Epic 9: Integrations
+- [ ] **MCP server** (APP-12, ADR-0003). Step 1: crate `crates/mcp` (`meshkeep-mcp`,
+      `rmcp` Streamable HTTP server over the shared `Mutex<Engine>`, no Tauri imports),
+      started from the shell when enabled in Settings, `127.0.0.1` only, bearer token
+      generated on first enable and shown in Settings with a copy button and client
+      snippets, `Origin` check, off by default; tools `list_roots`, `list_projects`,
+      `search_projects`, `get_project`, `tag_counts`, `library_stats`, `get_thumbnail`
+      (cache only), `update_metadata` (read-then-write with `sidecar_stamp`, conflict as
+      tool error), `set_favorite`; no delete, rename, root or scan tools. Test mode takes
+      `MESHKEEP_MCP_PORT` and `MESHKEEP_MCP_TOKEN`. Step 2: `meshkeep --mcp-stdio` shim
+      forwarding to the loopback server for clients without header support (Claude
+      Desktop), `AppExecutionAlias` in the MSIX manifest, macOS `network.server`
+      entitlement on the APP-11 checklist. Acceptance: `cargo test -p meshkeep-mcp` drives
+      every tool with an in-process client against `fixtures/library`, including the
+      conflict path and a 403 without token; one real-app E2E test starts the app in test
+      mode, connects with the official TypeScript MCP client and asserts `list_projects`
+      returns the fixture projects; a side-load test on the MSIX VM confirms the loopback
+      connection and the alias. Dependencies `rmcp`, `axum` justified in the PR.
+
 ## Phase 3: Model tools
 - [ ] **Transforms & mesh analysis** (VIEW-7).
