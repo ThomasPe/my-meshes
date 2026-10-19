@@ -44,5 +44,6 @@ Meshkeep is source-available under the
 [PolyForm Noncommercial License 1.0.0](LICENSE): read it, build it, use it and change it
 for any noncommercial purpose. Selling the app or offering it commercially is reserved to
 the copyright holder; the Microsoft Store release is distributed under its own terms.
-Contributions are welcome under the rights grant in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+Keep the [`NOTICE`](NOTICE) file with every copy. Contributions are welcome under the
+rights grant in [`CONTRIBUTING.md`](CONTRIBUTING.md).
 "Meshkeep" is the name of this project and is not covered by the license.
