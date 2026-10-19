@@ -45,9 +45,12 @@ npx tauri signer generate -w ~/.tauri/meshkeep.key
 
 ### Partner Center identity (Store builds)
 
-1. Create a Microsoft Partner Center developer account (one-time fee for individuals).
-2. Apps and games → New product → MSIX or PWA app → **reserve the name "Meshkeep"**.
-   Reservations last three months and are renewed by submitting.
+Status: account created and the name **Meshkeep** reserved (2026-10-19); the domain
+**meshkeep.app** is registered for the website, support and privacy-policy URLs.
+
+1. ~~Create a Microsoft Partner Center developer account.~~ Done.
+2. ~~Reserve the name "Meshkeep".~~ Done. Reservations last three months and are renewed
+   by submitting.
 3. Product management → Product identity shows three values. Put them into the repository
    variables (Settings → Secrets and variables → Actions → Variables):
    - `MSIX_IDENTITY_NAME` = `Package/Identity/Name` (looks like `12345DevSym.Meshkeep`)
@@ -59,8 +62,10 @@ npx tauri signer generate -w ~/.tauri/meshkeep.key
 ### Submission checklist
 
 - Age rating questionnaire: no user-generated content, no purchases, no data collection.
-- Privacy policy: the app is offline-only and collects nothing; a one-page policy stating
-  that is still required by the Store form (`docs/store/listing.md` has the text).
+- Privacy policy: the app is offline-only and collects nothing; the Store form needs a
+  **URL**, so the text in `docs/store/listing.md` has to be published at
+  `https://meshkeep.app/privacy` (a static page is enough). Website and support URL:
+  `https://meshkeep.app`.
 - `runFullTrust` capability: the submission form asks for a reason. Text: "Desktop app
   that indexes user-selected folders of 3D model files; file access is limited to folders
   the user picks through the system dialog."

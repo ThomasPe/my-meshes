@@ -30,6 +30,8 @@ metadata you add lives in a small, readable `project.yaml` next to them.
 
 Made for people who print a lot and have folders full of models they can no longer find.
 
+**Website:** https://meshkeep.app · **Support:** https://meshkeep.app/support · **Privacy policy URL:** https://meshkeep.app/privacy
+
 **Keywords:** 3D printing, STL, 3MF, OBJ, model library, Printables, MakerWorld, Thingiverse, organizer
 
 **Category:** Productivity (secondary: Utilities & tools)
