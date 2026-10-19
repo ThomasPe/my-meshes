@@ -16,7 +16,8 @@ settings page shows "Updates arrive through the Microsoft Store" for Store build
 
 ## Dev channel (fast local iteration)
 
-`.github/workflows/dev-channel.yml` turns every push to `main` into an installable,
+`.github/workflows/dev-channel.yml` turns every push to `main` or a working branch
+(`claude/**`, `feat/**`, `fix/**`) into an installable,
 self-updating Windows build without a local toolchain:
 
 1. Builds the NSIS installer with `--features updater` and the dev overlay
@@ -32,7 +33,8 @@ self-updating Windows build without a local toolchain:
 
 First install: download `Meshkeep_<version>_x64-setup.exe` from the `dev` release once
 (SmartScreen warns because the installer is not code-signed; updates fetched by the app
-do not trigger that prompt). From then on, merge to `main` and restart the app.
+do not trigger that prompt). From then on, push and restart the app; the release body
+names the branch and commit the build came from.
 
 The stable channel uses `src-tauri/tauri.updater.conf.json` (`releases/latest`) and is
 produced by `release.yml` on tags. Store builds have no updater at all.

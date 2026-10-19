@@ -1,10 +1,11 @@
 name: Dev channel
 
-# Every push to main becomes an installable, self-updating Windows build on the rolling
-# pre-release tagged `dev`. Installed dev builds check that feed on startup (APP-9).
+# Every push to main or a working branch becomes an installable, self-updating Windows
+# build on the rolling pre-release tagged `dev` (the newest push wins; a build in
+# progress is cancelled). Installed dev builds check that feed on startup (APP-9).
 on:
   push:
-    branches: ['main']
+    branches: ['main', 'claude/**', 'feat/**', 'fix/**']
     paths-ignore: ['docs/**', 'spike/**', '*.md']
   workflow_dispatch:
 
@@ -74,8 +75,8 @@ jobs:
           tagName: dev
           releaseName: Dev channel ${{ steps.ver.outputs.version }}
           releaseBody: |
-            Rolling development build from `${{ github.sha }}`. Installed dev builds update
-            to this automatically on the next start. Not for the Store.
+            Rolling development build from `${{ github.ref_name }}` @ `${{ github.sha }}`.
+            Installed dev builds offer this on the next start. Not for the Store.
           prerelease: true
           releaseDraft: false
           includeUpdaterJson: true
