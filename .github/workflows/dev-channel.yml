@@ -111,12 +111,14 @@ jobs:
           if ($LASTEXITCODE -ne 0) { exit 1 }
           gh release edit dev --prerelease --title "$env:TITLE" --notes "$notes" --target ${{ github.sha }}
           $keep = @($exe, "$exe.sig", "latest.json")
-          $assets = gh release view dev --json assets --jq '.assets[] | "\(.id) \(.name)"'
+          # REST ids (numeric), not the node ids `gh release view` prints
+          $assets = gh api "repos/${{ github.repository }}/releases/tags/dev" --jq '.assets[] | "\(.id) \(.name)"'
           foreach ($line in $assets) {
             $id, $name = $line -split ' ', 2
             if ($keep -notcontains $name) {
               Write-Host "removing stale asset $name"
               gh api -X DELETE "repos/${{ github.repository }}/releases/assets/$id" | Out-Null
+              if ($LASTEXITCODE -ne 0) { exit 1 }
             }
           }
       - uses: actions/upload-artifact@v4

@@ -209,8 +209,13 @@ describe('Meshkeep D5 (facets, batch edit, settings)', () => {
     expect(report.failed).toEqual([]);
     const yaml = fs.readFileSync(path.join(fixture(), 'Gridfinity', 'Bins', 'project.yaml'), 'utf8');
     expect(yaml).toContain('batch-e2e');
-    await $('[data-testid="nav-library"]').click();
-    await browser.waitUntil(async () => (await $$('[data-testid="project-card"] button=batch-e2e')).length >= ids.length, { timeout: 10000 });
+    for (const id of ids) {
+      const p = await browser.tauri.execute(({ core }, id) => core.invoke('get_project', { id }), id) as { tags: string[] };
+      expect(p.tags).toContain('batch-e2e');
+    }
+    // and the facet counts follow the new creator-less, tagged state through the index
+    const tags = await browser.tauri.execute(({ core }) => core.invoke('tag_counts', { rootId: null })) as Array<{ tag: string; count: number }>;
+    expect(tags.find((t) => t.tag === 'batch-e2e')?.count).toBe(ids.length);
   });
 
   it('preview location persists in settings.json and renders into <project>/.cache/thumbs', async () => {
