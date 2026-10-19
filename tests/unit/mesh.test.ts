@@ -99,3 +99,14 @@ describe('STL progressive (VIEW-1)', () => {
     expect(chunks).toEqual([1]);
   });
 });
+
+describe('3MF production extension (Bambu Studio / OrcaSlicer)', () => {
+  it('follows p:path components into 3D/Objects/*.model', () => {
+    const part = '<?xml version="1.0"?><model xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources><object id="1" type="model"><mesh><vertices><vertex x="0" y="0" z="0"/><vertex x="10" y="0" z="0"/><vertex x="0" y="10" z="0"/></vertices><triangles><triangle v1="0" v2="1" v3="2"/></triangles></mesh></object></resources></model>';
+    const root = '<?xml version="1.0"?><model xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06"><resources><object id="2" type="model"><components><component p:path="/3D/Objects/part_1.model" objectid="1" transform="1 0 0 0 1 0 0 0 1 5 0 0"/></components></object></resources><build><item objectid="2" transform="1 0 0 0 1 0 0 0 1 0 0 100"/></build></model>';
+    const buf = generate3mf({ '3D/3dmodel.model': strToU8(root), '3D/Objects/part_1.model': strToU8(part) });
+    const m = parse3mf(buf);
+    expect(m.triangles).toBe(1);
+    expect(Array.from(m.positions.slice(0, 3))).toEqual([5, 0, 100]);
+  });
+});

@@ -1,4 +1,4 @@
-import { Check, ExternalLink } from 'lucide-react';
+import { Check, ExternalLink, Info } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
 import { TagEditor } from '@/features/library/TagEditor';
 import { reportError } from '@/lib/errors';
 import { useUpdateMetadata } from '@/lib/queries';
@@ -68,7 +69,10 @@ export function MetadataForm({ project: p, onReload }: { project: Project; onRel
       <Field label={t('project.notes')}><Input value={form.notes} placeholder="0.2 mm, 15 % infill…" onChange={(e) => set('notes', e.target.value)} /></Field>
       <div className="flex items-center gap-3">
         <Button type="submit" disabled={!dirty || update.isPending || p.offline} data-testid="save-metadata"><Check />{t('project.save')}</Button>
-        <span className="text-xs text-muted-foreground">{t('project.saveHint')}</span>
+        <Tooltip>
+          <TooltipTrigger asChild><button type="button" aria-label={t('project.saveHint')} className="rounded-full p-1 text-muted-foreground hover:bg-secondary hover:text-foreground" data-testid="save-hint"><Info className="size-4" /></button></TooltipTrigger>
+          <TooltipContent side="right" className="max-w-[40ch]">{t('project.saveHint')}</TooltipContent>
+        </Tooltip>
       </div>
 
       <Dialog open={!!conflict} onOpenChange={(o) => !o && setConflict(null)}>

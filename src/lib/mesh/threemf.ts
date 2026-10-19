@@ -8,7 +8,7 @@ import { computeFlatNormals, type ParsedMesh } from './types';
 type Mat = number[]; // 12 numbers, 3MF column-major "m00 m01 m02 m10 m11 m12 m20 m21 m22 m30 m31 m32"
 const IDENTITY: Mat = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0];
 
-interface ObjectDef { mesh?: { v: Float32Array; t: Uint32Array }; components: Array<{ id: string; transform: Mat }> }
+interface ObjectDef { mesh?: { v: Float32Array; t: Uint32Array }; components: Array<{ id: string; transform: Mat; path?: string }> }
 
 function parseTransform(s: string | undefined): Mat {
   if (!s) return IDENTITY;
@@ -92,7 +92,9 @@ export function parseModelXml(xml: string): { objects: Map<string, ObjectDef>; b
     while ((cm = cRe.exec(body))) {
       const tag = '<component' + cm[1];
       const cid = attr(tag, 'objectid');
-      if (cid && !attr(tag, 'p:path')) def.components.push({ id: cid, transform: parseTransform(attr(tag, 'transform')) });
+      // production extension: the component lives in another model part of the package
+      const path = /\s(?:[\w-]+:)?path\s*=\s*["']([^"']+)["']/.exec(tag)?.[1]?.replace(/^\//, '');
+      if (cid) def.components.push({ id: cid, transform: parseTransform(attr(tag, 'transform')), path });
     }
     objects.set(id, def);
   }
@@ -113,11 +115,20 @@ export function parseModelXml(xml: string): { objects: Map<string, ObjectDef>; b
 export function parse3mf(buffer: ArrayBuffer): ParsedMesh {
   const files = unzipSync(new Uint8Array(buffer), { filter: (f) => /\.(model|rels)$/i.test(f.name) });
   const modelPath = findModelPath(files);
-  const xml = new TextDecoder().decode(files[modelPath]!);
-  const { objects, build } = parseModelXml(xml);
+  const parts = new Map<string, ReturnType<typeof parseModelXml>>();
+  const part = (path: string) => {
+    let p = parts.get(path);
+    if (!p) {
+      const data = files[path] ?? files[decodeURIComponent(path)];
+      p = data ? parseModelXml(new TextDecoder().decode(data)) : { objects: new Map(), build: [] };
+      parts.set(path, p);
+    }
+    return p;
+  };
+  const { objects, build } = part(modelPath);
   const out: number[] = [];
-  const emit = (id: string, m: Mat, depth: number) => {
-    const def = objects.get(id);
+  const emit = (id: string, m: Mat, depth: number, scope = objects) => {
+    const def = scope.get(id);
     if (!def || depth > 16) return;
     if (def.mesh) {
       const { v, t } = def.mesh;
@@ -129,7 +140,7 @@ export function parse3mf(buffer: ArrayBuffer): ParsedMesh {
         }
       }
     }
-    for (const c of def.components) emit(c.id, mul(m, c.transform), depth + 1);
+    for (const c of def.components) emit(c.id, mul(m, c.transform), depth + 1, c.path ? part(c.path).objects : scope);
   };
   const items = build.length ? build : [...objects.keys()].map((id) => ({ id, transform: IDENTITY }));
   for (const it of items) emit(it.id, it.transform, 0);

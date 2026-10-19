@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getBackend } from '@/lib/backend';
 import { isAppError, type FileEntry } from '@/lib/types';
-import { PREVIEWABLE } from '@/lib/mesh';
+import { parseModel, PREVIEWABLE } from '@/lib/mesh';
 import MeshWorker from '@/workers/mesh-worker?worker';
 import type { MeshWorkerMessage } from '@/workers/mesh-worker';
 
@@ -48,6 +48,9 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
       if (canvas.width !== w * renderer.getPixelRatio() || canvas.height !== h * renderer.getPixelRatio()) { renderer.setSize(w, h, false); camera.aspect = w / h; camera.updateProjectionMatrix(); }
       controls.update();
       renderer.render(scene, camera);
+      // orientation readback for tests and debugging (no React re-render)
+      canvas.dataset.azimuth = controls.getAzimuthalAngle().toFixed(3);
+      canvas.dataset.distance = camera.position.distanceTo(controls.target).toFixed(1);
     };
     // render on demand: while damping settles, keep animating; otherwise one frame per change
     let active = 0;
@@ -87,16 +90,17 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
       setStatus({ kind: 'loading', text: t('project.parsing', { name: file.name }) });
       // VIEW-1: the worker streams slices; geometry is pre-sized from 'begin' and the draw
       // range grows per slice, so big files appear progressively instead of after a freeze.
+      // A watchdog catches a worker that never answers (blocked script, crashed thread) and
+      // parses on the main thread instead, so the viewer never stays on "reading" forever.
       await new Promise<void>((res, rej) => {
-        const w = new MeshWorker();
-        worker = w;
         let geom: THREE.BufferGeometry | null = null;
         let pos: THREE.BufferAttribute | null = null;
         let nrm: THREE.BufferAttribute | null = null;
         let total = 0, done = 0, framed = false;
-        w.onmessage = (e: MessageEvent<MeshWorkerMessage>) => {
-          const m = e.data;
-          if (cancelled) { w.terminate(); return; }
+        let watchdog: ReturnType<typeof setTimeout> | null = null;
+        let settled = false;
+        const handle = (m: MeshWorkerMessage) => {
+          if (cancelled || settled) return;
           if (m.type === 'begin') {
             total = m.triangles;
             if (s.mesh) { s.scene.remove(s.mesh); s.mesh.geometry.dispose(); s.mesh = null; }
@@ -120,17 +124,38 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
             s.frame();
             if (total > 0) setStatus({ kind: 'loading', text: t('project.loadingProgress', { name: file.name, percent: Math.round((done / total) * 100) }), percent: done / total });
           } else if (m.type === 'done') {
-            w.terminate(); worker = null;
+            settled = true;
+            if (watchdog) clearTimeout(watchdog);
+            worker?.terminate(); worker = null;
             if (geom) frameTo(geom);
             s.frame();
             res();
           } else if (m.type === 'error') {
-            w.terminate(); worker = null;
+            settled = true;
+            if (watchdog) clearTimeout(watchdog);
+            worker?.terminate(); worker = null;
             rej(new Error(m.error));
           }
         };
-        w.onerror = (e) => { w.terminate(); worker = null; rej(e.error ?? new Error(e.message)); };
-        w.postMessage({ buffer: buf, ext }, [buf]);
+        const mainThread = (reason: string) => {
+          worker?.terminate(); worker = null;
+          console.warn(`mesh worker unavailable (${reason}); parsing on the main thread`);
+          try {
+            const m = parseModel(buf, ext);
+            handle({ type: 'begin', triangles: m.triangles });
+            handle({ type: 'chunk', offset: 0, triangles: m.triangles, positions: m.positions, normals: m.normals });
+            handle({ type: 'done', triangles: m.triangles, parseMs: 0 });
+          } catch (err) { handle({ type: 'error', error: err instanceof Error ? err.message : String(err) }); }
+        };
+        const arm = () => { if (watchdog) clearTimeout(watchdog); watchdog = setTimeout(() => { if (!settled) mainThread('no answer within 20 s'); }, 20_000); };
+        let w: Worker;
+        try { w = new MeshWorker(); } catch (err) { mainThread(err instanceof Error ? err.message : String(err)); return; }
+        worker = w;
+        w.onmessage = (e: MessageEvent<MeshWorkerMessage>) => { arm(); handle(e.data); };
+        w.onerror = (e) => { if (!settled) mainThread(e.message || 'worker error'); };
+        // the buffer is copied, not transferred: the main-thread fallback may still need it
+        w.postMessage({ buffer: buf, ext });
+        arm();
       });
       if (cancelled) return;
       setStatus({ kind: 'ready', triangles: s.mesh ? (s.mesh.geometry.drawRange.count / 3) : 0 });
@@ -146,7 +171,7 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
       <canvas ref={canvasRef} className="block size-full touch-none" />
       {models.length === 0 && <div className="absolute inset-0 grid place-items-center text-sm font-semibold text-muted-foreground">{t('project.noModels')}</div>}
       {status.kind !== 'ready' && status.kind !== 'idle' && models.length > 0 && (
-        <div className={status.kind === 'loading' && status.percent !== undefined ? 'pointer-events-none absolute inset-x-6 top-3 grid gap-1 text-xs font-semibold text-muted-foreground' : 'absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm font-semibold text-muted-foreground'} data-testid="viewer-status" data-progress={status.percent !== undefined ? Math.round(status.percent * 100) : undefined}>
+        <div className={status.kind === 'loading' && status.percent !== undefined ? 'pointer-events-none absolute inset-x-6 top-3 grid gap-1 text-xs font-semibold text-muted-foreground' : 'pointer-events-none absolute inset-x-6 top-1/2 -translate-y-1/2 text-center text-sm font-semibold text-muted-foreground'} data-testid="viewer-status" data-progress={status.percent !== undefined ? Math.round(status.percent * 100) : undefined}>
           <span className="truncate">{status.text}</span>
           {status.percent !== undefined && <span className="h-1 w-full overflow-hidden rounded-full bg-secondary"><span className="block h-full bg-primary transition-[width]" style={{ width: `${Math.round(status.percent * 100)}%` }} /></span>}
         </div>
@@ -154,11 +179,11 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
       <div className="absolute left-3 right-3 bottom-3 flex items-center gap-3 text-xs font-semibold text-muted-foreground">
         {models.length > 1 && (
           <Select value={current} onValueChange={setCurrent}>
-            <SelectTrigger size="sm" className="max-w-[260px]"><SelectValue /></SelectTrigger>
+            <SelectTrigger size="sm" className="max-w-[min(260px,60%)] min-w-0 [&>span:first-child]:min-w-0 [&>span:first-child]:truncate" title={current} data-testid="viewer-file"><SelectValue /></SelectTrigger>
             <SelectContent>{models.map((m) => <SelectItem key={m.rel_path} value={m.rel_path}>{m.name}</SelectItem>)}</SelectContent>
           </Select>
         )}
-        {models.length === 1 && <span className="rounded-full bg-card px-3 py-1 shadow-card">{models[0]!.name}</span>}
+        {models.length === 1 && <span className="max-w-[min(260px,60%)] truncate rounded-full bg-card px-3 py-1 shadow-card" title={models[0]!.name}>{models[0]!.name}</span>}
         {status.kind === 'ready' && <span data-testid="viewer-triangles">{t('project.triangles', { count: status.triangles ?? 0 })}</span>}
         <span className="ml-auto hidden sm:inline">{t('project.viewerHint')}</span>
         <Button size="icon-sm" variant="outline" onClick={reset} title="reset"><RotateCcw /></Button>

@@ -469,3 +469,32 @@ test('import: archives can be left where they are, the choice is remembered', as
   await page.getByTestId('import-open').click();
   await expect(page.getByTestId('import-policy')).toContainText('Leave where it is');
 });
+
+test('viewer: dragging orbits, the wheel zooms, long file names do not widen the picker', async ({ page }) => {
+  await page.getByTestId('project-card').filter({ hasText: 'Robotic Arm v4' }).dblclick();
+  await expect(page.getByTestId('viewer-triangles')).toBeVisible({ timeout: 20000 });
+  const canvas = page.getByTestId('viewer').locator('canvas');
+  const before = await canvas.getAttribute('data-azimuth');
+  const box = (await canvas.boundingBox())!;
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+  await page.mouse.down();
+  await page.mouse.move(box.x + box.width / 2 + 120, box.y + box.height / 2, { steps: 10 });
+  await page.mouse.up();
+  await expect.poll(() => canvas.getAttribute('data-azimuth')).not.toBe(before);
+  const dist = Number(await canvas.getAttribute('data-distance'));
+  await page.mouse.wheel(0, -400);
+  await expect.poll(async () => Number(await canvas.getAttribute('data-distance'))).toBeLessThan(dist);
+  await page.getByTestId('back').click();
+  await page.getByTestId('search').fill('Planetary');
+  await page.getByTestId('project-card').filter({ hasText: 'Planetary Gearbox' }).dblclick();
+  await expect(page.getByTestId('viewer-file')).toBeVisible();
+  const trigger = (await page.getByTestId('viewer-file').boundingBox())!;
+  expect(trigger.width).toBeLessThanOrEqual(262);
+  await page.getByTestId('viewer-file').click();
+  await page.getByRole('option', { name: /Planetary_Gearbox_Complete/ }).click();
+  await expect(page.getByTestId('viewer-file')).toContainText('Planetary_Gearbox');
+  expect((await page.getByTestId('viewer-file').boundingBox())!.width).toBeLessThanOrEqual(262);
+  // the save hint sits behind an info icon now
+  await page.getByTestId('save-hint').hover();
+  await expect(page.getByRole('tooltip')).toContainText('optimistic');
+});
