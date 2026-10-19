@@ -72,7 +72,7 @@ jobs:
         run: npm run test:e2e
         env:
           MESHKEEP_APP: ${{ github.workspace }}\target\release\meshkeep.exe
-      - name: Release build (Store flavor: no e2e plugins, no updater)
+      - name: Release build (Store flavor, no e2e plugins, no updater)
         run: npm run tauri:build:store
       - name: MSIX (side-load) + install round trip
         run: |
