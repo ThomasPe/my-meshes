@@ -69,7 +69,7 @@ export function SettingsPage({ scanning, onScanEnd }: { scanning: ScanState; onS
 
         <Card title={t('settings.roots')} hint={t('settings.rootsHint')} action={<Button size="sm" onClick={() => void addRootViaPicker()} data-testid="add-root"><Plus />{t('settings.addFolder')}</Button>}>
           {(roots.data ?? []).map((r) => (
-            <div key={r.id} className="grid grid-cols-[minmax(0,1fr)_170px_auto_auto] items-center gap-3.5 border-b border-border py-3.5 last:border-0" data-testid="root-row">
+            <div key={r.id} className="grid grid-cols-[minmax(0,1fr)_minmax(190px,max-content)_auto_auto] items-center gap-3.5 border-b border-border py-3.5 last:border-0" data-testid="root-row">
               <div className="flex min-w-0 items-center gap-2.5"><FolderOpen className="size-4 shrink-0 text-muted-foreground" /><div className="min-w-0"><div className="truncate font-extrabold" title={r.path}>{r.path}</div><div className="text-xs font-semibold text-muted-foreground">{r.last_scan_at ? t('settings.lastScan', { when: formatDate(r.last_scan_at, i18n.language) }) : t('settings.neverScanned')}</div>
                 {r.last_scan && <div className="text-xs text-muted-foreground tabular" data-testid="root-scan-summary">{t('settings.scanSummary', { projects: r.last_scan.projects, files: r.last_scan.files, time: formatDuration(r.last_scan.millis), trigger: t(`settings.trigger.${r.last_scan.trigger}`, { defaultValue: r.last_scan.trigger }) })}{r.last_scan.warning_count > 0 && <details className="inline"><summary className="ml-2 inline cursor-pointer text-warning">{t('settings.scanWarnings', { count: r.last_scan.warning_count })}</summary><ul className="mt-1 list-disc pl-4 text-warning">{r.last_scan.warnings.map((w) => <li key={w} className="break-all">{w}</li>)}</ul></details>}</div>}
                 {r.last_error && <div className="text-xs font-semibold text-warning" data-testid="root-error">{t('settings.lastError')}: {r.last_error}</div>}</div></div>
@@ -187,11 +187,11 @@ function nearestInterval(secs: number): number {
 function Card({ title, hint, action, children }: { title: string; hint?: string; action?: React.ReactNode; children: React.ReactNode }) {
   return (
     <section className="rounded-2xl bg-card p-5 shadow-card">
-      <div className="mb-2 flex items-center gap-2.5"><h2 className="text-base font-extrabold tracking-tight">{title}</h2>{hint && <span className="text-xs font-semibold text-muted-foreground">{hint}</span>}<span className="ml-auto">{action}</span></div>
+      <div className="mb-2 flex flex-wrap items-center gap-x-2.5 gap-y-1"><h2 className="shrink-0 whitespace-nowrap text-base font-extrabold tracking-tight">{title}</h2>{hint && <span className="min-w-0 flex-1 basis-60 text-xs font-semibold text-muted-foreground">{hint}</span>}{action && <span className="ml-auto shrink-0">{action}</span>}</div>
       {children}
     </section>
   );
 }
 function Row({ label, children }: { label: string; children: React.ReactNode }) {
-  return <div className="flex items-center justify-between gap-4 border-b border-border py-3 last:border-0"><b className="text-sm">{label}</b>{children}</div>;
+  return <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-2 border-b border-border py-3 last:border-0"><b className="shrink-0 text-sm">{label}</b>{children}</div>;
 }

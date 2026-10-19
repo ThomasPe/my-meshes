@@ -120,7 +120,7 @@ function RootTree({ root, filter, setFilter }: { root: LibraryRoot; filter: Libr
           <HardDrive className="text-muted-foreground" />
           <span className="truncate">{name}</span>
         </button>
-        <span className="text-[11px] text-muted-foreground">{root.status === 'offline' ? 'offline' : root.mode}</span>
+        <span className="shrink-0 text-[11px] text-muted-foreground">{root.status === 'offline' ? 'offline' : root.mode}</span>
       </div>
       {open && root.status !== 'offline' && (
         <div className={cn(itemClass, 'h-8 font-medium', same(filter, inboxFilter) && activeClass)} style={{ paddingLeft: 28 }}>

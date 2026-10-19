@@ -95,7 +95,7 @@ export function Inspector({ selectedIds, visible, tagCounts, facets, filterTitle
   const p = project.data!;
   const root = roots.data?.find((r) => r.id === p.root_id);
   const dirPath = root ? `${root.path}${p.rel_path ? (root.path.includes('\\') ? '\\' : '/') + p.rel_path.replace(/\//g, root.path.includes('\\') ? '\\' : '/') : ''}` : p.rel_path;
-  const sidecarBadge = p.sidecar.state === 'ok' ? <Badge variant="success">{t('inspector.sidecarOk')}</Badge> : p.sidecar.state === 'malformed' ? <Badge variant="warning" title={p.sidecar.message}>{t('inspector.sidecarMalformed')}</Badge> : <Badge variant="outline">{t('inspector.sidecarMissing')}</Badge>;
+  const sidecarBadge = p.sidecar.state === 'ok' ? <Badge variant="success" className="max-w-full" title={t('inspector.sidecarOk')}><span className="truncate">{t('inspector.sidecarOk')}</span></Badge> : p.sidecar.state === 'malformed' ? <Badge variant="warning" className="max-w-full" title={p.sidecar.message}><span className="truncate">{t('inspector.sidecarMalformed')}</span></Badge> : <Badge variant="outline" className="max-w-full" title={t('inspector.sidecarMissing')}><span className="truncate">{t('inspector.sidecarMissing')}</span></Badge>;
   const summary: ProjectSummary = { id: p.id, root_id: p.root_id, rel_path: p.rel_path, title: p.title, creator: p.creator, tags: p.tags, thumbnail: p.thumbnail, file_count: p.files.length, model_count: p.model_count, total_bytes: p.total_bytes, modified: p.modified, has_sidecar: p.sidecar.state === 'ok', offline: p.offline, favorite: p.favorite, added: p.added, thumb: p.thumb, slicer: p.slicer };
 
   const saveTags = (tags: string[]) => {
@@ -129,11 +129,11 @@ export function Inspector({ selectedIds, visible, tagCounts, facets, filterTitle
         <dl className="grid grid-cols-[92px_minmax(0,1fr)] gap-x-3 gap-y-2 text-[13px]">
           <dt className="text-muted-foreground">{t('inspector.creator')}</dt><dd className="truncate font-semibold">{p.creator ?? <span className="text-muted-foreground">{t('library.unknownCreator')}</span>}</dd>
           <dt className="text-muted-foreground">{t('inspector.license')}</dt><dd className="truncate font-semibold">{p.license ?? <span className="text-muted-foreground">{t('inspector.notSet')}</span>}</dd>
-          <dt className="text-muted-foreground">{t('inspector.source')}</dt><dd className="truncate font-semibold">{p.source_url ? <a className="inline-flex items-center gap-1 text-primary hover:underline" href={p.source_url} target="_blank" rel="noreferrer">{p.source_url.replace(/^https?:\/\/(www\.)?/, '')}<ExternalLink className="size-3" /></a> : <span className="text-muted-foreground">{t('inspector.notSet')}</span>}</dd>
+          <dt className="text-muted-foreground">{t('inspector.source')}</dt><dd className="truncate font-semibold">{p.source_url ? <a className="inline-flex max-w-full items-center gap-1 text-primary hover:underline" href={p.source_url} target="_blank" rel="noreferrer" title={p.source_url}><span className="truncate">{p.source_url.replace(/^https?:\/\/(www\.)?/, '')}</span><ExternalLink className="size-3 shrink-0" /></a> : <span className="text-muted-foreground">{t('inspector.notSet')}</span>}</dd>
           <dt className="text-muted-foreground">{t('inspector.material')}</dt><dd className="truncate font-semibold">{p.material ?? <span className="text-muted-foreground">{t('project.any')}</span>}{p.supports_required != null && <span className="text-muted-foreground"> · {p.supports_required ? t('inspector.supports') : t('inspector.noSupports')}</span>}</dd>
           <dt className="text-muted-foreground">{t('inspector.modified')}</dt><dd className="font-semibold">{formatDate(p.modified, i18n.language)}</dd>
           <dt className="text-muted-foreground">{t('inspector.added')}</dt><dd className="font-semibold">{formatDate(p.added, i18n.language)}</dd>
-          <dt className="text-muted-foreground">{t('inspector.sidecar')}</dt><dd>{sidecarBadge}</dd>
+          <dt className="text-muted-foreground">{t('inspector.sidecar')}</dt><dd className="min-w-0">{sidecarBadge}</dd>
         </dl>
         <Section title={t('inspector.tags')}>
           <TagEditor tags={p.tags} onChange={saveTags} disabled={p.offline || update.isPending} />

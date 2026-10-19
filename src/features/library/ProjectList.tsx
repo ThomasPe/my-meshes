@@ -26,7 +26,8 @@ export function ProjectList({ projects, selected, sort, onSort, onSelect, onOpen
   const { t, i18n } = useTranslation();
   const parentRef = useRef<HTMLDivElement>(null);
   const virt = useVirtualizer({ count: projects.length, getScrollElement: () => parentRef.current, estimateSize: () => ROW, overscan: 10 });
-  const cols = 'grid-cols-[56px_minmax(220px,2fr)_minmax(120px,1fr)_minmax(140px,1.4fr)_70px_90px_100px_36px]';
+  // narrow panels scroll the table sideways instead of clipping the last columns
+  const cols = 'min-w-[720px] grid-cols-[48px_minmax(180px,2fr)_minmax(100px,1fr)_minmax(110px,1.2fr)_60px_80px_92px_36px]';
   const Head = ({ k, label, className }: { k?: SortKey; label: string; className?: string }) => (
     <button type="button" disabled={!k} onClick={() => k && onSort(k)} className={cn('flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground disabled:cursor-default', className)}>
       {label}{k && sort === k && <ArrowDown className="size-3" />}
@@ -34,7 +35,7 @@ export function ProjectList({ projects, selected, sort, onSort, onSelect, onOpen
   );
   return (
     <div className="flex h-full flex-col px-5 pb-6 pt-3" data-testid="project-list">
-      <div className="overflow-hidden rounded-2xl bg-card shadow-card">
+      <div className="overflow-x-auto rounded-2xl bg-card shadow-card">
         <div className={cn('grid items-center gap-3 border-b border-border px-3 py-2', cols)}>
           <span /><Head k="title" label={t('library.columns.title')} /><Head k="creator" label={t('library.columns.creator')} /><Head label={t('library.columns.tags')} /><Head label={t('library.columns.files')} className="justify-end" /><Head k="size" label={t('library.columns.size')} className="justify-end" /><Head k="modified" label={t('library.columns.modified')} className="justify-end" /><span />
         </div>

@@ -1,5 +1,6 @@
 import { Search } from 'lucide-react';
 import { useCallback, useMemo } from 'react';
+import { Group, Panel, Separator, type Layout } from 'react-resizable-panels';
 import { useTranslation } from 'react-i18next';
 import type { ScanState } from '@/App';
 import { Button } from '@/components/ui/button';
@@ -18,6 +19,15 @@ import { useAddToCollection, useCollections, useFacets, useProjects, useReorderC
 import { navigate } from '@/lib/router';
 import { useUi } from '@/lib/store';
 import type { ListQuery } from '@/lib/types';
+
+const LAYOUT_KEY = 'mm.library.layout';
+function loadLayout(): Layout | undefined {
+  try { const l = JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? 'null'); return l && typeof l === 'object' && 'sidebar' in l ? (l as Layout) : undefined; } catch { return undefined; }
+}
+function saveLayout(l: Layout) {
+  try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(l)); } catch { /* ignore */ }
+}
+const separatorClass = 'group relative w-1 shrink-0 bg-transparent transition-colors hover:bg-primary/40 data-[separator-active]:bg-primary/60 data-[resize-handle-active]:bg-primary/60';
 
 export function LibraryPage({ scanning, onScanEnd }: { scanning: ScanState; onScanEnd: (rootId: string) => void }) {
   const { t } = useTranslation();
@@ -93,11 +103,13 @@ export function LibraryPage({ scanning, onScanEnd }: { scanning: ScanState; onSc
   const onReorder = collectionId && effectiveSort === 'collection' ? (ids: string[]) => reorder.mutate({ id: collectionId, order: ids }, { onError: reportError }) : undefined;
 
   return (
-    <div className="grid h-full grid-cols-[250px_minmax(0,1fr)_320px]" data-testid="library">
-      <Sidebar />
+    <Group orientation="horizontal" className="h-full" defaultLayout={loadLayout()} onLayoutChanged={saveLayout} data-testid="library">
+      <Panel id="sidebar" defaultSize={250} minSize={200} maxSize={480} className="min-w-0" data-testid="panel-sidebar"><Sidebar /></Panel>
+      <Separator className={separatorClass} aria-label="resize sidebar" data-testid="resize-sidebar" />
       {dialogs}
       <CollectionDialogs onCreated={(id, addIds) => { if (addIds?.length) addTo.mutate({ id, projectIds: addIds }, { onError: reportError }); }} />
-      <main className="grid min-h-0 grid-rows-[auto_minmax(0,1fr)]" onKeyDown={onKey}>
+      <Panel id="main" minSize={360} className="min-w-0">
+      <main className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]" onKeyDown={onKey}>
         <Toolbar title={filterTitle} count={filter.kind === 'inbox' ? 0 : list.length} onRescan={activeRoot && filter.kind !== 'inbox' ? () => void scan(activeRoot) : undefined} scanning={!!activeRoot && activeRoot in scanning} sortLocked={filter.kind === 'recent' || filter.kind === 'inbox'} onImport={() => void pickImport()} onSaveSmart={filtered && filter.kind !== 'inbox' && filter.kind !== 'collection' && filter.kind !== 'smart' ? saveSmart : undefined} collectionSort={filter.kind === 'collection'} />
         {filter.kind === 'inbox' ? (
           <InboxView rootId={filter.rootId} />
@@ -116,7 +128,11 @@ export function LibraryPage({ scanning, onScanEnd }: { scanning: ScanState; onSc
           <ProjectList projects={list} selected={selectedSet} sort={effectiveSort} onSort={setSort} onSelect={onSelect} onOpen={onOpen} onTag={toggleTag} actions={actions} />
         )}
       </main>
-      <Inspector selectedIds={selected} visible={list} tagCounts={tagCounts.data ?? []} facets={facets.data} filterTitle={filterTitle} onTag={toggleTag} actions={actions} />
-    </div>
+      </Panel>
+      <Separator className={separatorClass} aria-label="resize inspector" data-testid="resize-inspector" />
+      <Panel id="inspector" defaultSize={320} minSize={260} maxSize={600} className="min-w-0" data-testid="panel-inspector">
+        <Inspector selectedIds={selected} visible={list} tagCounts={tagCounts.data ?? []} facets={facets.data} filterTitle={filterTitle} onTag={toggleTag} actions={actions} />
+      </Panel>
+    </Group>
   );
 }

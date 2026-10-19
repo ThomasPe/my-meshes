@@ -387,3 +387,30 @@ test('settings: preview location and notification toggle; import notifies when u
   await expect.poll(() => page.evaluate(() => (window as unknown as { __mockNotifications?: unknown[] }).__mockNotifications?.length ?? 0)).toBe(1);
   expect(await page.evaluate(() => (window as unknown as { __mockNotifications: Array<{ title: string }> }).__mockNotifications[0]!.title)).toBe('Import finished');
 });
+
+test('sidebars resize by dragging, the layout persists, long names truncate instead of clipping', async ({ page }) => {
+  const sidebar = page.getByTestId('panel-sidebar');
+  const before = (await sidebar.boundingBox())!;
+  expect(Math.round(before.width)).toBeGreaterThanOrEqual(240);
+  const handle = (await page.getByTestId('resize-sidebar').boundingBox())!;
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + 200);
+  await page.mouse.down();
+  await page.mouse.move(handle.x + 120, handle.y + 200, { steps: 8 });
+  await page.mouse.up();
+  const after = (await sidebar.boundingBox())!;
+  expect(after.width).toBeGreaterThan(before.width + 80);
+  await page.reload();
+  await expect(page.getByTestId('library')).toBeVisible();
+  const again = (await page.getByTestId('panel-sidebar').boundingBox())!;
+  expect(Math.abs(again.width - after.width)).toBeLessThan(4);
+  // a long title and a long file name stay inside the inspector
+  await page.getByTestId('project-card').filter({ hasText: 'Robotic Arm v4' }).click();
+  const panel = (await page.getByTestId('panel-inspector').boundingBox())!;
+  for (const text of ['Show in Explorer', 'Open']) {
+    const box = (await page.getByTestId('inspector').getByRole('button', { name: text }).boundingBox())!;
+    expect(box.x + box.width).toBeLessThanOrEqual(panel.x + panel.width + 1);
+  }
+  const folder = page.getByTestId('filter-folder').filter({ hasText: 'Calibration' }).first();
+  expect((await folder.boundingBox())!.x + (await folder.boundingBox())!.width).toBeLessThanOrEqual(again.x + again.width + 1);
+  await page.screenshot({ path: 'test-results/resized-layout.png' });
+});
