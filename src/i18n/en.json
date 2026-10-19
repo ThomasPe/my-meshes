@@ -206,7 +206,10 @@
     "installUpdate": "Install and restart",
     "updateInstalling": "Installing…",
     "updateError": "Update check failed: {{message}}",
-    "updateIdle": "Updates are never installed without asking."
+    "updateIdle": "Updates are never installed without asking.",
+    "updatesDevChannel": "Dev channel: every push to main becomes a build; checked once on startup.",
+    "updateDevHint": "Dev channel build. Installs in the background and restarts the app.",
+    "channel": "{{channel}} channel"
   },
   "status": {
     "watching": "Watching {{path}}",

@@ -14,6 +14,29 @@ The Store build never contains the updater (spec `04-quality.md`): the `updater`
 feature is simply not compiled in, so there is no code path to hide at runtime. The
 settings page shows "Updates arrive through the Microsoft Store" for Store builds.
 
+## Dev channel (fast local iteration)
+
+`.github/workflows/dev-channel.yml` turns every push to `main` into an installable,
+self-updating Windows build without a local toolchain:
+
+1. Builds the NSIS installer with `--features updater` and the dev overlay
+   (`src-tauri/tauri.updater.dev.conf.json`: dev endpoint, channel `dev`), versioned
+   `<package.json version>-dev.<run number>` so every build is newer than the last and
+   older than the next stable release. LTO is off for this job; it takes about half the
+   time of a release build.
+2. Signs the installer with the updater key and publishes installer, `.sig` and
+   `latest.json` to the rolling pre-release tagged **`dev`** (recreated on every run).
+3. An installed dev build checks `releases/download/dev/latest.json` once on startup and
+   offers "Install and restart"; nothing installs without the click. Settings shows the
+   channel badge and a manual check.
+
+First install: download `Meshkeep_<version>_x64-setup.exe` from the `dev` release once
+(SmartScreen warns because the installer is not code-signed; updates fetched by the app
+do not trigger that prompt). From then on, merge to `main` and restart the app.
+
+The stable channel uses `src-tauri/tauri.updater.conf.json` (`releases/latest`) and is
+produced by `release.yml` on tags. Store builds have no updater at all.
+
 ## Pipeline
 
 `.github/workflows/release.yml` runs on every `v*` tag:
@@ -35,13 +58,14 @@ settings page shows "Updates arrive through the Microsoft Store" for Store build
 
 ### Updater signing key (private builds)
 
-```bash
-npx tauri signer generate -w ~/.tauri/meshkeep.key
-```
+Status: generated 2026-10-19 (minisign key id `0C7DD2E789BBD1C8`); the public key is in
+both updater overlays, the private key and password are repository secrets
+`TAURI_SIGNING_PRIVATE_KEY` / `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`.
 
-- Paste the **public** key into `src-tauri/tauri.updater.conf.json` (`plugins.updater.pubkey`).
-- Store the **private** key and its password as the GitHub secrets named above. Never
-  commit the private key; losing it means every installed private build stops updating.
+To rotate: `npx tauri signer generate -w ~/.tauri/meshkeep.key`, paste the **public** key
+into `src-tauri/tauri.updater.conf.json` and `tauri.updater.dev.conf.json`, replace the
+secrets. Never commit the private key; losing it means every installed private build
+has to be reinstalled by hand once.
 
 ### Partner Center identity (Store builds)
 

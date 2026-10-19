@@ -206,7 +206,10 @@
     "installUpdate": "Installieren und neu starten",
     "updateInstalling": "Installiere…",
     "updateError": "Update-Prüfung fehlgeschlagen: {{message}}",
-    "updateIdle": "Updates werden nie ohne Nachfrage installiert."
+    "updateIdle": "Updates werden nie ohne Nachfrage installiert.",
+    "updatesDevChannel": "Dev-Kanal: jeder Push auf main wird ein Build; wird beim Start einmal geprüft.",
+    "updateDevHint": "Dev-Kanal-Build. Installiert im Hintergrund und startet die App neu.",
+    "channel": "Kanal {{channel}}"
   },
   "status": {
     "watching": "Beobachte {{path}}",

@@ -30,8 +30,10 @@ npm run tauri:build:store && ./msix/build-msix.ps1 && ./msix/sideload-test.ps1  
 ```
 
 Build flavors are cargo features on `src-tauri`: none (dev), `e2e` (WebDriver plugins +
-test seams), `updater` (private builds, `tauri.updater.conf.json`), `store` (Microsoft
-Store, never with the updater). `docs/store/README.md` has the release pipeline.
+test seams), `updater` (private builds; `tauri.updater.conf.json` = stable channel,
+`tauri.updater.dev.conf.json` = dev channel), `store` (Microsoft Store, never with the
+updater). Every push to `main` publishes a self-updating dev build to the `dev`
+pre-release (`dev-channel.yml`); `docs/store/README.md` has the whole pipeline.
 
 ## Rules that are not negotiable (from the spec)
 

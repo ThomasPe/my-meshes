@@ -10,7 +10,8 @@ import { LibraryPage } from '@/features/library/LibraryPage';
 import { ProjectPage } from '@/features/project/ProjectPage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
 import { WelcomePage } from '@/features/welcome/WelcomePage';
-import { queryClient, useBackendEvents, useRoots } from '@/lib/queries';
+import { queryClient, useAppInfo, useBackendEvents, useRoots } from '@/lib/queries';
+import { useStartupUpdateCheck } from '@/features/settings/useStartupUpdateCheck';
 import { navigate, useRoute } from '@/lib/router';
 
 export type ScanState = Record<string, number>; // rootId -> projects found so far
@@ -22,6 +23,8 @@ function Shell() {
   const onScan = useCallback((rootId: string, found: number) => setScanning((s) => ({ ...s, [rootId]: found })), []);
   useBackendEvents(onScan);
   useEffect(() => { wireImportEvents(); }, []);
+  const info = useAppInfo();
+  useStartupUpdateCheck(info.data);
   const scanEnd = useCallback((rootId: string) => setScanning((s) => { const n = { ...s }; delete n[rootId]; return n; }), []);
 
   // First run: no roots -> welcome. Keep explicit navigation otherwise.

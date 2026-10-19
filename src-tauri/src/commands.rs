@@ -73,6 +73,8 @@ pub struct AppInfo {
     updater: bool,
     /// Built for the Microsoft Store (updates come from the Store).
     store: bool,
+    /// Update channel of this build ("dev", "stable") or `None` without an updater.
+    channel: Option<String>,
     os: String,
     arch: String,
     webview: String,
@@ -87,6 +89,17 @@ pub fn app_info(app: AppHandle, state: State<AppState>) -> AppInfo {
         e2e_build: cfg!(feature = "e2e"),
         updater: cfg!(feature = "updater"),
         store: cfg!(feature = "store"),
+        channel: if cfg!(feature = "updater") {
+            app.config()
+                .plugins
+                .0
+                .get("meshkeep")
+                .and_then(|v| v.get("channel"))
+                .and_then(|v| v.as_str())
+                .map(|s| s.to_string())
+        } else {
+            None
+        },
         os: std::env::consts::OS.into(),
         arch: std::env::consts::ARCH.into(),
         webview: tauri::webview_version().unwrap_or_else(|_| "unknown".into()),

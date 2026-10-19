@@ -140,6 +140,7 @@ export interface AppInfo {
   e2eBuild: boolean;
   updater: boolean;
   store: boolean;
+  channel: string | null;
   os: string;
   arch: string;
   webview: string;

@@ -126,7 +126,7 @@ export function SettingsPage({ scanning, onScanEnd }: { scanning: ScanState; onS
           </Row>
         </Card>
 
-        <Card title={t('settings.updates')} hint={info.data?.store ? t('settings.updatesStore') : info.data?.updater ? t('settings.updatesPrivate') : t('settings.updatesDev')} action={info.data?.updater ? <Button size="sm" variant="outline" disabled={update.state === 'checking' || update.state === 'installing'} onClick={() => void checkUpdate()} data-testid="check-update"><Download />{t('settings.checkUpdate')}</Button> : undefined}>
+        <Card title={t('settings.updates')} hint={info.data?.store ? t('settings.updatesStore') : info.data?.updater ? (info.data.channel === 'dev' ? t('settings.updatesDevChannel') : t('settings.updatesPrivate')) : t('settings.updatesDev')} action={info.data?.updater ? <Button size="sm" variant="outline" disabled={update.state === 'checking' || update.state === 'installing'} onClick={() => void checkUpdate()} data-testid="check-update"><Download />{t('settings.checkUpdate')}</Button> : undefined}>
           <div className="text-[13px] font-semibold text-secondary-foreground" data-testid="update-status">
             {update.state === 'checking' && t('settings.updateChecking')}
             {update.state === 'result' && update.error && <span className="text-warning">{t('settings.updateError', { message: update.error })}</span>}
@@ -140,7 +140,7 @@ export function SettingsPage({ scanning, onScanEnd }: { scanning: ScanState; onS
 
         <Card title={t('settings.about')}>
           <dl className="grid grid-cols-[120px_minmax(0,1fr)] gap-x-3 gap-y-2 text-[13px]">
-            <dt className="text-muted-foreground">{t('settings.version')}</dt><dd className="font-semibold">{info.data?.version} {info.data?.testMode && <Badge variant="warning">{t('settings.testMode')}</Badge>} {info.data?.e2eBuild && <Badge variant="outline">e2e</Badge>} {info.data?.store && <Badge variant="accent">Store</Badge>}</dd>
+            <dt className="text-muted-foreground">{t('settings.version')}</dt><dd className="font-semibold">{info.data?.version} {info.data?.testMode && <Badge variant="warning">{t('settings.testMode')}</Badge>} {info.data?.e2eBuild && <Badge variant="outline">e2e</Badge>} {info.data?.store && <Badge variant="accent">Store</Badge>} {info.data?.channel && <Badge variant="outline" data-testid="channel-badge">{t('settings.channel', { channel: info.data.channel })}</Badge>}</dd>
             <dt className="text-muted-foreground">{t('settings.dataDir')}</dt><dd className="break-all font-mono text-xs" data-testid="data-dir">{info.data?.dataDir}</dd>
             <dt className="text-muted-foreground">{t('settings.webview')}</dt><dd className="font-semibold">{info.data?.webview} · {info.data?.os} {info.data?.arch}</dd>
           </dl>

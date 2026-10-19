@@ -126,7 +126,7 @@ export function createMockBackend(): Backend {
 
   return {
     kind: 'mock',
-    async appInfo() { return { version: '0.1.0-mock', dataDir: 'in-memory', testMode: false, e2eBuild: false, updater: true, store: false, os: 'browser', arch: 'n/a', webview: navigator.userAgent.split(') ').pop() ?? '' }; },
+    async appInfo() { return { version: '0.1.0-mock', dataDir: 'in-memory', testMode: false, e2eBuild: false, updater: true, store: false, channel: 'stable', os: 'browser', arch: 'n/a', webview: navigator.userAgent.split(') ').pop() ?? '' }; },
     async getRoots() { await delay(); return roots.map((r) => ({ ...r })); },
     async addRoot(path, mode = 'watch') {
       if (roots.some((r) => r.path === path)) throw err('root_exists', `root already registered: ${path}`);

@@ -19,7 +19,8 @@
     "tauri:build": "tauri build --no-bundle",
     "tauri:build:e2e": "tauri build --no-bundle --features e2e --config src-tauri/tauri.e2e.conf.json",
     "tauri:build:store": "tauri build --no-bundle --features store",
-    "tauri:build:updater": "tauri build --features updater --config src-tauri/tauri.updater.conf.json"
+    "tauri:build:updater": "tauri build --features updater --config src-tauri/tauri.updater.conf.json",
+    "tauri:build:dev-channel": "tauri build --features updater --config src-tauri/tauri.updater.dev.conf.json"
   },
   "dependencies": {
     "@radix-ui/react-context-menu": "^2.2.16",

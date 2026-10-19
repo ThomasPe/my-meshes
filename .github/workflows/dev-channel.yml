@@ -1,0 +1,82 @@
+name: Dev channel
+
+# Every push to main becomes an installable, self-updating Windows build on the rolling
+# pre-release tagged `dev`. Installed dev builds check that feed on startup (APP-9).
+on:
+  push:
+    branches: ['main']
+    paths-ignore: ['docs/**', 'spike/**', '*.md']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: dev-channel
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+  # Fast iteration beats the last 10 % of binary size: no LTO, parallel codegen.
+  CARGO_PROFILE_RELEASE_LTO: "false"
+  CARGO_PROFILE_RELEASE_CODEGEN_UNITS: "16"
+
+jobs:
+  windows:
+    name: windows · dev build + rolling pre-release
+    runs-on: windows-latest
+    timeout-minutes: 60
+    defaults: { run: { shell: pwsh } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { key: dev-channel }
+      - run: npm ci
+
+      - name: Require the updater signing key
+        if: ${{ env.TAURI_SIGNING_PRIVATE_KEY == '' }}
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+        run: |
+          Write-Host "::error::Secret TAURI_SIGNING_PRIVATE_KEY is missing; the dev channel cannot sign updates (docs/store/README.md)."
+          exit 1
+
+      # Version: <package.json version>-dev.<run number>, strictly increasing per build and
+      # below the next stable release in semver order. Merged into the dev overlay.
+      - name: Dev overlay with build version
+        id: ver
+        run: |
+          $pkg = Get-Content package.json -Raw | ConvertFrom-Json
+          $version = "$($pkg.version)-dev.${{ github.run_number }}"
+          $overlay = Get-Content src-tauri/tauri.updater.dev.conf.json -Raw | ConvertFrom-Json
+          $overlay | Add-Member -NotePropertyName version -NotePropertyValue $version -Force
+          $overlay | ConvertTo-Json -Depth 10 | Set-Content src-tauri/tauri.dev-build.conf.json -Encoding UTF8
+          "version=$version" >> $env:GITHUB_OUTPUT
+
+      - name: Reset the rolling dev release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release delete dev --cleanup-tag --yes 2>$null
+          if ($LASTEXITCODE -ne 0) { Write-Host "no previous dev release" }
+          exit 0
+
+      - name: Build, sign and publish
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: dev
+          releaseName: Dev channel ${{ steps.ver.outputs.version }}
+          releaseBody: |
+            Rolling development build from `${{ github.sha }}`. Installed dev builds update
+            to this automatically on the next start. Not for the Store.
+          prerelease: true
+          releaseDraft: false
+          includeUpdaterJson: true
+          args: --features updater --config src-tauri/tauri.dev-build.conf.json
