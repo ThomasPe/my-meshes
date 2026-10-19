@@ -10,6 +10,7 @@
 pub mod collections;
 pub mod error;
 pub mod hash;
+pub mod import;
 pub mod index;
 pub mod model;
 pub mod roots;

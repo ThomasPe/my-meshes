@@ -331,7 +331,8 @@ impl Index {
         Ok(tags)
     }
 
-    pub fn list(&self, q: &ListQuery) -> Result<Vec<ProjectSummary>> {
+    /// `collection`: member ids in collection order when the query is scoped to a collection.
+    pub fn list(&self, q: &ListQuery, collection: Option<&[String]>) -> Result<Vec<ProjectSummary>> {
         let mut sql = format!("SELECT p.id, p.root_id, p.rel_path, p.title, p.creator, p.thumbnail, p.file_count, p.model_count, p.total_bytes, p.modified, p.sidecar_state, p.offline, p.favorite, p.added, p.slicer, CASE WHEN {THUMB_VALID} THEN t.key END FROM projects p{THUMB_JOIN}");
         let mut where_: Vec<String> = Vec::new();
         let mut args: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
@@ -365,6 +366,15 @@ impl Index {
         if q.favorites {
             where_.push("p.favorite = 1".into());
         }
+        if let Some(ids) = &collection {
+            if ids.is_empty() {
+                return Ok(Vec::new());
+            }
+            where_.push(format!("p.id IN ({})", vec!["?"; ids.len()].join(",")));
+            for id in ids.iter() {
+                args.push(Box::new(id.clone()));
+            }
+        }
         if !where_.is_empty() {
             sql.push_str(" WHERE ");
             sql.push_str(&where_.join(" AND "));
@@ -375,6 +385,7 @@ impl Index {
             SortKey::Creator => " ORDER BY p.creator IS NULL, p.creator COLLATE NOCASE, p.title COLLATE NOCASE",
             SortKey::Size => " ORDER BY p.total_bytes DESC",
             SortKey::Added => " ORDER BY p.added DESC, p.modified DESC, p.title COLLATE NOCASE",
+            SortKey::Collection => " ORDER BY p.modified DESC, p.title COLLATE NOCASE",
         });
         if let Some(limit) = q.limit {
             sql.push_str(&format!(" LIMIT {} OFFSET {}", limit, q.offset.unwrap_or(0)));
@@ -406,6 +417,11 @@ impl Index {
         let mut out = rows;
         for p in &mut out {
             p.tags = self.tags_of(&p.id)?;
+        }
+        if q.sort == SortKey::Collection {
+            if let Some(ids) = collection {
+                out.sort_by_key(|p| ids.iter().position(|i| i == &p.id).unwrap_or(usize::MAX));
+            }
         }
         Ok(out)
     }
@@ -629,35 +645,47 @@ mod tests {
         )
         .unwrap();
         assert_eq!(ix.count(None).unwrap().0, 3);
-        let all = ix.list(&ListQuery::default()).unwrap();
+        let all = ix.list(&ListQuery::default(), None).unwrap();
         assert_eq!(all.len(), 3);
         let grid = ix
-            .list(&ListQuery {
-                tags: vec!["gridfinity".into()],
-                ..Default::default()
-            })
+            .list(
+                &ListQuery {
+                    tags: vec!["gridfinity".into()],
+                    ..Default::default()
+                },
+                None,
+            )
             .unwrap();
         assert_eq!(grid.len(), 2);
         let search = ix
-            .list(&ListQuery {
-                text: Some("robo".into()),
-                ..Default::default()
-            })
+            .list(
+                &ListQuery {
+                    text: Some("robo".into()),
+                    ..Default::default()
+                },
+                None,
+            )
             .unwrap();
         assert_eq!(search.len(), 1);
         assert_eq!(search[0].title, "Robotic Arm v4");
         let by_file = ix
-            .list(&ListQuery {
-                text: Some("bom".into()),
-                ..Default::default()
-            })
+            .list(
+                &ListQuery {
+                    text: Some("bom".into()),
+                    ..Default::default()
+                },
+                None,
+            )
             .unwrap();
         assert_eq!(by_file.len(), 1);
         let under = ix
-            .list(&ListQuery {
-                path_prefix: Some("Gridfinity".into()),
-                ..Default::default()
-            })
+            .list(
+                &ListQuery {
+                    path_prefix: Some("Gridfinity".into()),
+                    ..Default::default()
+                },
+                None,
+            )
             .unwrap();
         assert_eq!(under.len(), 2);
         let tree = ix.folder_tree("r1").unwrap();
@@ -674,10 +702,13 @@ mod tests {
         // favorites
         assert!(ix.set_favorite(&full.id, true).unwrap());
         let favs = ix
-            .list(&ListQuery {
-                favorites: true,
-                ..Default::default()
-            })
+            .list(
+                &ListQuery {
+                    favorites: true,
+                    ..Default::default()
+                },
+                None,
+            )
             .unwrap();
         assert_eq!(favs.len(), 1);
         assert!(favs[0].favorite);
@@ -687,7 +718,7 @@ mod tests {
             .unwrap();
         assert_eq!(ix.count(None).unwrap().0, 1);
         ix.mark_root_offline("r1", true).unwrap();
-        assert!(ix.list(&ListQuery::default()).unwrap()[0].offline);
+        assert!(ix.list(&ListQuery::default(), None).unwrap()[0].offline);
     }
 
     #[test]
@@ -706,7 +737,7 @@ mod tests {
         ix.set_thumb(&a.id, &src, Some("k.png"), None).unwrap();
         assert!(ix.thumb_queue(10).unwrap().is_empty());
         assert_eq!(
-            ix.list(&ListQuery::default())
+            ix.list(&ListQuery::default(), None)
                 .unwrap()
                 .iter()
                 .find(|p| p.id == a.id)
@@ -740,6 +771,38 @@ mod tests {
         // rename carries the record over
         ix.rename_thumb(&a.id, "r1:A2").unwrap();
         ix.remove_project(&a.id).unwrap();
+    }
+
+    #[test]
+    fn collection_scope_keeps_manual_order() {
+        let mut ix = Index::open_in_memory().unwrap();
+        ix.rebuild_root(
+            "r1",
+            &[
+                proj("a", "A", "A", &[], &["a.stl"]),
+                proj("b", "B", "B", &[], &["b.stl"]),
+                proj("c", "C", "C", &[], &["c.stl"]),
+            ],
+        )
+        .unwrap();
+        let ids = vec![Project::make_id("r1", "C"), Project::make_id("r1", "A"), "r1:gone".to_string()];
+        let q = ListQuery {
+            sort: SortKey::Collection,
+            ..Default::default()
+        };
+        let out = ix.list(&q, Some(&ids)).unwrap();
+        assert_eq!(out.iter().map(|p| p.rel_path.as_str()).collect::<Vec<_>>(), vec!["C", "A"]);
+        let titled = ix
+            .list(
+                &ListQuery {
+                    sort: SortKey::Title,
+                    ..Default::default()
+                },
+                Some(&ids),
+            )
+            .unwrap();
+        assert_eq!(titled.iter().map(|p| p.rel_path.as_str()).collect::<Vec<_>>(), vec!["A", "C"]);
+        assert!(ix.list(&q, Some(&[])).unwrap().is_empty());
     }
 
     #[test]

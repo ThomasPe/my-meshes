@@ -286,7 +286,7 @@ pub struct ProjectSummary {
     pub slicer: Option<String>,
 }
 
-#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
 pub struct ListQuery {
     #[serde(default)]
     pub root_id: Option<String>,
@@ -301,6 +301,9 @@ pub struct ListQuery {
     /// Only favorites.
     #[serde(default)]
     pub favorites: bool,
+    /// Only members of this manual collection (in collection order unless sorted otherwise).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub collection_id: Option<String>,
     #[serde(default)]
     pub sort: SortKey,
     #[serde(default)]
@@ -319,6 +322,8 @@ pub enum SortKey {
     Size,
     /// Newest additions first (directory creation time).
     Added,
+    /// The manual order of the collection being listed (falls back to `Modified`).
+    Collection,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

@@ -2,7 +2,7 @@ import { QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/re
 import { useEffect } from 'react';
 import { getBackend } from '@/lib/backend';
 import { kickThumbQueue, useThumbs } from '@/lib/thumbs/queue';
-import type { ListQuery, Project, ProjectSummary, UpdateMetadata } from '@/lib/types';
+import type { ImportRequest, ListQuery, Project, ProjectSummary, UpdateMetadata } from '@/lib/types';
 
 export const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 10_000, retry: false, refetchOnWindowFocus: false } } });
 
@@ -17,6 +17,10 @@ export const keys = {
   ignore: ['ignore'] as const,
   thumbStats: ['thumbStats'] as const,
   containers: ['containers'] as const,
+  collections: ['collections'] as const,
+  smart: ['smart'] as const,
+  smartProjects: (id: string, q: ListQuery) => ['smartProjects', id, q] as const,
+  inbox: (rootId: string) => ['inbox', rootId] as const,
 };
 
 export const useAppInfo = () => useQuery({ queryKey: keys.appInfo, queryFn: async () => (await getBackend()).appInfo(), staleTime: Infinity });
@@ -31,6 +35,8 @@ export const useContainerDirs = () => useQuery({ queryKey: keys.containers, quer
 
 export function invalidateLibrary(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ['projects'] });
+  qc.invalidateQueries({ queryKey: ['smartProjects'] });
+  qc.invalidateQueries({ queryKey: ['inbox'] });
   qc.invalidateQueries({ queryKey: ['tags'] });
   qc.invalidateQueries({ queryKey: ['tree'] });
   qc.invalidateQueries({ queryKey: keys.stats });
@@ -61,7 +67,9 @@ export function useBackendEvents(onScan?: (rootId: string, found: number) => voi
       });
       const c = await b.onProjectChanged((e) => { qc.invalidateQueries({ queryKey: keys.project(e.projectId) }); qc.invalidateQueries({ queryKey: ['projects'] }); qc.invalidateQueries({ queryKey: ['tags'] }); qc.invalidateQueries({ queryKey: keys.stats }); void kickThumbQueue(); });
       const s = await b.onScanProgress((p) => onScan?.(p.root_id, p.projects_found));
-      if (dead) { a(); c(); s(); } else unlisten.push(a, c, s);
+      const d = await b.onCollectionsChanged(() => { qc.invalidateQueries({ queryKey: keys.collections }); qc.invalidateQueries({ queryKey: keys.smart }); qc.invalidateQueries({ queryKey: ['projects'] }); qc.invalidateQueries({ queryKey: ['smartProjects'] }); });
+      const i = await b.onInboxChanged((e) => { qc.invalidateQueries({ queryKey: keys.inbox(e.rootId) }); });
+      if (dead) { a(); c(); s(); d(); i(); } else unlisten.push(a, c, s, d, i);
     });
     // Thumbnails: patch cards as PNGs land, and refetch lists once a batch settles.
     import('@/lib/thumbs/queue').then(({ startThumbnails }) => {
@@ -126,5 +134,51 @@ export function useUpdateMetadata() {
     },
     onError: (_e, { id }, ctx) => { if (ctx?.prev) qc.setQueryData(keys.project(id), ctx.prev); },
     onSuccess: (project) => { qc.setQueryData(keys.project(project.id), project); qc.invalidateQueries({ queryKey: ['projects'] }); qc.invalidateQueries({ queryKey: ['tags'] }); },
+  });
+}
+
+// ---- D3: collections, smart collections, inbox, import ----------------------------------
+
+export const useCollections = () => useQuery({ queryKey: keys.collections, queryFn: async () => (await getBackend()).getCollections() });
+export const useSmartCollections = () => useQuery({ queryKey: keys.smart, queryFn: async () => (await getBackend()).getSmartCollections() });
+export const useSmartProjects = (id: string | null, overrides: ListQuery) => useQuery({ queryKey: keys.smartProjects(id ?? '', overrides), queryFn: async () => (await getBackend()).listSmartCollection(id!, overrides), enabled: !!id, placeholderData: (prev) => prev });
+export const useInbox = (rootId: string | null) => useQuery({ queryKey: keys.inbox(rootId ?? ''), queryFn: async () => (await getBackend()).listInbox(rootId!), enabled: !!rootId });
+
+function useCollectionMutation<TArgs, TOut>(fn: (b: Awaited<ReturnType<typeof getBackend>>, args: TArgs) => Promise<TOut>) {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (args: TArgs) => fn(await getBackend(), args),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: keys.collections }); qc.invalidateQueries({ queryKey: keys.smart }); qc.invalidateQueries({ queryKey: ['projects'] }); qc.invalidateQueries({ queryKey: ['smartProjects'] }); },
+  });
+}
+export const useCreateCollection = () => useCollectionMutation((b, name: string) => b.createCollection(name));
+export const useRenameCollection = () => useCollectionMutation((b, a: { id: string; name: string }) => b.renameCollection(a.id, a.name));
+export const useDeleteCollection = () => useCollectionMutation((b, id: string) => b.deleteCollection(id));
+export const useAddToCollection = () => useCollectionMutation((b, a: { id: string; projectIds: string[] }) => b.addToCollection(a.id, a.projectIds));
+export const useRemoveFromCollection = () => useCollectionMutation((b, a: { id: string; projectIds: string[] }) => b.removeFromCollection(a.id, a.projectIds));
+export const useReorderCollection = () => useCollectionMutation((b, a: { id: string; order: string[] }) => b.reorderCollection(a.id, a.order));
+export const useCreateSmartCollection = () => useCollectionMutation((b, a: { name: string; query: ListQuery }) => b.createSmartCollection(a.name, a.query));
+export const useRenameSmartCollection = () => useCollectionMutation((b, a: { id: string; name: string }) => b.updateSmartCollection(a.id, a.name));
+export const useDeleteSmartCollection = () => useCollectionMutation((b, id: string) => b.deleteSmartCollection(id));
+
+export function usePromoteInbox() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (a: { rootId: string; files: string[]; name: string }) => (await getBackend()).promoteInbox(a.rootId, a.files, a.name),
+    onSuccess: (project) => { qc.setQueryData(keys.project(project.id), project); invalidateLibrary(qc); },
+  });
+}
+export function useDeleteInboxFile() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (a: { rootId: string; name: string }) => (await getBackend()).deleteInboxFile(a.rootId, a.name),
+    onSuccess: (_r, a) => { qc.invalidateQueries({ queryKey: keys.inbox(a.rootId) }); },
+  });
+}
+export function useExecuteImport() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (request: ImportRequest) => (await getBackend()).executeImport(request),
+    onSuccess: () => invalidateLibrary(qc),
   });
 }

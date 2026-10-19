@@ -16,6 +16,7 @@ Object.assign(process.env, {
   MESHKEEP_DATA_DIR: dataDir,
   MESHKEEP_FIXTURE_ROOT: fixture,
   MESHKEEP_PICK_FOLDER: fixture,
+  MESHKEEP_PICK_FILES: [path.join(root, 'fixtures/import/Cable Clip.zip'), path.join(root, 'fixtures/import/loose_hook.stl')].join(';'),
   MESHKEEP_E2E_DATA_DIR: dataDir,
   MESHKEEP_E2E_FIXTURE: fixture,
 });

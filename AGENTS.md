@@ -26,7 +26,12 @@ cargo test                  # engine + shell crates
 npm run typecheck && npm test
 npx vite build && npm run test:ui          # Playwright UI tests (needs `npx playwright install chromium` once)
 npm run tauri:build:e2e && npm run test:e2e   # real-app E2E (Windows/macOS/Linux+Xvfb)
+npm run tauri:build:store && ./msix/build-msix.ps1 && ./msix/sideload-test.ps1   # Windows: MSIX round trip
 ```
+
+Build flavors are cargo features on `src-tauri`: none (dev), `e2e` (WebDriver plugins +
+test seams), `updater` (private builds, `tauri.updater.conf.json`), `store` (Microsoft
+Store, never with the updater). `docs/store/README.md` has the release pipeline.
 
 ## Rules that are not negotiable (from the spec)
 
@@ -44,7 +49,10 @@ npm run tauri:build:e2e && npm run test:e2e   # real-app E2E (Windows/macOS/Linu
 7. **Stable selectors:** interactive elements that tests touch carry `data-testid`.
 8. **Deletes go to the OS trash** (`trash` crate), never `remove_dir_all`, and only after a
    confirmation in the UI. Tests inject a plain remover via `Engine::set_deleter`.
-9. **Thumbnails are a cache, never library content.** PNGs live in `<data dir>/thumbs/`,
+9. **Imports write only after confirmation.** `analyze_import` is read-only; `execute_import`
+   validates every target (name rules, collisions) before the first byte is written.
+   `_Inbox` and `_Originals` below a root belong to the app and are never projects.
+10. **Thumbnails are a cache, never library content.** PNGs live in `<data dir>/thumbs/`,
    keyed per project + source file, invalidated by source size/mtime (see
    `docs/spec/02-domain-model.md`). The frontend reads them through `read_thumbnail` only.
 
@@ -65,7 +73,9 @@ behaviour: engine unit test > UI test in browser mode > real-app E2E.
 
 `--test-mode` or `MESHKEEP_TEST_MODE=1` isolates app data (`MESHKEEP_DATA_DIR` or a temp
 dir), seeds and scans `MESHKEEP_FIXTURE_ROOT` if set, and lets `MESHKEEP_PICK_FOLDER`
-answer the native folder picker. `fixtures/library` is the deterministic sample library:
+answer the native folder picker and `MESHKEEP_PICK_FILES` (`;`-separated) the import
+picker. `fixtures/import` holds a bundle zip and a loose STL for import tests.
+`fixtures/library` is the deterministic sample library:
 tiny ASCII STLs, an OBJ, a PrusaSlicer-style 3MF with an embedded preview, one proper
 sidecar, one malformed sidecar, one nested sidecar, an attachment, ignored files.
 Browser mode (`npm run dev`, Playwright) uses the mock backend, which synthesizes STL, OBJ,
@@ -89,7 +99,9 @@ Browser mode (`npm run dev`, Playwright) uses the mock backend, which synthesize
 | Area | Path |
 |---|---|
 | Spec, backlog, ADRs, mockups, click dummy | `docs/` |
-| Engine | `crates/engine/src/{scan,sidecar,index,watch,roots,collections,threemf,thumbs,engine}.rs` |
+| Engine | `crates/engine/src/{scan,sidecar,index,watch,roots,collections,import,threemf,thumbs,engine}.rs` |
+| Import staging, inbox, collections UI | `src/features/import/`, `src/features/library/{InboxView,CollectionDialogs}.tsx` |
+| MSIX packaging, Store docs | `msix/`, `docs/store/` |
 | Shell commands and events | `src-tauri/src/{commands,state}.rs` |
 | Backend facade (Tauri vs mock) | `src/lib/backend/` |
 | Mesh parsers (STL, OBJ, 3MF) and workers | `src/lib/mesh/`, `src/workers/{mesh,thumb}-worker.ts` |

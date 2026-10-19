@@ -7,6 +7,7 @@
     "core:default",
     "core:window:default",
     "core:event:default",
+    "core:webview:default",
     "dialog:allow-open",
     "opener:default"
   ]

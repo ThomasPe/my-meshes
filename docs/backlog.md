@@ -36,9 +36,11 @@ scan, grid and list, search, tags, inspector, STL viewer, settings). **D2 Daily 
 (done 2026-10-18: rendered thumbnails with a background queue and cache, 3MF and OBJ
 preview, slicer-3MF badge with embedded preview, favorites and recent additions, poll
 mode with intervals, safe delete to trash, rename): the author's real library can go live
-on it. **D3 Store-ready**
-(import with staging and inbox, collections and smart collections, onboarding, MSIX
-pipeline with the updater disabled, Store assets).
+on it. **D3 Store-ready** (done 2026-10-19: import with staging and inbox, collections and
+smart collections, onboarding, MSIX pipeline with the updater compiled out of Store
+builds, self-updater for private builds, release workflow, Store assets and listing
+texts). What remains before the first submission is outside the code: Partner Center
+account, name reservation, screenshots (`docs/store/README.md`).
 
 ### Epic 1: Scaffold & foundation (Tauri 2 + Rust)
 - [x] **Repository layout.** Cargo workspace with `crates/engine` (shell-agnostic
@@ -68,10 +70,13 @@ pipeline with the updater disabled, Store assets).
 - [x] **CI.** `.github/workflows/ci.yml`: engine (fmt, clippy, test) and frontend
       (typecheck, Vitest, Playwright UI) on Linux; e2e build + WebDriver E2E + release
       build on Windows. Installer-on-tag still to do.
-- [ ] **Auto-update** (APP-9) via `tauri-plugin-updater` with signed manifests for
-      private builds; compiled out of Store builds.
-- [ ] **MSIX packaging** (APP-11): scripted `MakeAppx` + `AppxManifest.xml` in CI with
-      a Partner-Center-matching identity; side-load test on a clean VM.
+- [x] **Auto-update** (APP-9) via `tauri-plugin-updater` behind the `updater` cargo
+      feature (private NSIS builds, manual check in settings); Store and dev builds do not
+      compile it. Signing key setup documented in `docs/store/README.md`.
+- [x] **MSIX packaging** (APP-11): `msix/` manifest, assets, `build-msix.ps1`
+      (side-load self-signed or unsigned for Partner Center) and `sideload-test.ps1`;
+      CI installs and launches the package on every push; `release.yml` attaches both
+      MSIX flavors and the installer to a draft release on `v*` tags.
 
 ### Epic 2: Library engine
 - [x] **Library roots** (LIB-1).
@@ -99,26 +104,33 @@ pipeline with the updater disabled, Store assets).
       available anywhere; viewer shows a message instead of crashing.
 
 ### Epic 4: Browsing & organization
-- [~] **Sidebar navigation** (NAV-1): roots, folder tree, tags, Recent additions and
-      Favorites done; Inbox pending (D3).
+- [x] **Sidebar navigation** (NAV-1): roots, folder tree, tags, Recent additions,
+      Favorites, Inbox per root, collections and smart collections.
 - [x] **Grid view** (NAV-2) virtualized with zoom slider.
 - [x] **List view** (NAV-3) with sortable columns.
 - [~] **Search & filters** (NAV-4 done via FTS5; NAV-5 tags and folders done, other
       attributes pending).
 - [x] **Detail view** (NAV-6): inspector and project page.
-- [ ] **Collections & smart collections** (NAV-7, NAV-8) persisted in `collections.json`.
+- [x] **Collections & smart collections** (NAV-7, NAV-8) persisted in `collections.json`:
+      create/rename/delete, add via context menu, remove, drag-to-reorder in the collection
+      view; smart collections save the current search/tags/scope and evaluate live.
 
 ### Epic 5: Import & file operations
-- [ ] **Staging area & archive import** (IMP-1, IMP-2).
-- [ ] **Inbox** (IMP-3).
-- [ ] **Passive sync of OS drops; archives as attachments** (IMP-4).
+- [~] **Staging area & archive import** (IMP-1, IMP-2): native drop or picker opens the
+      staging dialog; zips and folders become projects, loose files go to the inbox,
+      archive policy keep/_Originals/trash with the space each costs. 7z/rar are not
+      extracted yet (reported, routed to the inbox).
+- [x] **Inbox** (IMP-3): `_Inbox` per root with its own view, promote-to-project, delete.
+- [x] **Passive sync of OS drops; archives as attachments** (IMP-4): the watcher picks up
+      files that appear on disk; archives inside projects stay opaque attachments.
 - [x] **Safe delete to trash** (IMP-5): whole project or single file, confirmation dialog,
       `Delete` key; a project whose last model goes leaves the library.
 - [ ] **Drag-out to other applications** (IMP-6).
 
 ### Epic 6: Settings
 - [~] **Settings module** (APP-4): roots, sync mode with poll interval, ignore patterns,
-      preview cache, theme, language done; thumbnail location and notifications pending.
+      bundle folders, preview cache, updates, theme, language done; thumbnail location
+      and notifications pending.
 
 ## Phase 2: Quality of life
 

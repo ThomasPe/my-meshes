@@ -1,4 +1,6 @@
 use crate::state::{self, AppState};
+use meshkeep_engine::collections::{Collection, SmartCollection};
+use meshkeep_engine::import::{ImportItem, ImportReport, ImportRequest, InboxFile};
 use meshkeep_engine::model::{
     FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, ScanReport, SyncMode, TagCount, ThumbJob, ThumbStats,
 };
@@ -67,6 +69,10 @@ pub struct AppInfo {
     data_dir: String,
     test_mode: bool,
     e2e_build: bool,
+    /// Built with the self-updater (private NSIS builds).
+    updater: bool,
+    /// Built for the Microsoft Store (updates come from the Store).
+    store: bool,
     os: String,
     arch: String,
     webview: String,
@@ -79,6 +85,8 @@ pub fn app_info(app: AppHandle, state: State<AppState>) -> AppInfo {
         data_dir: state.data_dir.to_string_lossy().into_owned(),
         test_mode: state.config.test_mode,
         e2e_build: cfg!(feature = "e2e"),
+        updater: cfg!(feature = "updater"),
+        store: cfg!(feature = "store"),
         os: std::env::consts::OS.into(),
         arch: std::env::consts::ARCH.into(),
         webview: tauri::webview_version().unwrap_or_else(|_| "unknown".into()),
@@ -239,6 +247,34 @@ pub fn open_project_file(app: AppHandle, state: State<AppState>, project_id: Str
             code: "shell",
             message: e.to_string(),
         })
+}
+
+/// Native multi-file picker for imports (archives, models, folders are dropped instead).
+/// In test mode `MESHKEEP_PICK_FILES` (`;`-separated paths) short-circuits the dialog.
+#[tauri::command]
+pub async fn pick_import_files(app: AppHandle) -> CmdResult<Vec<String>> {
+    if app.state::<AppState>().config.test_mode {
+        if let Some(p) = std::env::var_os("MESHKEEP_PICK_FILES") {
+            return Ok(p
+                .to_string_lossy()
+                .split(';')
+                .filter(|s| !s.trim().is_empty())
+                .map(|s| s.trim().to_string())
+                .collect());
+        }
+    }
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .add_filter("Archives and models", &["zip", "stl", "obj", "3mf", "step", "stp", "ply", "amf"])
+            .blocking_pick_files()
+    })
+    .await
+    .map_err(|e| AppError {
+        code: "shell",
+        message: e.to_string(),
+    })?;
+    Ok(picked.unwrap_or_default().into_iter().map(|p| p.to_string()).collect())
 }
 
 /// Native folder picker. In test mode `MESHKEEP_PICK_FOLDER` short-circuits the dialog
@@ -422,4 +458,238 @@ fn percent_decode(s: &str) -> String {
         i += 1;
     }
     String::from_utf8_lossy(&out).into_owned()
+}
+
+// ---- import and inbox ----------------------------------------------------------------
+
+#[tauri::command]
+pub fn analyze_import(state: State<AppState>, paths: Vec<String>) -> Vec<ImportItem> {
+    let paths: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
+    state.engine.lock().unwrap().analyze_import(&paths)
+}
+
+/// Long-running: streams `import://progress`, ends with `library://changed` (reason "import").
+#[tauri::command]
+pub async fn execute_import(app: AppHandle, request: ImportRequest) -> CmdResult<ImportReport> {
+    let handle = app.clone();
+    let report = tauri::async_runtime::spawn_blocking(move || {
+        let state = handle.state::<AppState>();
+        let mut engine = state.engine.lock().unwrap();
+        engine.execute_import(&request, |p| {
+            let _ = handle.emit("import://progress", &p);
+        })
+    })
+    .await
+    .map_err(|e| AppError {
+        code: "shell",
+        message: e.to_string(),
+    })??;
+    let _ = app.emit(
+        "library://changed",
+        serde_json::json!({ "rootId": report.root_id, "report": serde_json::Value::Null, "reason": "import" }),
+    );
+    Ok(report)
+}
+
+#[tauri::command]
+pub fn list_inbox(state: State<AppState>, root_id: String) -> CmdResult<Vec<InboxFile>> {
+    Ok(state.engine.lock().unwrap().list_inbox(&root_id)?)
+}
+
+#[tauri::command]
+pub fn promote_inbox(app: AppHandle, state: State<AppState>, root_id: String, files: Vec<String>, name: String) -> CmdResult<Project> {
+    let project = { state.engine.lock().unwrap().promote_inbox(&root_id, &files, &name)? };
+    let _ = app.emit(
+        "library://changed",
+        serde_json::json!({ "rootId": root_id, "report": serde_json::Value::Null, "reason": "import", "newId": project.id }),
+    );
+    Ok(project)
+}
+
+#[tauri::command]
+pub fn delete_inbox_file(app: AppHandle, state: State<AppState>, root_id: String, name: String) -> CmdResult<()> {
+    state.engine.lock().unwrap().delete_inbox_file(&root_id, &name)?;
+    let _ = app.emit("inbox://changed", serde_json::json!({ "rootId": root_id }));
+    Ok(())
+}
+
+// ---- collections ---------------------------------------------------------------------
+
+fn collections_changed(app: &AppHandle) {
+    let _ = app.emit("collections://changed", serde_json::Value::Null);
+}
+
+#[tauri::command]
+pub fn get_collections(state: State<AppState>) -> Vec<Collection> {
+    state.engine.lock().unwrap().collections()
+}
+
+#[tauri::command]
+pub fn create_collection(app: AppHandle, state: State<AppState>, name: String) -> CmdResult<Collection> {
+    let c = { state.engine.lock().unwrap().create_collection(&name)? };
+    collections_changed(&app);
+    Ok(c)
+}
+
+#[tauri::command]
+pub fn rename_collection(app: AppHandle, state: State<AppState>, id: String, name: String) -> CmdResult<Collection> {
+    let c = { state.engine.lock().unwrap().rename_collection(&id, &name)? };
+    collections_changed(&app);
+    Ok(c)
+}
+
+#[tauri::command]
+pub fn delete_collection(app: AppHandle, state: State<AppState>, id: String) -> CmdResult<()> {
+    state.engine.lock().unwrap().delete_collection(&id)?;
+    collections_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn add_to_collection(app: AppHandle, state: State<AppState>, id: String, project_ids: Vec<String>) -> CmdResult<Collection> {
+    let c = { state.engine.lock().unwrap().add_to_collection(&id, &project_ids)? };
+    collections_changed(&app);
+    Ok(c)
+}
+
+#[tauri::command]
+pub fn remove_from_collection(app: AppHandle, state: State<AppState>, id: String, project_ids: Vec<String>) -> CmdResult<Collection> {
+    let c = { state.engine.lock().unwrap().remove_from_collection(&id, &project_ids)? };
+    collections_changed(&app);
+    Ok(c)
+}
+
+#[tauri::command]
+pub fn reorder_collection(app: AppHandle, state: State<AppState>, id: String, order: Vec<String>) -> CmdResult<Collection> {
+    let c = { state.engine.lock().unwrap().reorder_collection(&id, &order)? };
+    collections_changed(&app);
+    Ok(c)
+}
+
+#[tauri::command]
+pub fn get_smart_collections(state: State<AppState>) -> Vec<SmartCollection> {
+    state.engine.lock().unwrap().smart_collections()
+}
+
+#[tauri::command]
+pub fn create_smart_collection(app: AppHandle, state: State<AppState>, name: String, query: ListQuery) -> CmdResult<SmartCollection> {
+    let c = { state.engine.lock().unwrap().create_smart_collection(&name, query)? };
+    collections_changed(&app);
+    Ok(c)
+}
+
+#[tauri::command]
+pub fn update_smart_collection(
+    app: AppHandle,
+    state: State<AppState>,
+    id: String,
+    name: Option<String>,
+    query: Option<ListQuery>,
+) -> CmdResult<SmartCollection> {
+    let c = { state.engine.lock().unwrap().update_smart_collection(&id, name.as_deref(), query)? };
+    collections_changed(&app);
+    Ok(c)
+}
+
+#[tauri::command]
+pub fn delete_smart_collection(app: AppHandle, state: State<AppState>, id: String) -> CmdResult<()> {
+    state.engine.lock().unwrap().delete_smart_collection(&id)?;
+    collections_changed(&app);
+    Ok(())
+}
+
+#[tauri::command]
+pub fn list_smart_collection(state: State<AppState>, id: String, overrides: Option<ListQuery>) -> CmdResult<Vec<ProjectSummary>> {
+    Ok(state.engine.lock().unwrap().list_smart_collection(&id, overrides.as_ref())?)
+}
+
+// ---- updates (APP-9) -----------------------------------------------------------------
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct UpdateInfo {
+    available: bool,
+    version: Option<String>,
+    notes: Option<String>,
+    date: Option<String>,
+}
+
+#[cfg(feature = "updater")]
+fn none() -> UpdateInfo {
+    UpdateInfo {
+        available: false,
+        version: None,
+        notes: None,
+        date: None,
+    }
+}
+
+/// Private builds: asks the release feed (skipped in test mode so E2E stays deterministic).
+#[cfg(feature = "updater")]
+#[tauri::command]
+pub async fn check_update(app: AppHandle) -> CmdResult<UpdateInfo> {
+    use tauri_plugin_updater::UpdaterExt;
+    if app.state::<AppState>().config.test_mode {
+        return Ok(none());
+    }
+    let updater_err = |e: tauri_plugin_updater::Error| AppError {
+        code: "updater",
+        message: e.to_string(),
+    };
+    let update = app.updater().map_err(updater_err)?.check().await.map_err(updater_err)?;
+    Ok(match update {
+        Some(u) => UpdateInfo {
+            available: true,
+            version: Some(u.version.clone()),
+            notes: u.body.clone(),
+            date: u.date.map(|d| d.to_string()),
+        },
+        None => none(),
+    })
+}
+
+/// Store and dev builds: no updater; the message says where updates come from.
+#[cfg(not(feature = "updater"))]
+#[tauri::command]
+pub async fn check_update(_app: AppHandle) -> CmdResult<UpdateInfo> {
+    Err(AppError {
+        code: "updater",
+        message: if cfg!(feature = "store") {
+            "updates come from the Microsoft Store".into()
+        } else {
+            "this build has no updater".into()
+        },
+    })
+}
+
+/// Downloads and installs the pending update, then relaunches.
+#[cfg(feature = "updater")]
+#[tauri::command]
+pub async fn install_update(app: AppHandle) -> CmdResult<()> {
+    use tauri_plugin_updater::UpdaterExt;
+    let updater_err = |e: tauri_plugin_updater::Error| AppError {
+        code: "updater",
+        message: e.to_string(),
+    };
+    let update = app
+        .updater()
+        .map_err(updater_err)?
+        .check()
+        .await
+        .map_err(updater_err)?
+        .ok_or(AppError {
+            code: "updater",
+            message: "no update available".into(),
+        })?;
+    update.download_and_install(|_, _| {}, || {}).await.map_err(updater_err)?;
+    app.restart();
+}
+
+#[cfg(not(feature = "updater"))]
+#[tauri::command]
+pub async fn install_update(_app: AppHandle) -> CmdResult<()> {
+    Err(AppError {
+        code: "updater",
+        message: "this build has no updater".into(),
+    })
 }

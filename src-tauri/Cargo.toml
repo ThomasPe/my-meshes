@@ -27,7 +27,14 @@ time.workspace = true
 # WebdriverIO support; only compiled with `--features e2e` (plus tauri.e2e.conf.json).
 tauri-plugin-wdio = { version = "1.5", optional = true }
 tauri-plugin-wdio-webdriver = { version = "1.5", optional = true }
+# Self-updater for private (NSIS) builds only; Store builds never carry it (APP-9, Q2).
+tauri-plugin-updater = { version = "2", optional = true }
+tauri-plugin-process = { version = "2", optional = true }
 
 [features]
 default = []
 e2e = ["dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]
+# Private build: checks GitHub Releases for updates (needs tauri.updater.conf.json + signing key).
+updater = ["dep:tauri-plugin-updater", "dep:tauri-plugin-process"]
+# Microsoft Store build: identical to default, named so CI and scripts say what they build.
+store = []

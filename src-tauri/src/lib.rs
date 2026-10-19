@@ -36,6 +36,12 @@ pub fn run() {
         .plugin(tauri_plugin_wdio::init())
         .plugin(tauri_plugin_wdio_webdriver::init());
 
+    // Private builds only: Store builds must not ship an updater (spec 04-quality, APP-9).
+    #[cfg(feature = "updater")]
+    let builder = builder
+        .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_process::init());
+
     builder
         .setup(move |app| {
             let data_dir = config.resolve_data_dir(app.handle())?;
@@ -87,6 +93,26 @@ pub fn run() {
             commands::thumbnail_failed,
             commands::read_thumbnail,
             commands::clear_thumbnails,
+            commands::pick_import_files,
+            commands::analyze_import,
+            commands::execute_import,
+            commands::list_inbox,
+            commands::promote_inbox,
+            commands::delete_inbox_file,
+            commands::get_collections,
+            commands::create_collection,
+            commands::rename_collection,
+            commands::delete_collection,
+            commands::add_to_collection,
+            commands::remove_from_collection,
+            commands::reorder_collection,
+            commands::get_smart_collections,
+            commands::create_smart_collection,
+            commands::update_smart_collection,
+            commands::delete_smart_collection,
+            commands::list_smart_collection,
+            commands::check_update,
+            commands::install_update,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Meshkeep");

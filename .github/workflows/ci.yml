@@ -72,8 +72,12 @@ jobs:
         run: npm run test:e2e
         env:
           MESHKEEP_APP: ${{ github.workspace }}\target\release\meshkeep.exe
-      - name: Release build (no e2e plugins)
-        run: npm run tauri:build
+      - name: Release build (Store flavor: no e2e plugins, no updater)
+        run: npm run tauri:build:store
+      - name: MSIX (side-load) + install round trip
+        run: |
+          ./msix/build-msix.ps1 -Version "0.1.0.${{ github.run_number }}"
+          ./msix/sideload-test.ps1
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -82,3 +86,5 @@ jobs:
           path: |
             logs/**
             target/release/meshkeep.exe
+            target/*.msix
+            target/meshkeep-dev.cer

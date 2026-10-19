@@ -1,8 +1,9 @@
 //! The facade the application shell talks to. One instance per app; not thread-safe by
 //! itself (wrap in a mutex in the shell), but every operation is short except `scan_root`.
 
-use crate::collections::CollectionsStore;
+use crate::collections::{Collection, CollectionsStore, SmartCollection};
 use crate::error::{EngineError, Result};
+use crate::import::{self, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile};
 use crate::index::{Index, ThumbSourceState};
 use crate::model::{
     FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, RootStatus, ScanReport, Sidecar, SidecarStamp, SyncMode, TagCount,
@@ -207,7 +208,27 @@ impl Engine {
     // ---- reading ----------------------------------------------------------------------
 
     pub fn list_projects(&self, q: &ListQuery) -> Result<Vec<ProjectSummary>> {
-        self.index.list(q)
+        match &q.collection_id {
+            Some(cid) => {
+                let members = self.collections.collection(cid)?.projects.clone();
+                self.index.list(q, Some(&members))
+            }
+            None => self.index.list(q, None),
+        }
+    }
+
+    /// Evaluates a smart collection's saved query (with the caller's sort/paging on top).
+    pub fn list_smart_collection(&self, id: &str, overrides: Option<&ListQuery>) -> Result<Vec<ProjectSummary>> {
+        let mut q = self.collections.smart_collection(id)?.query.clone();
+        if let Some(o) = overrides {
+            q.sort = o.sort;
+            q.limit = o.limit;
+            q.offset = o.offset;
+            if o.text.is_some() {
+                q.text = o.text.clone();
+            }
+        }
+        self.index.list(&q, None)
     }
 
     pub fn get_project(&self, id: &str) -> Result<Project> {
@@ -294,6 +315,87 @@ impl Engine {
         self.collections.set_favorite(project_id, favorite)?;
         self.index.set_favorite(project_id, favorite)?;
         self.get_project(project_id)
+    }
+
+    // ---- collections ------------------------------------------------------------------
+
+    pub fn collections(&self) -> Vec<Collection> {
+        self.collections.collections().to_vec()
+    }
+    pub fn create_collection(&mut self, name: &str) -> Result<Collection> {
+        self.collections.create_collection(name)
+    }
+    pub fn rename_collection(&mut self, id: &str, name: &str) -> Result<Collection> {
+        self.collections.rename_collection(id, name)
+    }
+    pub fn delete_collection(&mut self, id: &str) -> Result<()> {
+        self.collections.delete_collection(id)
+    }
+    pub fn add_to_collection(&mut self, id: &str, project_ids: &[String]) -> Result<Collection> {
+        self.collections.add_to_collection(id, project_ids)
+    }
+    pub fn remove_from_collection(&mut self, id: &str, project_ids: &[String]) -> Result<Collection> {
+        self.collections.remove_from_collection(id, project_ids)
+    }
+    pub fn reorder_collection(&mut self, id: &str, order: &[String]) -> Result<Collection> {
+        self.collections.reorder_collection(id, order)
+    }
+    pub fn smart_collections(&self) -> Vec<SmartCollection> {
+        self.collections.smart_collections().to_vec()
+    }
+    pub fn create_smart_collection(&mut self, name: &str, query: ListQuery) -> Result<SmartCollection> {
+        self.collections.create_smart_collection(name, query)
+    }
+    pub fn update_smart_collection(&mut self, id: &str, name: Option<&str>, query: Option<ListQuery>) -> Result<SmartCollection> {
+        self.collections.update_smart_collection(id, name, query)
+    }
+    pub fn delete_smart_collection(&mut self, id: &str) -> Result<()> {
+        self.collections.delete_smart_collection(id)
+    }
+
+    // ---- import and inbox -------------------------------------------------------------
+
+    /// Staging step: proposes an action per dropped path. Writes nothing.
+    pub fn analyze_import(&self, paths: &[PathBuf]) -> Vec<ImportItem> {
+        import::analyze(paths)
+    }
+
+    /// Runs a confirmed import into a root and rescans that root afterwards.
+    pub fn execute_import(&mut self, req: &ImportRequest, progress: impl FnMut(ImportProgress)) -> Result<ImportReport> {
+        let root = self.root(&req.root_id)?;
+        let report = import::execute(&root.path, req, &self.deleter, progress)?;
+        self.scan_root(&req.root_id, |_| {})?;
+        Ok(report)
+    }
+
+    pub fn list_inbox(&self, root_id: &str) -> Result<Vec<InboxFile>> {
+        let root = self.root(root_id)?;
+        if root.status == RootStatus::Offline {
+            return Ok(Vec::new());
+        }
+        import::list_inbox(&root.path)
+    }
+
+    /// Moves inbox files into a new project directory and returns the indexed project.
+    pub fn promote_inbox(&mut self, root_id: &str, files: &[String], name: &str) -> Result<Project> {
+        let root = self.root(root_id)?;
+        let dir = import::promote_inbox(&root.path, files, name)?;
+        self.reindex_dir(root_id, &dir)
+    }
+
+    pub fn delete_inbox_file(&mut self, root_id: &str, name: &str) -> Result<()> {
+        let root = self.root(root_id)?;
+        if Path::new(name).components().count() != 1 {
+            return Err(EngineError::InvalidName(name.to_string()));
+        }
+        let path = root.path.join(import::INBOX_DIR).join(name);
+        if !path.is_file() {
+            return Err(EngineError::Io {
+                path,
+                source: std::io::Error::new(std::io::ErrorKind::NotFound, "not in the inbox"),
+            });
+        }
+        (self.deleter)(&path).map_err(|e| EngineError::Io { path, source: e })
     }
 
     // ---- thumbnails -------------------------------------------------------------------
@@ -539,7 +641,7 @@ impl Engine {
 }
 
 /// Windows-safe directory names (the stricter platform wins so libraries stay portable).
-fn validate_dir_name(name: &str) -> Result<String> {
+pub(crate) fn validate_dir_name(name: &str) -> Result<String> {
     let n = name.trim();
     if n.is_empty() {
         return Err(EngineError::InvalidName("name is empty".into()));

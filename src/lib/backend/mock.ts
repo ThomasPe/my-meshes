@@ -2,7 +2,7 @@
 // the Tauri commands, including error codes, so UI tests exercise real flows.
 import type { Backend, Unlisten } from './index';
 import { generate3mf, generateObj, generateStl } from '@/lib/mesh/generate';
-import type { AppError, FileEntry, FileKind, FolderNode, LibraryChanged, LibraryRoot, ListQuery, Project, ProjectSummary, ScanProgress, SidecarStamp, TagCount, ThumbJob, UpdateMetadata } from '@/lib/types';
+import type { AppError, Collection, FileEntry, FileKind, FolderNode, ImportItem, ImportProgress, InboxFile, LibraryChanged, LibraryRoot, ListQuery, Project, ProjectSummary, ScanProgress, SidecarStamp, SmartCollection, TagCount, ThumbJob, UpdateMetadata } from '@/lib/types';
 
 const kindOf = (name: string): FileKind => {
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
@@ -100,7 +100,25 @@ export function createMockBackend(): Backend {
   let containers = ['files', 'stl', 'stls', 'models', '3d'];
   const thumbs = new Map<string, ArrayBuffer>(); // key -> png
   const failed = new Set<string>();
-  const listeners = { scan: new Set<(p: ScanProgress) => void>(), lib: new Set<(e: LibraryChanged) => void>(), proj: new Set<(e: { projectId: string }) => void>() };
+  const listeners = { scan: new Set<(p: ScanProgress) => void>(), lib: new Set<(e: LibraryChanged) => void>(), proj: new Set<(e: { projectId: string }) => void>(), imp: new Set<(p: ImportProgress) => void>(), coll: new Set<() => void>(), inbox: new Set<(e: { rootId: string }) => void>() };
+  const collections: Collection[] = [{ id: 'c_desk', name: 'Desk setup', projects: ['r1:Projects/Desk/Phone Stand', 'r1:Projects/Desk/Cable Clips'] }];
+  const smart: SmartCollection[] = [{ id: 's_grid', name: 'Gridfinity PLA', query: { tags: ['gridfinity'], sort: 'title' } }];
+  const inbox = new Map<string, InboxFile[]>([['r1', [{ name: 'quick_download.stl', kind: 'model', size: 2.2 * MB, modified: new Date(Date.now() - 864e5).toISOString() }, { name: 'reference.jpg', kind: 'image', size: 0.4 * MB, modified: new Date(Date.now() - 2 * 864e5).toISOString() }]]]);
+  const collChanged = () => listeners.coll.forEach((cb) => cb());
+  const applyQuery = (list: MockProject[], q: ListQuery) => {
+    if (q.root_id) list = list.filter((p) => p.root_id === q.root_id);
+    if (q.path_prefix) list = list.filter((p) => p.rel_path === q.path_prefix || p.rel_path.startsWith(q.path_prefix + '/'));
+    if (q.favorites) list = list.filter((p) => p.favorite);
+    for (const t of q.tags ?? []) list = list.filter((p) => p.tags.includes(t.toLowerCase()));
+    if (q.text?.trim()) {
+      const terms = q.text.toLowerCase().split(/\s+/).filter(Boolean);
+      list = list.filter((p) => { const hay = [p.title, p.creator ?? '', p.description ?? '', ...p.tags, ...p.files.map((x) => x.name)].join(' ').toLowerCase(); return terms.every((t) => hay.split(/[^a-z0-9äöüß]+/i).some((w) => w.startsWith(t))); });
+    }
+    const sort = q.sort ?? 'modified';
+    list.sort((a, b) => sort === 'title' ? a.title.localeCompare(b.title) : sort === 'creator' ? (a.creator ?? '~').localeCompare(b.creator ?? '~') : sort === 'size' ? b.total_bytes - a.total_bytes : sort === 'added' ? b.added.localeCompare(a.added) : b.modified.localeCompare(a.modified));
+    if (q.limit) list = list.slice(q.offset ?? 0, (q.offset ?? 0) + q.limit);
+    return list;
+  };
   const sub = <T>(set: Set<(x: T) => void>, cb: (x: T) => void): Promise<Unlisten> => { set.add(cb); return Promise.resolve(() => set.delete(cb)); };
   const summary = (p: MockProject): ProjectSummary => ({ id: p.id, root_id: p.root_id, rel_path: p.rel_path, title: p.title, creator: p.creator, tags: p.tags, thumbnail: p.thumbnail, file_count: p.files.length, model_count: p.model_count, total_bytes: p.total_bytes, modified: p.modified, has_sidecar: p.has_sidecar, offline: p.offline, favorite: p.favorite, added: p.added, thumb: p.thumb, slicer: p.slicer });
   const delay = (ms = 30) => new Promise((r) => setTimeout(r, ms));
@@ -108,7 +126,7 @@ export function createMockBackend(): Backend {
 
   return {
     kind: 'mock',
-    async appInfo() { return { version: '0.1.0-mock', dataDir: 'in-memory', testMode: false, e2eBuild: false, os: 'browser', arch: 'n/a', webview: navigator.userAgent.split(') ').pop() ?? '' }; },
+    async appInfo() { return { version: '0.1.0-mock', dataDir: 'in-memory', testMode: false, e2eBuild: false, updater: true, store: false, os: 'browser', arch: 'n/a', webview: navigator.userAgent.split(') ').pop() ?? '' }; },
     async getRoots() { await delay(); return roots.map((r) => ({ ...r })); },
     async addRoot(path, mode = 'watch') {
       if (roots.some((r) => r.path === path)) throw err('root_exists', `root already registered: ${path}`);
@@ -139,18 +157,13 @@ export function createMockBackend(): Backend {
     async listProjects(q: ListQuery) {
       await delay(15);
       let list = projects.slice();
-      if (q.root_id) list = list.filter((p) => p.root_id === q.root_id);
-      if (q.path_prefix) list = list.filter((p) => p.rel_path === q.path_prefix || p.rel_path.startsWith(q.path_prefix + '/'));
-      if (q.favorites) list = list.filter((p) => p.favorite);
-      for (const t of q.tags ?? []) list = list.filter((p) => p.tags.includes(t.toLowerCase()));
-      if (q.text?.trim()) {
-        const terms = q.text.toLowerCase().split(/\s+/).filter(Boolean);
-        list = list.filter((p) => { const hay = [p.title, p.creator ?? '', p.description ?? '', ...p.tags, ...p.files.map((x) => x.name)].join(' ').toLowerCase(); return terms.every((t) => hay.split(/[^a-z0-9äöüß]+/i).some((w) => w.startsWith(t))); });
+      if (q.collection_id) {
+        const c = collections.find((x) => x.id === q.collection_id);
+        if (!c) throw err('not_found', `collection ${q.collection_id}`);
+        list = list.filter((p) => c.projects.includes(p.id));
+        if ((q.sort ?? 'collection') === 'collection') { list.sort((a, b) => c.projects.indexOf(a.id) - c.projects.indexOf(b.id)); return list.map(summary); }
       }
-      const sort = q.sort ?? 'modified';
-      list.sort((a, b) => sort === 'title' ? a.title.localeCompare(b.title) : sort === 'creator' ? (a.creator ?? '~').localeCompare(b.creator ?? '~') : sort === 'size' ? b.total_bytes - a.total_bytes : sort === 'added' ? b.added.localeCompare(a.added) : b.modified.localeCompare(a.modified));
-      if (q.limit) list = list.slice(q.offset ?? 0, (q.offset ?? 0) + q.limit);
-      return list.map(summary);
+      return applyQuery(list, q).map(summary);
     },
     async getProject(id) { await delay(10); return { ...find(id) }; },
     async tagCounts(rootId) {
@@ -216,6 +229,7 @@ export function createMockBackend(): Backend {
       if (projects.some((x) => x.root_id === p.root_id && x.rel_path.toLowerCase() === newRel.toLowerCase() && x !== p)) throw err('already_exists', `a file or folder named ${name} already exists`);
       const oldId = p.id;
       p.rel_path = newRel; p.id = `${p.root_id}:${newRel}`;
+      for (const c of collections) c.projects = c.projects.map((x) => (x === oldId ? p.id : x));
       if (!p.has_sidecar) p.title = name;
       listeners.lib.forEach((cb) => cb({ rootId: p.root_id, report: null, reason: 'rename', oldId, newId: p.id }));
       return { ...p };
@@ -225,6 +239,7 @@ export function createMockBackend(): Backend {
       const i = projects.findIndex((x) => x.id === projectId);
       if (i < 0) throw err('not_found', projectId);
       const [p] = projects.splice(i, 1);
+      for (const c of collections) c.projects = c.projects.filter((x) => x !== projectId);
       listeners.lib.forEach((cb) => cb({ rootId: p!.root_id, report: null, reason: 'delete', oldId: projectId }));
     },
     async deleteFile(projectId, relPath) {
@@ -271,6 +286,73 @@ export function createMockBackend(): Backend {
     async storeEmbeddedThumbnail(projectId) { throw err('not_allowed', `${projectId}: no embedded preview in browser mode`); },
     async thumbnailFailed(projectId) { failed.add(projectId); },
     async readThumbnail(key) { const b = thumbs.get(key); if (!b) throw err('not_found', key); return b.slice(0); },
+    async pickImportFiles() { return ['C:\\Downloads\\Cable Clip.zip', 'C:\\Downloads\\loose_hook.stl', 'C:\\Downloads\\notes.7z']; },
+    async analyzeImport(paths) {
+      await delay(80);
+      return paths.map((source): ImportItem => {
+        const base = source.split(/[\\/]/).pop() ?? source;
+        const ext = base.split('.').pop()?.toLowerCase() ?? '';
+        const name = base.replace(/\.[^.]+$/, '');
+        if (ext === 'zip') return { source, kind: 'archive', name, action: 'project', model_count: 2, file_count: 3, total_bytes: 4.2 * MB, strip_prefix: name, warnings: [] };
+        if (!ext) return { source, kind: 'folder', name, action: 'project', model_count: 3, file_count: 5, total_bytes: 9 * MB, strip_prefix: null, warnings: [] };
+        const model = ['stl', 'obj', '3mf'].includes(ext);
+        return { source, kind: 'file', name, action: 'inbox', model_count: model ? 1 : 0, file_count: 1, total_bytes: 1.1 * MB, strip_prefix: null, warnings: ext === '7z' ? ['.7z archives are not extracted yet; extract manually or keep it in the inbox'] : [] };
+      });
+    },
+    async executeImport(req) {
+      const root = roots.find((r) => r.id === req.root_id);
+      if (!root) throw err('not_found', req.root_id);
+      const report = { root_id: req.root_id, projects: [] as string[], inbox_files: 0, skipped: 0, errors: [] as string[] };
+      for (const it of req.items.filter((x) => x.action === 'project')) {
+        if (!it.name.trim() || /[\\/:*?"<>|]/.test(it.name)) throw err('invalid_name', `invalid name: ${it.name}`);
+        if (projects.some((p) => p.root_id === req.root_id && p.rel_path.toLowerCase() === it.name.trim().toLowerCase())) throw err('already_exists', `a file or folder named ${it.name} already exists`);
+      }
+      for (const [i, it] of req.items.entries()) {
+        await delay(120);
+        listeners.imp.forEach((cb) => cb({ index: i, total: req.items.length, name: it.name }));
+        if (it.action === 'skip') { report.skipped++; continue; }
+        if (it.action === 'inbox') { const list = inbox.get(req.root_id) ?? []; list.unshift({ name: it.source.split(/[\\/]/).pop()!, kind: kindOf(it.source), size: 1.1 * MB, modified: new Date().toISOString() }); inbox.set(req.root_id, list); report.inbox_files++; continue; }
+        const files = [f('part_a.stl', 2 * MB, 0), f('part_b.stl', 2.2 * MB, 0), f('README.md', 1024, 0)];
+        if (req.archive_policy === 'keep' && it.source.endsWith('.zip')) files.push(f(it.source.split(/[\\/]/).pop()!, 4.2 * MB, 0));
+        projects.unshift(mk(req.root_id, it.name.trim(), it.name.trim(), { files, daysAgo: 0, has_sidecar: false }));
+        report.projects.push(it.name.trim());
+      }
+      listeners.lib.forEach((cb) => cb({ rootId: req.root_id, report: null, reason: 'import' }));
+      return report;
+    },
+    async listInbox(rootId) { return (inbox.get(rootId) ?? []).slice(); },
+    async promoteInbox(rootId, files, name) {
+      await delay(80);
+      if (!name.trim() || /[\\/:*?"<>|]/.test(name)) throw err('invalid_name', `invalid name: ${name}`);
+      if (projects.some((p) => p.root_id === rootId && p.rel_path.toLowerCase() === name.trim().toLowerCase())) throw err('already_exists', `a file or folder named ${name} already exists`);
+      const list = inbox.get(rootId) ?? [];
+      const moved = list.filter((x) => files.includes(x.name));
+      if (moved.length === 0) throw err('not_allowed', 'no files selected');
+      inbox.set(rootId, list.filter((x) => !files.includes(x.name)));
+      const p = mk(rootId, name.trim(), name.trim(), { files: moved.map((x) => f(x.name, x.size, 0)), daysAgo: 0, has_sidecar: false });
+      projects.unshift(p);
+      listeners.lib.forEach((cb) => cb({ rootId, report: null, reason: 'import', newId: p.id }));
+      return { ...p };
+    },
+    async deleteInboxFile(rootId, name) { inbox.set(rootId, (inbox.get(rootId) ?? []).filter((x) => x.name !== name)); listeners.inbox.forEach((cb) => cb({ rootId })); },
+    async getCollections() { return collections.map((c) => ({ ...c, projects: c.projects.slice() })); },
+    async createCollection(name) { if (!name.trim()) throw err('invalid_name', 'collection name is empty'); const c = { id: 'c_' + Math.random().toString(36).slice(2, 8), name: name.trim(), projects: [] }; collections.push(c); collChanged(); return { ...c }; },
+    async renameCollection(id, name) { const c = collections.find((x) => x.id === id); if (!c) throw err('not_found', id); if (!name.trim()) throw err('invalid_name', 'collection name is empty'); c.name = name.trim(); collChanged(); return { ...c }; },
+    async deleteCollection(id) { const i = collections.findIndex((x) => x.id === id); if (i < 0) throw err('not_found', id); collections.splice(i, 1); collChanged(); },
+    async addToCollection(id, ids) { const c = collections.find((x) => x.id === id); if (!c) throw err('not_found', id); for (const p of ids) if (!c.projects.includes(p)) c.projects.push(p); collChanged(); return { ...c }; },
+    async removeFromCollection(id, ids) { const c = collections.find((x) => x.id === id); if (!c) throw err('not_found', id); c.projects = c.projects.filter((p) => !ids.includes(p)); collChanged(); return { ...c }; },
+    async reorderCollection(id, order) { const c = collections.find((x) => x.id === id); if (!c) throw err('not_found', id); const next = order.filter((p) => c.projects.includes(p)); for (const p of c.projects) if (!next.includes(p)) next.push(p); c.projects = next; collChanged(); return { ...c }; },
+    async getSmartCollections() { return smart.map((s) => ({ ...s })); },
+    async createSmartCollection(name, query) { if (!name.trim()) throw err('invalid_name', 'collection name is empty'); const s = { id: 's_' + Math.random().toString(36).slice(2, 8), name: name.trim(), query: { ...query, limit: undefined, offset: undefined, collection_id: undefined } }; smart.push(s); collChanged(); return { ...s }; },
+    async updateSmartCollection(id, name, query) { const s = smart.find((x) => x.id === id); if (!s) throw err('not_found', id); if (name !== undefined) s.name = name; if (query) s.query = query; collChanged(); return { ...s }; },
+    async deleteSmartCollection(id) { const i = smart.findIndex((x) => x.id === id); if (i < 0) throw err('not_found', id); smart.splice(i, 1); collChanged(); },
+    async listSmartCollection(id, overrides) { const s = smart.find((x) => x.id === id); if (!s) throw err('not_found', id); return applyQuery(projects.slice(), { ...s.query, sort: overrides?.sort ?? s.query.sort, text: overrides?.text ?? s.query.text }).map(summary); },
+    onImportProgress: (cb) => sub(listeners.imp, cb),
+    onCollectionsChanged: (cb) => sub(listeners.coll, cb),
+    onInboxChanged: (cb) => sub(listeners.inbox, cb),
+    async checkUpdate() { await delay(300); return { available: true, version: '0.2.0', notes: 'Mock release notes', date: null }; },
+    async installUpdate() { await delay(300); },
+    async onFileDrop() { return () => {}; },
     async clearThumbnails() { thumbs.clear(); failed.clear(); for (const p of projects) p.thumb = null; listeners.lib.forEach((cb) => cb({ rootId: null, report: null, reason: 'thumbs_cleared' })); },
     async pickFolder() { return 'E:\\More Models'; },
     async getIgnorePatterns() { return ignore.slice(); },

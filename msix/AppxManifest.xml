@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<Package
+  xmlns="http://schemas.microsoft.com/appx/manifest/foundation/windows10"
+  xmlns:uap="http://schemas.microsoft.com/appx/manifest/uap/windows10"
+  xmlns:uap3="http://schemas.microsoft.com/appx/manifest/uap/windows10/3"
+  xmlns:rescap="http://schemas.microsoft.com/appx/manifest/foundation/windows10/restrictedcapabilities"
+  IgnorableNamespaces="uap uap3 rescap">
+  <!--
+    Identity: for a Store submission, Name and Publisher MUST equal the values Partner Center
+    shows under "Product identity" after reserving the app name (Package/Identity/Name and
+    Package/Identity/Publisher). build-msix.ps1 stamps them from -IdentityName / -Publisher;
+    the defaults below are for self-signed side-loading only.
+  -->
+  <Identity Name="DevSym.Meshkeep" Publisher="CN=DevSym Dev" Version="0.1.0.0" ProcessorArchitecture="x64" />
+  <Properties>
+    <DisplayName>Meshkeep</DisplayName>
+    <PublisherDisplayName>DevSym</PublisherDisplayName>
+    <Logo>Assets\StoreLogo.png</Logo>
+    <Description>Local-first library manager for 3D printing models.</Description>
+  </Properties>
+  <Dependencies>
+    <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.26100.0" />
+  </Dependencies>
+  <Resources>
+    <Resource Language="en-us" />
+    <Resource Language="de-de" />
+  </Resources>
+  <Applications>
+    <Application Id="Meshkeep" Executable="meshkeep.exe" EntryPoint="Windows.FullTrustApplication">
+      <uap:VisualElements DisplayName="Meshkeep" Description="Browse, preview, tag and organize the 3D models on your own disks."
+        BackgroundColor="transparent" Square150x150Logo="Assets\Square150x150Logo.png" Square44x44Logo="Assets\Square44x44Logo.png">
+        <uap:DefaultTile Wide310x150Logo="Assets\Wide310x150Logo.png" Square71x71Logo="Assets\Square71x71Logo.png" Square310x310Logo="Assets\Square310x310Logo.png" />
+      </uap:VisualElements>
+      <Extensions>
+        <uap3:Extension Category="windows.appExecutionAlias">
+          <uap3:AppExecutionAlias><uap3:ExecutionAlias Alias="meshkeep.exe" /></uap3:AppExecutionAlias>
+        </uap3:Extension>
+      </Extensions>
+    </Application>
+  </Applications>
+  <Capabilities>
+    <!-- A packaged Win32 (Tauri) app; library folders are chosen through the native picker. -->
+    <rescap:Capability Name="runFullTrust" />
+  </Capabilities>
+</Package>

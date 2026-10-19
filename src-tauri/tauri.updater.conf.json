@@ -1,0 +1,13 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "bundle": {
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "endpoints": ["https://github.com/ThomasPe/my-meshes/releases/latest/download/latest.json"],
+      "pubkey": "REPLACE_WITH_PUBLIC_KEY_FROM_tauri_signer_generate",
+      "windows": { "installMode": "passive" }
+    }
+  }
+}

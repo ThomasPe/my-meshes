@@ -1,4 +1,4 @@
-import { Image as ImageIcon, LayoutGrid, List, RefreshCw, X } from 'lucide-react';
+import { Image as ImageIcon, LayoutGrid, List, RefreshCw, Sparkles, Upload, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -7,7 +7,7 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useUi } from '@/lib/store';
 import type { SortKey } from '@/lib/types';
 
-export function Toolbar({ title, count, onRescan, scanning, sortLocked }: { title: string; count: number; onRescan?: () => void; scanning?: boolean; sortLocked?: boolean }) {
+export function Toolbar({ title, count, onRescan, scanning, sortLocked, onImport, onSaveSmart, collectionSort }: { title: string; count: number; onRescan?: () => void; scanning?: boolean; sortLocked?: boolean; onImport?: () => void; onSaveSmart?: () => void; collectionSort?: boolean }) {
   const { t } = useTranslation();
   const { tags, removeTag, text, setText, sort, setSort, view, setView, tile, setTile } = useUi();
   return (
@@ -23,9 +23,11 @@ export function Toolbar({ title, count, onRescan, scanning, sortLocked }: { titl
         <span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-accent px-3 text-[13px] font-bold text-accent-foreground">“{text}”<button type="button" aria-label="clear search" onClick={() => setText('')} className="rounded-full p-0.5 opacity-70 hover:bg-black/10 hover:opacity-100"><X className="size-3.5" /></button></span>
       )}
       <div className="ml-auto flex items-center gap-2">
+        {onSaveSmart && <Button variant="outline" size="sm" onClick={onSaveSmart} data-testid="save-smart" title={t('collections.saveSmartHint')}><Sparkles />{t('collections.saveSmart')}</Button>}
         <Select value={sortLocked ? 'added' : sort} onValueChange={(v) => setSort(v as SortKey)} disabled={sortLocked}>
           <SelectTrigger size="sm" data-testid="sort"><span className="text-muted-foreground">{t('library.sort')}</span><SelectValue /></SelectTrigger>
           <SelectContent>
+            {collectionSort && <SelectItem value="collection">{t('library.sortCollection')}</SelectItem>}
             <SelectItem value="modified">{t('library.sortModified')}</SelectItem>
             <SelectItem value="added">{t('library.sortAdded')}</SelectItem>
             <SelectItem value="title">{t('library.sortTitle')}</SelectItem>
@@ -44,6 +46,7 @@ export function Toolbar({ title, count, onRescan, scanning, sortLocked }: { titl
           </label>
         )}
         {onRescan && <Button variant="outline" size="sm" onClick={onRescan} disabled={scanning} data-testid="rescan"><RefreshCw className={scanning ? 'animate-spin' : ''} />{t('library.rescan')}</Button>}
+        {onImport && <Button size="sm" onClick={onImport} data-testid="import-open"><Upload />{t('import.open')}</Button>}
       </div>
     </div>
   );

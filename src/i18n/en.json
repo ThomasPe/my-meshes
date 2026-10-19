@@ -15,7 +15,23 @@
     "addRootHint": "Pick the folder where your models live. Subfolders are scanned as projects.",
     "settings": "Open settings",
     "settingsHint": "Ignore patterns, theme, language.",
-    "footer": "Offline by design. You can add more folders later in Settings."
+    "footer": "Offline by design. You can add more folders later in Settings.",
+    "import": "Import archives or models",
+    "importHint": "Zips from Printables, MakerWorld or Thingiverse become projects; loose files go to the inbox.",
+    "steps": {
+      "scan": {
+        "title": "1 · Scan",
+        "body": "Folders with model files become projects. Nothing is moved or written."
+      },
+      "thumbs": {
+        "title": "2 · Previews",
+        "body": "Thumbnails render in the background and live in the app cache."
+      },
+      "sidecar": {
+        "title": "3 · Metadata",
+        "body": "Tags, creator and notes go into a project.yaml next to the files, only when you edit."
+      }
+    }
   },
   "library": {
     "all": "All projects",
@@ -60,7 +76,8 @@
     "favorites": "Favorites",
     "sortAdded": "Date added",
     "emptyFavorites": "Star a project to see it here.",
-    "slicerProject": "slicer"
+    "slicerProject": "slicer",
+    "sortCollection": "Collection order"
   },
   "inspector": {
     "open": "Open",
@@ -177,7 +194,19 @@
     "containers": "Bundle folders",
     "containersHint": "A folder whose models sit only in a sub-folder with one of these names (plus images or a README next to it) counts as one project. Applies on the next scan.",
     "addContainer": "add name, Enter",
-    "containerSaved": "Bundle folders saved"
+    "containerSaved": "Bundle folders saved",
+    "updates": "Updates",
+    "updatesStore": "Updates arrive through the Microsoft Store.",
+    "updatesPrivate": "Private build: checks GitHub Releases on request.",
+    "updatesDev": "Development build without an updater.",
+    "checkUpdate": "Check for updates",
+    "updateChecking": "Checking…",
+    "updateNone": "You are on the latest version.",
+    "updateAvailable": "Version {{version}} is available.",
+    "installUpdate": "Install and restart",
+    "updateInstalling": "Installing…",
+    "updateError": "Update check failed: {{message}}",
+    "updateIdle": "Updates are never installed without asking."
   },
   "status": {
     "watching": "Watching {{path}}",
@@ -199,7 +228,8 @@
     "generic": "Something went wrong: {{message}}",
     "invalid_name": "That name is not allowed as a folder name.",
     "already_exists": "A file or folder with that name already exists.",
-    "not_allowed": "This action is not allowed here."
+    "not_allowed": "This action is not allowed here.",
+    "updater": "Update failed: {{message}}"
   },
   "common": {
     "cancel": "Cancel",
@@ -226,5 +256,82 @@
     "deleteFileBody": "Only this file is moved. The project keeps its other files and metadata.",
     "fileDeleted": "{{name}} moved to trash",
     "projectGone": "The folder no longer contains a model and left the library."
+  },
+  "import": {
+    "title": "Import",
+    "lead": "Review what each dropped item becomes. Nothing is written until you confirm.",
+    "open": "Import…",
+    "analyzing": "Looking inside…",
+    "source": "Source",
+    "becomes": "Becomes",
+    "name": "Project folder",
+    "contents": "Contents",
+    "actions": {
+      "project": "New project",
+      "inbox": "Inbox",
+      "skip": "Skip"
+    },
+    "toInbox": "copied to _Inbox",
+    "models_one": "{{count}} model",
+    "models_other": "{{count}} models",
+    "empty": "Nothing to import.",
+    "intoRoot": "Into library",
+    "archivePolicy": "Original archives",
+    "policy": {
+      "keep": "Keep inside the project (+{{size}})",
+      "originals": "Move to _Originals (+{{size}})",
+      "trash": "Move to trash after extracting"
+    },
+    "summary": {
+      "projects_one": "{{count}} project",
+      "projects_other": "{{count}} projects",
+      "inbox_one": "{{count}} to inbox",
+      "inbox_other": "{{count}} to inbox",
+      "skip_one": "{{count}} skipped",
+      "skip_other": "{{count}} skipped"
+    },
+    "progress": "{{index}}/{{total}} · {{name}}",
+    "confirm": "Import",
+    "done": "Imported {{projects}} projects, {{inbox}} files to the inbox",
+    "partial": "Import finished with {{count}} errors",
+    "dropHere": "Drop to import",
+    "dropHint": "Archives and folders become projects, single files go to the inbox"
+  },
+  "inbox": {
+    "title": "Inbox",
+    "hint": "Loose files in {{path}}. Select some and turn them into a project.",
+    "makeProject_one": "Make project ({{count}})",
+    "makeProject_other": "Make project ({{count}})",
+    "makeProjectShort": "Make project",
+    "empty": "The inbox is empty",
+    "emptyHint": "Drop single model files onto the app or choose “Inbox” in the import dialog; they land here until you turn them into projects.",
+    "promoteTitle_one": "Turn {{count}} file into a project",
+    "promoteTitle_other": "Turn {{count}} files into a project",
+    "promoteBody": "A new project folder is created directly below the library root and the files move there.",
+    "promoted": "Project “{{name}}” created"
+  },
+  "collections": {
+    "title": "Collections",
+    "new": "New collection",
+    "newTitle": "New collection",
+    "nameBody": "A collection is an ordered list of projects, independent of folders. Stored in the app data, not in your library.",
+    "name": "Name",
+    "save": "Save",
+    "created": "Collection “{{name}}” created",
+    "renameTitle": "Rename collection",
+    "deleteTitle": "Delete “{{name}}”?",
+    "deleteBody": "Only the collection is removed. Projects and files stay where they are.",
+    "addTo": "Add to collection",
+    "removeFrom": "Remove from this collection",
+    "added": "Added to “{{name}}”",
+    "emptyHint": "Right-click a project to add it to a collection, or save a search as a smart collection.",
+    "emptyCollection": "This collection is empty. Right-click a project → Add to collection.",
+    "emptySmart": "No project matches this smart collection right now.",
+    "saveSmart": "Save search",
+    "saveSmartHint": "Save the current search, tags and scope as a smart collection",
+    "newSmartTitle": "Save as smart collection",
+    "newSmartBody": "The current search text, tags, favorites and folder scope are saved and evaluated live every time you open it.",
+    "smartSaved": "Smart collection “{{name}}” saved",
+    "smartHint": "Smart collection: a saved search"
   }
 }

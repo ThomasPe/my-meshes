@@ -1,8 +1,10 @@
-import { ChevronDown, ChevronRight, Clock, Folder, HardDrive, LayoutGrid, Plus, Star, Tag } from 'lucide-react';
+import { ChevronDown, ChevronRight, Clock, Folder, FolderHeart, HardDrive, Inbox, LayoutGrid, Pencil, Plus, Sparkles, Star, Tag, Trash2 } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useFolderTree, useLibraryStats, useRoots, useTagCounts } from '@/lib/queries';
+import { useCollectionDialog } from '@/features/library/CollectionDialogs';
+import { useCollections, useFolderTree, useInbox, useLibraryStats, useRoots, useSmartCollections, useTagCounts } from '@/lib/queries';
 import { routeHref } from '@/lib/router';
 import { useUi, type LibraryFilter } from '@/lib/store';
 import type { FolderNode, LibraryRoot } from '@/lib/types';
@@ -10,6 +12,7 @@ import { cn } from '@/lib/utils';
 
 const itemClass = 'flex h-9 w-full items-center gap-2.5 rounded-[10px] px-3 text-left text-[13px] font-semibold text-secondary-foreground hover:bg-secondary [&_svg]:size-4 [&_svg]:shrink-0';
 const activeClass = 'bg-accent text-accent-foreground hover:bg-accent';
+const headClass = 'mb-1.5 flex items-center px-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground';
 
 function same(a: LibraryFilter, b: LibraryFilter) {
   return JSON.stringify(a) === JSON.stringify(b);
@@ -20,16 +23,19 @@ export function Sidebar() {
   const roots = useRoots();
   const stats = useLibraryStats();
   const tags = useTagCounts(null);
+  const collections = useCollections();
+  const smart = useSmartCollections();
   const filter = useUi((s) => s.filter);
   const setFilter = useUi((s) => s.setFilter);
   const activeTags = useUi((s) => s.tags);
   const toggleTag = useUi((s) => s.toggleTag);
+  const openDialog = useCollectionDialog((s) => s.open);
 
   return (
     <ScrollArea className="h-full border-r border-border bg-panel" data-testid="sidebar">
       <nav className="grid gap-4 p-3">
         <section>
-          <h3 className="mb-1.5 px-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t('nav.library')}</h3>
+          <h3 className={headClass}>{t('nav.library')}</h3>
           <button type="button" data-testid="filter-all" className={cn(itemClass, filter.kind === 'all' && activeClass)} onClick={() => setFilter({ kind: 'all' })}>
             <LayoutGrid />{t('library.all')}<span className="ml-auto text-xs tabular text-muted-foreground">{stats.data?.projects ?? ''}</span>
           </button>
@@ -41,12 +47,48 @@ export function Sidebar() {
           </button>
         </section>
         <section>
-          <h3 className="mb-1.5 flex items-center px-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t('library.roots')}<a href={routeHref({ page: 'settings' })} className="ml-auto rounded-full p-1 hover:bg-secondary" title={t('settings.addFolder')}><Plus className="size-3.5" /></a></h3>
+          <h3 className={headClass}>{t('collections.title')}<button type="button" className="ml-auto rounded-full p-1 hover:bg-secondary" title={t('collections.new')} aria-label={t('collections.new')} data-testid="collection-new" onClick={() => openDialog({ kind: 'create' })}><Plus className="size-3.5" /></button></h3>
+          {(collections.data ?? []).map((c) => {
+            const f: LibraryFilter = { kind: 'collection', id: c.id };
+            return (
+              <ContextMenu key={c.id}>
+                <ContextMenuTrigger asChild>
+                  <button type="button" data-testid="filter-collection" className={cn(itemClass, same(filter, f) && activeClass)} onClick={() => setFilter(f)}>
+                    <FolderHeart /><span className="truncate">{c.name}</span><span className="ml-auto text-xs tabular text-muted-foreground">{c.projects.length}</span>
+                  </button>
+                </ContextMenuTrigger>
+                <ContextMenuContent>
+                  <ContextMenuItem onSelect={() => openDialog({ kind: 'rename', id: c.id, name: c.name })}><Pencil />{t('actions.rename')}</ContextMenuItem>
+                  <ContextMenuItem variant="destructive" onSelect={() => openDialog({ kind: 'delete', id: c.id, name: c.name })} data-testid="collection-delete"><Trash2 />{t('actions.delete')}</ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
+            );
+          })}
+          {(smart.data ?? []).map((s) => {
+            const f: LibraryFilter = { kind: 'smart', id: s.id };
+            return (
+              <ContextMenu key={s.id}>
+                <ContextMenuTrigger asChild>
+                  <button type="button" data-testid="filter-smart" className={cn(itemClass, same(filter, f) && activeClass)} onClick={() => setFilter(f)} title={t('collections.smartHint')}>
+                    <Sparkles /><span className="truncate">{s.name}</span>
+                  </button>
+                </ContextMenuTrigger>
+                <ContextMenuContent>
+                  <ContextMenuItem onSelect={() => openDialog({ kind: 'renameSmart', id: s.id, name: s.name })}><Pencil />{t('actions.rename')}</ContextMenuItem>
+                  <ContextMenuItem variant="destructive" onSelect={() => openDialog({ kind: 'deleteSmart', id: s.id, name: s.name })}><Trash2 />{t('actions.delete')}</ContextMenuItem>
+                </ContextMenuContent>
+              </ContextMenu>
+            );
+          })}
+          {(collections.data?.length ?? 0) + (smart.data?.length ?? 0) === 0 && <p className="px-3 py-1 text-xs text-muted-foreground">{t('collections.emptyHint')}</p>}
+        </section>
+        <section>
+          <h3 className={headClass}>{t('library.roots')}<a href={routeHref({ page: 'settings' })} className="ml-auto rounded-full p-1 hover:bg-secondary" title={t('settings.addFolder')}><Plus className="size-3.5" /></a></h3>
           {(roots.data ?? []).map((r) => <RootTree key={r.id} root={r} filter={filter} setFilter={setFilter} />)}
         </section>
         {tags.data && tags.data.length > 0 && (
           <section>
-            <h3 className="mb-1.5 px-3 text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t('library.tags')}</h3>
+            <h3 className={headClass}>{t('library.tags')}</h3>
             <div className="flex flex-wrap gap-1.5 px-3">
               {tags.data.slice(0, 24).map((tc) => (
                 <button key={tc.tag} type="button" onClick={() => toggleTag(tc.tag)} className={cn('inline-flex items-center gap-1 rounded-full bg-secondary px-2.5 py-0.5 text-xs font-semibold text-secondary-foreground hover:bg-accent hover:text-accent-foreground', activeTags.includes(tc.tag) && 'bg-primary text-primary-foreground hover:bg-primary hover:text-primary-foreground')}>
@@ -62,9 +104,12 @@ export function Sidebar() {
 }
 
 function RootTree({ root, filter, setFilter }: { root: LibraryRoot; filter: LibraryFilter; setFilter: (f: LibraryFilter) => void }) {
+  const { t } = useTranslation();
   const [open, setOpen] = useState(true);
   const tree = useFolderTree(root.id);
+  const inbox = useInbox(root.status === 'offline' ? null : root.id);
   const rootFilter: LibraryFilter = { kind: 'root', rootId: root.id };
+  const inboxFilter: LibraryFilter = { kind: 'inbox', rootId: root.id };
   const name = root.path.split(/[\\/]/).filter(Boolean).pop() || root.path;
   return (
     <div>
@@ -77,6 +122,12 @@ function RootTree({ root, filter, setFilter }: { root: LibraryRoot; filter: Libr
         </button>
         <span className="text-[11px] text-muted-foreground">{root.status === 'offline' ? 'offline' : root.mode}</span>
       </div>
+      {open && root.status !== 'offline' && (
+        <div className={cn(itemClass, 'h-8 font-medium', same(filter, inboxFilter) && activeClass)} style={{ paddingLeft: 28 }}>
+          <button type="button" data-testid="filter-inbox" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setFilter(inboxFilter)}><Inbox className="text-muted-foreground" /><span className="truncate">{t('inbox.title')}</span></button>
+          <span className="text-[11px] tabular text-muted-foreground" data-testid="inbox-count">{inbox.data?.length ?? 0}</span>
+        </div>
+      )}
       {open && (tree.data ?? []).map((n) => <FolderItem key={n.rel_path} node={n} depth={1} rootId={root.id} filter={filter} setFilter={setFilter} />)}
     </div>
   );

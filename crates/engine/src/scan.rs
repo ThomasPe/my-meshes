@@ -340,6 +340,11 @@ pub fn scan_root(root_id: &str, root: &Path, opts: &ScanOptions, mut progress: i
             walker.skip_current_dir();
             continue;
         }
+        // `_Inbox` and `_Originals` directly below the root are the app's own folders, not projects.
+        if entry.depth() == 1 && crate::import::SPECIAL_DIRS.iter().any(|s| rel.as_os_str().eq_ignore_ascii_case(s)) {
+            walker.skip_current_dir();
+            continue;
+        }
         let is_project = match dir_is_project(dir, &ignore, root, opts) {
             Ok(v) => v,
             Err(e) => {
@@ -469,6 +474,16 @@ mod tests {
         };
         let out = scan_root("r1", r, &opts, |_| {}).unwrap();
         assert!(out.projects.iter().any(|p| p.rel_path == "Cable Organizer/files"));
+    }
+
+    #[test]
+    fn inbox_and_originals_are_not_projects() {
+        let t = tempfile::tempdir().unwrap();
+        touch(&t.path().join("_Inbox/loose.stl"), 10);
+        touch(&t.path().join("_Originals/old.zip"), 10);
+        touch(&t.path().join("Real/part.stl"), 10);
+        let out = scan_root("r1", t.path(), &ScanOptions::default(), |_| {}).unwrap();
+        assert_eq!(out.projects.iter().map(|p| p.rel_path.as_str()).collect::<Vec<_>>(), vec!["Real"]);
     }
 
     #[test]

@@ -15,7 +15,23 @@
     "addRootHint": "Wähle den Ordner mit deinen Modellen. Unterordner werden als Projekte erkannt.",
     "settings": "Einstellungen öffnen",
     "settingsHint": "Ignoriermuster, Design, Sprache.",
-    "footer": "Offline by design. Weitere Ordner kannst du später in den Einstellungen hinzufügen."
+    "footer": "Offline by design. Weitere Ordner kannst du später in den Einstellungen hinzufügen.",
+    "import": "Archive oder Modelle importieren",
+    "importHint": "Zips von Printables, MakerWorld oder Thingiverse werden zu Projekten, lose Dateien landen im Posteingang.",
+    "steps": {
+      "scan": {
+        "title": "1 · Scannen",
+        "body": "Ordner mit Modelldateien werden zu Projekten. Nichts wird verschoben oder geschrieben."
+      },
+      "thumbs": {
+        "title": "2 · Vorschauen",
+        "body": "Thumbnails werden im Hintergrund gerendert und liegen im App-Cache."
+      },
+      "sidecar": {
+        "title": "3 · Metadaten",
+        "body": "Tags, Designer und Notizen landen in einer project.yaml neben den Dateien, erst wenn du etwas änderst."
+      }
+    }
   },
   "library": {
     "all": "Alle Projekte",
@@ -60,7 +76,8 @@
     "favorites": "Favoriten",
     "sortAdded": "Hinzugefügt am",
     "emptyFavorites": "Markiere ein Projekt mit einem Stern, dann erscheint es hier.",
-    "slicerProject": "Slicer"
+    "slicerProject": "Slicer",
+    "sortCollection": "Reihenfolge der Sammlung"
   },
   "inspector": {
     "open": "Öffnen",
@@ -177,7 +194,19 @@
     "containers": "Bundle-Ordner",
     "containersHint": "Ein Ordner, dessen Modelle nur in einem Unterordner mit einem dieser Namen liegen (plus Bilder oder README daneben), zählt als ein Projekt. Gilt ab dem nächsten Scan.",
     "addContainer": "Name eingeben, Enter",
-    "containerSaved": "Bundle-Ordner gespeichert"
+    "containerSaved": "Bundle-Ordner gespeichert",
+    "updates": "Updates",
+    "updatesStore": "Updates kommen über den Microsoft Store.",
+    "updatesPrivate": "Private Version: prüft GitHub Releases auf Anfrage.",
+    "updatesDev": "Entwicklungsversion ohne Updater.",
+    "checkUpdate": "Nach Updates suchen",
+    "updateChecking": "Prüfe…",
+    "updateNone": "Du hast die aktuelle Version.",
+    "updateAvailable": "Version {{version}} ist verfügbar.",
+    "installUpdate": "Installieren und neu starten",
+    "updateInstalling": "Installiere…",
+    "updateError": "Update-Prüfung fehlgeschlagen: {{message}}",
+    "updateIdle": "Updates werden nie ohne Nachfrage installiert."
   },
   "status": {
     "watching": "Beobachte {{path}}",
@@ -199,7 +228,8 @@
     "generic": "Etwas ist schiefgelaufen: {{message}}",
     "invalid_name": "Dieser Name ist als Ordnername nicht erlaubt.",
     "already_exists": "Eine Datei oder ein Ordner mit diesem Namen existiert bereits.",
-    "not_allowed": "Diese Aktion ist hier nicht erlaubt."
+    "not_allowed": "Diese Aktion ist hier nicht erlaubt.",
+    "updater": "Update fehlgeschlagen: {{message}}"
   },
   "common": {
     "cancel": "Abbrechen",
@@ -226,5 +256,82 @@
     "deleteFileBody": "Nur diese Datei wird verschoben. Das Projekt behält seine übrigen Dateien und Metadaten.",
     "fileDeleted": "{{name}} in den Papierkorb verschoben",
     "projectGone": "Der Ordner enthält kein Modell mehr und ist aus der Bibliothek verschwunden."
+  },
+  "import": {
+    "title": "Importieren",
+    "lead": "Prüfe, was aus jedem Element wird. Geschrieben wird erst nach deiner Bestätigung.",
+    "open": "Importieren…",
+    "analyzing": "Schaue hinein…",
+    "source": "Quelle",
+    "becomes": "Wird zu",
+    "name": "Projektordner",
+    "contents": "Inhalt",
+    "actions": {
+      "project": "Neues Projekt",
+      "inbox": "Posteingang",
+      "skip": "Überspringen"
+    },
+    "toInbox": "nach _Inbox kopiert",
+    "models_one": "{{count}} Modell",
+    "models_other": "{{count}} Modelle",
+    "empty": "Nichts zu importieren.",
+    "intoRoot": "In Bibliothek",
+    "archivePolicy": "Original-Archive",
+    "policy": {
+      "keep": "Im Projekt behalten (+{{size}})",
+      "originals": "Nach _Originals verschieben (+{{size}})",
+      "trash": "Nach dem Entpacken in den Papierkorb"
+    },
+    "summary": {
+      "projects_one": "{{count}} Projekt",
+      "projects_other": "{{count}} Projekte",
+      "inbox_one": "{{count}} in den Posteingang",
+      "inbox_other": "{{count}} in den Posteingang",
+      "skip_one": "{{count}} übersprungen",
+      "skip_other": "{{count}} übersprungen"
+    },
+    "progress": "{{index}}/{{total}} · {{name}}",
+    "confirm": "Importieren",
+    "done": "{{projects}} Projekte importiert, {{inbox}} Dateien im Posteingang",
+    "partial": "Import mit {{count}} Fehlern beendet",
+    "dropHere": "Loslassen zum Importieren",
+    "dropHint": "Archive und Ordner werden zu Projekten, einzelne Dateien landen im Posteingang"
+  },
+  "inbox": {
+    "title": "Posteingang",
+    "hint": "Lose Dateien in {{path}}. Wähle welche aus und mach ein Projekt daraus.",
+    "makeProject_one": "Projekt erstellen ({{count}})",
+    "makeProject_other": "Projekt erstellen ({{count}})",
+    "makeProjectShort": "Projekt erstellen",
+    "empty": "Der Posteingang ist leer",
+    "emptyHint": "Zieh einzelne Modelldateien auf die App oder wähle im Import-Dialog „Posteingang“; sie landen hier, bis du Projekte daraus machst.",
+    "promoteTitle_one": "{{count}} Datei zu einem Projekt machen",
+    "promoteTitle_other": "{{count}} Dateien zu einem Projekt machen",
+    "promoteBody": "Ein neuer Projektordner entsteht direkt unter dem Bibliotheksordner, die Dateien ziehen dorthin um.",
+    "promoted": "Projekt „{{name}}“ erstellt"
+  },
+  "collections": {
+    "title": "Sammlungen",
+    "new": "Neue Sammlung",
+    "newTitle": "Neue Sammlung",
+    "nameBody": "Eine Sammlung ist eine geordnete Liste von Projekten, unabhängig von Ordnern. Gespeichert in den App-Daten, nicht in deiner Bibliothek.",
+    "name": "Name",
+    "save": "Speichern",
+    "created": "Sammlung „{{name}}“ erstellt",
+    "renameTitle": "Sammlung umbenennen",
+    "deleteTitle": "„{{name}}“ löschen?",
+    "deleteBody": "Nur die Sammlung wird entfernt. Projekte und Dateien bleiben, wo sie sind.",
+    "addTo": "Zu Sammlung hinzufügen",
+    "removeFrom": "Aus dieser Sammlung entfernen",
+    "added": "Zu „{{name}}“ hinzugefügt",
+    "emptyHint": "Rechtsklick auf ein Projekt, um es zu einer Sammlung hinzuzufügen, oder speichere eine Suche als smarte Sammlung.",
+    "emptyCollection": "Diese Sammlung ist leer. Rechtsklick auf ein Projekt → Zu Sammlung hinzufügen.",
+    "emptySmart": "Gerade passt kein Projekt zu dieser smarten Sammlung.",
+    "saveSmart": "Suche speichern",
+    "saveSmartHint": "Aktuelle Suche, Tags und Bereich als smarte Sammlung speichern",
+    "newSmartTitle": "Als smarte Sammlung speichern",
+    "newSmartBody": "Suchtext, Tags, Favoriten und Ordnerbereich werden gespeichert und bei jedem Öffnen live ausgewertet.",
+    "smartSaved": "Smarte Sammlung „{{name}}“ gespeichert",
+    "smartHint": "Smarte Sammlung: eine gespeicherte Suche"
   }
 }

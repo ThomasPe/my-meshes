@@ -1,4 +1,4 @@
-import { FolderOpen, Images, Monitor, Moon, Plus, RefreshCw, Sun, Trash2, X } from 'lucide-react';
+import { Download, FolderOpen, Images, Monitor, Moon, Plus, RefreshCw, Sun, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -18,7 +18,7 @@ import { invalidateLibrary, keys, useAppInfo, useContainerDirs, useIgnorePattern
 import { kickThumbQueue, useThumbs } from '@/lib/thumbs/queue';
 import { dropThumbnailCache } from '@/lib/thumbs/useThumbnail';
 import { applyTheme, loadTheme, type Theme } from '@/lib/store';
-import type { LibraryRoot, SyncMode } from '@/lib/types';
+import type { LibraryRoot, SyncMode, UpdateInfo } from '@/lib/types';
 import { useQueryClient } from '@tanstack/react-query';
 
 export function SettingsPage({ scanning, onScanEnd }: { scanning: ScanState; onScanEnd: (rootId: string) => void }) {
@@ -35,6 +35,15 @@ export function SettingsPage({ scanning, onScanEnd }: { scanning: ScanState; onS
   const [theme, setTheme] = useState<Theme>(loadTheme());
   const [pattern, setPattern] = useState('');
   const [container, setContainer] = useState('');
+  const [update, setUpdate] = useState<{ state: 'idle' | 'checking' | 'result' | 'installing'; info?: UpdateInfo; error?: string }>({ state: 'idle' });
+  const checkUpdate = async () => {
+    setUpdate({ state: 'checking' });
+    try { const b = await getBackend(); setUpdate({ state: 'result', info: await b.checkUpdate() }); } catch (e) { setUpdate({ state: 'result', error: e instanceof Error ? e.message : (e as { message?: string }).message ?? String(e) }); }
+  };
+  const installUpdate = async () => {
+    setUpdate((u) => ({ ...u, state: 'installing' }));
+    try { const b = await getBackend(); await b.installUpdate(); } catch (e) { reportError(e); setUpdate({ state: 'idle' }); }
+  };
 
   const setMode = async (root: LibraryRoot, mode: SyncMode, pollIntervalSecs?: number) => {
     try { const b = await getBackend(); await b.setRootMode(root.id, mode, pollIntervalSecs); await qc.invalidateQueries({ queryKey: keys.roots }); } catch (e) { reportError(e); }
@@ -117,9 +126,21 @@ export function SettingsPage({ scanning, onScanEnd }: { scanning: ScanState; onS
           </Row>
         </Card>
 
+        <Card title={t('settings.updates')} hint={info.data?.store ? t('settings.updatesStore') : info.data?.updater ? t('settings.updatesPrivate') : t('settings.updatesDev')} action={info.data?.updater ? <Button size="sm" variant="outline" disabled={update.state === 'checking' || update.state === 'installing'} onClick={() => void checkUpdate()} data-testid="check-update"><Download />{t('settings.checkUpdate')}</Button> : undefined}>
+          <div className="text-[13px] font-semibold text-secondary-foreground" data-testid="update-status">
+            {update.state === 'checking' && t('settings.updateChecking')}
+            {update.state === 'result' && update.error && <span className="text-warning">{t('settings.updateError', { message: update.error })}</span>}
+            {update.state === 'result' && update.info && !update.info.available && t('settings.updateNone')}
+            {(update.state === 'result' || update.state === 'installing') && update.info?.available && (
+              <span className="flex flex-wrap items-center gap-2">{t('settings.updateAvailable', { version: update.info.version })}<Button size="sm" disabled={update.state === 'installing'} onClick={() => void installUpdate()} data-testid="install-update">{update.state === 'installing' ? t('settings.updateInstalling') : t('settings.installUpdate')}</Button></span>
+            )}
+            {update.state === 'idle' && (info.data?.updater ? t('settings.updateIdle') : info.data?.store ? t('settings.updatesStore') : t('settings.updatesDev'))}
+          </div>
+        </Card>
+
         <Card title={t('settings.about')}>
           <dl className="grid grid-cols-[120px_minmax(0,1fr)] gap-x-3 gap-y-2 text-[13px]">
-            <dt className="text-muted-foreground">{t('settings.version')}</dt><dd className="font-semibold">{info.data?.version} {info.data?.testMode && <Badge variant="warning">{t('settings.testMode')}</Badge>} {info.data?.e2eBuild && <Badge variant="outline">e2e</Badge>}</dd>
+            <dt className="text-muted-foreground">{t('settings.version')}</dt><dd className="font-semibold">{info.data?.version} {info.data?.testMode && <Badge variant="warning">{t('settings.testMode')}</Badge>} {info.data?.e2eBuild && <Badge variant="outline">e2e</Badge>} {info.data?.store && <Badge variant="accent">Store</Badge>}</dd>
             <dt className="text-muted-foreground">{t('settings.dataDir')}</dt><dd className="break-all font-mono text-xs" data-testid="data-dir">{info.data?.dataDir}</dd>
             <dt className="text-muted-foreground">{t('settings.webview')}</dt><dd className="font-semibold">{info.data?.webview} · {info.data?.os} {info.data?.arch}</dd>
           </dl>

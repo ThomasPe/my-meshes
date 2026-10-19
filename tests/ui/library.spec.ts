@@ -69,6 +69,10 @@ test('double-click opens the project page with metadata form and files', async (
 test('settings lists roots and switches language', async ({ page }) => {
   await page.getByTestId('nav-settings').click();
   await expect(page.getByTestId('root-row')).toHaveCount(2);
+  // updates card (mock is an updater build): manual check, nothing installs on its own
+  await page.getByTestId('check-update').click();
+  await expect(page.getByTestId('update-status')).toContainText('Version 0.2.0 is available');
+  await expect(page.getByTestId('install-update')).toBeVisible();
   await page.getByTestId('language').click();
   await page.getByRole('option', { name: 'Deutsch' }).click();
   await expect(page.getByRole('heading', { name: 'Einstellungen' })).toBeVisible();
@@ -177,4 +181,90 @@ test('project page: OBJ renders in the viewer, slicer badge, delete a single fil
   await expect(page.getByTestId('container-dirs')).toContainText('files');
   await page.getByTestId('container-dirs').getByRole('button', { name: 'remove files' }).click();
   await expect(page.getByTestId('container-dirs')).not.toContainText('files');
+});
+
+// ---- D3: import staging, inbox, collections, smart collections ---------------------------
+
+test('import: picker opens the staging dialog, proposals are editable, confirm creates projects', async ({ page }) => {
+  await page.getByTestId('import-open').click();
+  await expect(page.getByTestId('import-dialog')).toBeVisible();
+  await expect(page.getByTestId('import-item')).toHaveCount(3);
+  const rows = page.getByTestId('import-item');
+  await expect(rows.nth(0)).toContainText('Cable Clip.zip');
+  await expect(rows.nth(0).getByTestId('import-name')).toHaveValue('Cable Clip');
+  await expect(rows.nth(1)).toContainText('copied to _Inbox');
+  await expect(rows.nth(2)).toContainText('not extracted yet');
+  // collision with an existing project is reported inline, then fixed
+  await rows.nth(0).getByTestId('import-name').fill('Projects/Desk/Cable Clips');
+  await page.getByTestId('import-confirm').click();
+  await expect(page.getByTestId('import-error')).toBeVisible();
+  await rows.nth(0).getByTestId('import-name').fill('Cable Clip');
+  await page.getByTestId('import-confirm').click();
+  await expect(page.getByTestId('import-dialog')).toBeHidden();
+  await expect(page.getByText('Imported 1 projects, 2 files to the inbox')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'Recent additions' })).toBeVisible();
+  await expect(page.getByTestId('project-card').first()).toContainText('Cable Clip');
+});
+
+test('inbox: lists loose files per root, promotes a selection to a project', async ({ page }) => {
+  await expect(page.getByTestId('inbox-count').first()).toHaveText('2');
+  await page.getByTestId('filter-inbox').first().click();
+  await expect(page.getByTestId('inbox-row')).toHaveCount(2);
+  await expect(page.getByTestId('inbox-promote')).toBeDisabled();
+  await page.getByTestId('inbox-row').filter({ hasText: 'quick_download.stl' }).click();
+  await page.getByTestId('inbox-promote').click();
+  await expect(page.getByTestId('promote-name')).toHaveValue('quick download');
+  await page.getByTestId('promote-name').fill('Quick Download');
+  await page.getByTestId('promote-confirm').click();
+  await expect(page.getByText('Project “Quick Download” created')).toBeVisible();
+  await expect(page.getByTestId('project-page')).toBeVisible();
+  await expect(page.getByTestId('project-title')).toHaveText('Quick Download');
+  await page.getByTestId('back').click();
+  await expect(page.getByTestId('inbox-count').first()).toHaveText('1');
+});
+
+test('collections: create via context menu, view in manual order, remove, delete', async ({ page }) => {
+  await expect(page.getByTestId('filter-collection')).toHaveCount(1);
+  await expect(page.getByTestId('filter-collection')).toContainText('Desk setup');
+  // add a project to the existing collection through the context menu
+  await page.getByTestId('project-card').filter({ hasText: 'Low-Poly Benchy' }).click({ button: 'right' });
+  await page.getByTestId('menu-add-to-collection').hover();
+  await page.getByTestId('menu-collection').filter({ hasText: 'Desk setup' }).click();
+  await expect(page.getByText('Added to “Desk setup”')).toBeVisible();
+  await page.getByTestId('filter-collection').click();
+  await expect(page.getByTestId('result-count')).toHaveText('3');
+  const titles = await page.getByTestId('project-card').locator('h4').allTextContents();
+  expect(titles).toEqual(['Phone Stand', 'Cable Clips', 'Low-Poly Benchy']);
+  await expect(page.getByTestId('reorder-handle')).toHaveCount(3);
+  // remove one from the collection
+  await page.getByTestId('project-card').filter({ hasText: 'Cable Clips' }).click({ button: 'right' });
+  await page.getByTestId('menu-remove-from-collection').click();
+  await expect(page.getByTestId('result-count')).toHaveText('2');
+  // new collection from the sidebar, then delete it
+  await page.getByTestId('collection-new').click();
+  await page.getByTestId('collection-name').fill('Bench');
+  await page.getByTestId('collection-confirm').click();
+  await expect(page.getByText('Collection “Bench” created')).toBeVisible();
+  await expect(page.getByTestId('filter-collection')).toHaveCount(2);
+  await expect(page.getByTestId('empty')).toContainText('This collection is empty');
+  await page.getByTestId('filter-collection').filter({ hasText: 'Bench' }).click({ button: 'right' });
+  await page.getByTestId('collection-delete').click();
+  await page.getByTestId('collection-confirm').click();
+  await expect(page.getByTestId('filter-collection')).toHaveCount(1);
+});
+
+test('smart collections: the sample one evaluates live, a search can be saved as one', async ({ page }) => {
+  await page.getByTestId('filter-smart').filter({ hasText: 'Gridfinity PLA' }).click();
+  await expect(page.getByTestId('result-count')).toHaveText('3');
+  await page.getByTestId('filter-all').click();
+  await expect(page.getByTestId('save-smart')).toHaveCount(0);
+  await page.getByTestId('search').fill('robo');
+  await page.getByTestId('save-smart').click();
+  await page.getByTestId('collection-name').fill('Robots');
+  await page.getByTestId('collection-confirm').click();
+  await expect(page.getByText('Smart collection “Robots” saved')).toBeVisible();
+  await expect(page.getByTestId('filter-smart')).toHaveCount(2);
+  await expect(page.getByRole('heading', { name: 'Robots' })).toBeVisible();
+  await page.getByRole('button', { name: 'clear search' }).click();
+  await expect(page.getByTestId('result-count')).toHaveText('1');
 });

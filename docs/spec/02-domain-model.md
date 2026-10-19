@@ -53,7 +53,11 @@ and quick downloads. It has its own sidebar view and a "make this a project" act
 Items in the inbox are expected to be promoted into proper projects later (Q6).
 
 ### Staging Area
-A review step for imports, not a place on disk. Dropped archives or scanned input folders
+A review step for imports, not a place on disk. Implemented (D3): a native drop or the
+picker opens the staging dialog; archives (zip) and folders are proposed as projects,
+loose files for the inbox; a zip with a single top-level folder has it stripped so the
+project folder replaces it. Paths that would escape the target (zip-slip) are skipped
+with a warning. 7z and rar are not extracted yet. Dropped archives or scanned input folders
 are analyzed and the app proposes a project structure; single files are proposed for the
 inbox. Nothing is written to the library until the user confirms (Q6). After extracting
 an archive into a new project, the original archive is **kept as an attachment inside the

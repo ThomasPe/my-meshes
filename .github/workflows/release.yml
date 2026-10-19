@@ -1,0 +1,83 @@
+name: Release
+
+# Tag `vX.Y.Z` -> private NSIS installer (self-updating when signing secrets exist),
+# Store-flavored MSIX (unsigned, for Partner Center) and a side-load MSIX, all on the
+# GitHub release. The Store build never carries the updater (docs/spec/04-quality.md).
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  windows:
+    name: windows · installer, updater, msix
+    runs-on: windows-latest
+    timeout-minutes: 90
+    defaults: { run: { shell: pwsh } }
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+        with: { key: release-windows }
+      - run: npm ci
+
+      - name: Version from tag
+        id: ver
+        run: |
+          $v = "${{ github.ref_name }}".TrimStart('v')
+          if ($v -notmatch '^\d+\.\d+\.\d+$') { $v = (Get-Content package.json -Raw | ConvertFrom-Json).version }
+          "version=$v" >> $env:GITHUB_OUTPUT
+          "msix=$v.0" >> $env:GITHUB_OUTPUT
+
+      # 1. Private build: NSIS installer. With signing secrets the updater is compiled in and
+      #    tauri-action publishes latest.json + .sig next to the installer.
+      - name: Private installer (with updater)
+        if: ${{ env.TAURI_SIGNING_PRIVATE_KEY != '' }}
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Meshkeep ${{ steps.ver.outputs.version }}
+          releaseDraft: true
+          args: --features updater --config src-tauri/tauri.updater.conf.json
+      - name: Private installer (no updater, no signing key configured)
+        if: ${{ env.TAURI_SIGNING_PRIVATE_KEY == '' }}
+        uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tagName: ${{ github.ref_name }}
+          releaseName: Meshkeep ${{ steps.ver.outputs.version }}
+          releaseDraft: true
+
+      # 2. Store flavor: plain exe without updater, packed as MSIX twice (unsigned for Partner
+      #    Center, self-signed for side-loading) and smoke-tested by installing it.
+      - name: Store build
+        run: npm run tauri:build:store
+      - name: MSIX for Partner Center (unsigned)
+        run: ./msix/build-msix.ps1 -Store -Version "${{ steps.ver.outputs.msix }}" -IdentityName "${{ vars.MSIX_IDENTITY_NAME || 'DevSym.Meshkeep' }}" -Publisher "${{ vars.MSIX_PUBLISHER || 'CN=DevSym Dev' }}" -PublisherDisplayName "${{ vars.MSIX_PUBLISHER_DISPLAY_NAME || 'DevSym' }}"
+      - name: MSIX side-load build + install round trip
+        run: |
+          ./msix/build-msix.ps1 -Version "${{ steps.ver.outputs.msix }}"
+          ./msix/sideload-test.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: meshkeep-${{ steps.ver.outputs.version }}-msix
+          path: |
+            target/*.msix
+            target/meshkeep-dev.cer
+      - name: Attach MSIX packages to the release
+        if: startsWith(github.ref, 'refs/tags/')
+        env: { GH_TOKEN: ${{ secrets.GITHUB_TOKEN }} }
+        run: gh release upload "${{ github.ref_name }}" (Get-ChildItem target/*.msix).FullName --clobber

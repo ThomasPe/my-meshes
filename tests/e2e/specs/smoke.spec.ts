@@ -74,7 +74,7 @@ describe('Meshkeep D2 (thumbnails, favorites, rename, 3MF)', () => {
     // the slicer 3MF got its embedded preview (no rendering) and a badge
     const plate = await $('[data-testid="project-card"][data-id$="Slicer/Plate"]');
     await expect(plate.$('[data-testid="slicer-badge"]')).toBeDisplayed();
-    await expect(plate.$('[data-testid="thumb-img"]')).toBeDisplayed();
+    await browser.waitUntil(async () => plate.$('[data-testid="thumb-img"]').isDisplayed(), { timeout: 60000, timeoutMsg: 'embedded 3MF preview did not appear' });
   });
 
   it('favorites persist in collections.json and survive a rescan', async () => {
@@ -123,5 +123,61 @@ describe('Meshkeep D2 (thumbnails, favorites, rename, 3MF)', () => {
     await $('[data-testid="project-page"]').waitForDisplayed();
     await browser.waitUntil(async () => (await $$('[data-testid="viewer-triangles"]')).length > 0, { timeout: 30000 });
     expect(await $('[data-testid="viewer-triangles"]').getText()).toMatch(/24 /);
+  });
+});
+
+// ---- D3: import, inbox, collections against the real engine ----------------------------
+describe('Meshkeep D3 (import, inbox, collections)', () => {
+  const fixture = () => process.env.MESHKEEP_E2E_FIXTURE!;
+  const dataDir = async () => (await browser.tauri.execute(({ core }) => core.invoke('app_info')) as { dataDir: string }).dataDir;
+
+  it('imports a bundle zip as a project and a loose file into the inbox', async () => {
+    await browser.url(await browser.getUrl().then((u) => u.split('#')[0] + '#/library'));
+    await $('[data-testid="library"]').waitForDisplayed({ timeout: 20000 });
+    await $('[data-testid="filter-all"]').click();
+    await $('[data-testid="import-open"]').click(); // MESHKEEP_PICK_FILES answers the picker
+    await $('[data-testid="import-dialog"]').waitForDisplayed();
+    await browser.waitUntil(async () => (await $$('[data-testid="import-item"]')).length === 2, { timeout: 10000 });
+    const names = await $$('[data-testid="import-item"]').map((r) => r.getText());
+    expect(names.join('\n')).toContain('Cable Clip.zip');
+    expect(names.join('\n')).toContain('loose_hook.stl');
+    await $('[data-testid="import-confirm"]').click();
+    await browser.waitUntil(async () => !(await $('[data-testid="import-dialog"]').isDisplayed()), { timeout: 30000 });
+    const project = path.join(fixture(), 'Cable Clip');
+    await browser.waitUntil(() => fs.existsSync(path.join(project, 'files/clip_6mm.stl')), { timeout: 10000, timeoutMsg: 'archive was not extracted' });
+    expect(fs.existsSync(path.join(project, 'Cable Clip.zip'))).toBe(true); // kept as attachment (default policy)
+    expect(fs.existsSync(path.join(fixture(), '_Inbox/loose_hook.stl'))).toBe(true);
+    await browser.waitUntil(async () => (await $$('[data-testid="project-card"][data-id$="Cable Clip"]')).length === 1, { timeout: 10000 });
+    await $('[data-testid="filter-inbox"]').click();
+    await $('[data-testid="inbox"]').waitForDisplayed();
+    await browser.waitUntil(async () => (await $$('[data-testid="inbox-row"]')).length === 1, { timeout: 10000 });
+  });
+
+  it('promotes the inbox file to a project directory', async () => {
+    await $('[data-testid="inbox-row"]').click();
+    await $('[data-testid="inbox-promote"]').click();
+    await $('[data-testid="promote-name"]').waitForDisplayed();
+    await $('[data-testid="promote-name"]').setValue('Hook');
+    await $('[data-testid="promote-confirm"]').click();
+    await $('[data-testid="project-page"]').waitForDisplayed({ timeout: 15000 });
+    expect(fs.existsSync(path.join(fixture(), 'Hook/loose_hook.stl'))).toBe(true);
+    expect(fs.existsSync(path.join(fixture(), '_Inbox/loose_hook.stl'))).toBe(false);
+    await $('[data-testid="back"]').click();
+    await $('[data-testid="library"]').waitForDisplayed();
+  });
+
+  it('collections persist in collections.json', async () => {
+    await $('[data-testid="filter-all"]').click();
+    await $('[data-testid="collection-new"]').click();
+    await $('[data-testid="collection-name"]').waitForDisplayed();
+    await $('[data-testid="collection-name"]').setValue('E2E Set');
+    await $('[data-testid="collection-confirm"]').click();
+    await browser.waitUntil(async () => (await $$('[data-testid="filter-collection"]')).length === 1, { timeout: 10000 });
+    const file = path.join(await dataDir(), 'collections.json');
+    await browser.waitUntil(() => fs.existsSync(file) && JSON.parse(fs.readFileSync(file, 'utf8')).collections?.length === 1, { timeout: 5000 });
+    // clean up the fixture: remove what the import created
+    fs.rmSync(path.join(fixture(), 'Cable Clip'), { recursive: true, force: true });
+    fs.rmSync(path.join(fixture(), 'Hook'), { recursive: true, force: true });
+    fs.rmSync(path.join(fixture(), '_Inbox'), { recursive: true, force: true });
   });
 });

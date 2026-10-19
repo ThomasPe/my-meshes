@@ -4,7 +4,7 @@
 export type SyncMode = 'watch' | 'poll' | 'manual';
 export type RootStatus = 'online' | 'offline' | 'unknown';
 export type FileKind = 'model' | 'image' | 'document' | 'attachment' | 'other';
-export type SortKey = 'modified' | 'title' | 'creator' | 'size' | 'added';
+export type SortKey = 'modified' | 'title' | 'creator' | 'size' | 'added' | 'collection';
 export type ThumbSource = 'render' | 'image' | 'embedded';
 
 export interface LibraryRoot {
@@ -87,6 +87,7 @@ export interface ListQuery {
   tags?: string[];
   text?: string | null;
   favorites?: boolean;
+  collection_id?: string | null;
   sort?: SortKey;
   limit?: number | null;
   offset?: number | null;
@@ -137,6 +138,8 @@ export interface AppInfo {
   dataDir: string;
   testMode: boolean;
   e2eBuild: boolean;
+  updater: boolean;
+  store: boolean;
   os: string;
   arch: string;
   webview: string;
@@ -148,10 +151,72 @@ export interface LibraryStats {
   favorites: number;
 }
 
+export interface Collection {
+  id: string;
+  name: string;
+  projects: string[];
+}
+
+export interface SmartCollection {
+  id: string;
+  name: string;
+  query: ListQuery;
+}
+
+export type SourceKind = 'archive' | 'folder' | 'file';
+export type ImportAction = 'project' | 'inbox' | 'skip';
+export type ArchivePolicy = 'keep' | 'originals' | 'trash';
+
+export interface ImportItem {
+  source: string;
+  kind: SourceKind;
+  name: string;
+  action: ImportAction;
+  model_count: number;
+  file_count: number;
+  total_bytes: number;
+  strip_prefix: string | null;
+  warnings: string[];
+}
+
+export interface ImportRequest {
+  root_id: string;
+  items: Array<{ source: string; action: ImportAction; name: string }>;
+  archive_policy: ArchivePolicy;
+}
+
+export interface ImportReport {
+  root_id: string;
+  projects: string[];
+  inbox_files: number;
+  skipped: number;
+  errors: string[];
+}
+
+export interface ImportProgress {
+  index: number;
+  total: number;
+  name: string;
+}
+
+export interface InboxFile {
+  name: string;
+  kind: FileKind;
+  size: number;
+  modified: string;
+}
+
 export interface ThumbJob {
   project_id: string;
   rel_path: string;
   source: ThumbSource;
+}
+
+export interface UpdateInfo {
+  available: boolean;
+  version: string | null;
+  notes: string | null;
+  date: string | null;
 }
 
 export interface ThumbStats {
@@ -161,7 +226,7 @@ export interface ThumbStats {
 }
 
 export interface AppError {
-  code: 'sidecar_conflict' | 'sidecar_invalid' | 'root_offline' | 'not_found' | 'root_exists' | 'not_a_directory' | 'invalid_pattern' | 'invalid_name' | 'already_exists' | 'not_allowed' | 'io' | 'index' | 'serde' | 'watch' | 'shell' | 'mock';
+  code: 'sidecar_conflict' | 'sidecar_invalid' | 'root_offline' | 'not_found' | 'root_exists' | 'not_a_directory' | 'invalid_pattern' | 'invalid_name' | 'already_exists' | 'not_allowed' | 'io' | 'index' | 'serde' | 'watch' | 'shell' | 'updater' | 'mock';
   message: string;
 }
 
@@ -169,4 +234,4 @@ export function isAppError(e: unknown): e is AppError {
   return typeof e === 'object' && e !== null && 'code' in e && 'message' in e;
 }
 
-export type LibraryChanged = { rootId: string | null; report: ScanReport | null; reason: 'scan' | 'watch' | 'poll' | 'root_removed' | 'rename' | 'delete' | 'thumbs_cleared'; error?: string; oldId?: string; newId?: string };
+export type LibraryChanged = { rootId: string | null; report: ScanReport | null; reason: 'scan' | 'watch' | 'poll' | 'root_removed' | 'rename' | 'delete' | 'thumbs_cleared' | 'import'; error?: string; oldId?: string; newId?: string };

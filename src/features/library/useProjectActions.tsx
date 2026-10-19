@@ -8,7 +8,8 @@ import { Label } from '@/components/ui/label';
 import type { ProjectActions } from '@/features/library/ProjectMenu';
 import { getBackend } from '@/lib/backend';
 import { reportError } from '@/lib/errors';
-import { useDeleteProject, useRenameProject, useSetFavorite } from '@/lib/queries';
+import { useCollectionDialog } from '@/features/library/CollectionDialogs';
+import { useAddToCollection, useCollections, useDeleteProject, useRemoveFromCollection, useRenameProject, useSetFavorite } from '@/lib/queries';
 import { navigate } from '@/lib/router';
 import { useUi } from '@/lib/store';
 import { isAppError, type ProjectSummary } from '@/lib/types';
@@ -19,9 +20,14 @@ type Target = Pick<ProjectSummary, 'id' | 'title' | 'rel_path' | 'favorite' | 'o
  * Project-level actions (favorite, rename, delete, reveal, open) plus the dialogs they need.
  * Render `dialogs` once in the page; pass `actions` to cards, rows, menus and the inspector.
  */
-export function useProjectActions(opts: { onRenamed?: (oldId: string, newId: string) => void; onDeleted?: (id: string) => void } = {}) {
+export function useProjectActions(opts: { onRenamed?: (oldId: string, newId: string) => void; onDeleted?: (id: string) => void; collectionId?: string | null } = {}) {
   const { t } = useTranslation();
   const favorite = useSetFavorite();
+  const collections = useCollections();
+  const addTo = useAddToCollection();
+  const removeFrom = useRemoveFromCollection();
+  const openCollectionDialog = useCollectionDialog((s) => s.open);
+  const collectionId = opts.collectionId ?? null;
   const rename = useRenameProject();
   const remove = useDeleteProject();
   const select = useUi((s) => s.select);
@@ -36,7 +42,13 @@ export function useProjectActions(opts: { onRenamed?: (oldId: string, newId: str
     rename: (p) => { setRenameError(null); setName(p.rel_path.split('/').pop() ?? ''); setRenaming(p); },
     remove: (p) => setDeleting(p),
     reveal: (p) => { getBackend().then((b) => b.revealProject(p.id)).catch(reportError); },
-  }), [favorite]);
+    addToCollection: (p, cid) => {
+      if (cid === null) { openCollectionDialog({ kind: 'create', addProjectIds: [p.id] }); return; }
+      addTo.mutate({ id: cid, projectIds: [p.id] }, { onSuccess: (c) => toast.success(t('collections.added', { name: c.name })), onError: reportError });
+    },
+    removeFromCollection: collectionId ? (p) => removeFrom.mutate({ id: collectionId, projectIds: [p.id] }, { onError: reportError }) : undefined,
+    collections: collections.data ?? [],
+  }), [favorite, collections.data, addTo, removeFrom, collectionId, openCollectionDialog, t]);
 
   const submitRename = useCallback(() => {
     if (!renaming) return;

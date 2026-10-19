@@ -1,7 +1,15 @@
 import { create } from 'zustand';
 import type { SortKey } from '@/lib/types';
 
-export type LibraryFilter = { kind: 'all' } | { kind: 'recent' } | { kind: 'favorites' } | { kind: 'root'; rootId: string } | { kind: 'folder'; rootId: string; path: string };
+export type LibraryFilter =
+  | { kind: 'all' }
+  | { kind: 'recent' }
+  | { kind: 'favorites' }
+  | { kind: 'root'; rootId: string }
+  | { kind: 'folder'; rootId: string; path: string }
+  | { kind: 'inbox'; rootId: string }
+  | { kind: 'collection'; id: string }
+  | { kind: 'smart'; id: string };
 export type ViewMode = 'grid' | 'list';
 
 interface UiState {

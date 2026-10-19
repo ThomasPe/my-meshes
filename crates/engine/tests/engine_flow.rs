@@ -253,3 +253,93 @@ fn favorites_rename_delete_and_thumbnails() {
     engine.clear_thumbnails().unwrap();
     assert!(!data.path().join("thumbs").exists());
 }
+
+#[test]
+fn import_inbox_and_collections_through_the_engine() {
+    use meshkeep_engine::import::{ArchivePolicy, ImportRequest, ImportRequestItem};
+    use meshkeep_engine::model::SortKey;
+    let data = tempfile::tempdir().unwrap();
+    let lib = tempfile::tempdir().unwrap();
+    let drop = tempfile::tempdir().unwrap();
+    touch(&lib.path().join("Existing/part.stl"), 10);
+    touch(&drop.path().join("Dropped Folder/a.stl"), 10);
+    touch(&drop.path().join("loose.stl"), 10);
+
+    let mut engine = Engine::open(data.path()).unwrap();
+    engine.set_deleter(Box::new(
+        |p: &Path| if p.is_dir() { fs::remove_dir_all(p) } else { fs::remove_file(p) },
+    ));
+    let root = engine.add_root(lib.path(), SyncMode::Manual).unwrap();
+    engine.scan_root(&root.id, |_| {}).unwrap();
+
+    let items = engine.analyze_import(&[drop.path().join("Dropped Folder"), drop.path().join("loose.stl")]);
+    assert_eq!(items.len(), 2);
+    let report = engine
+        .execute_import(
+            &ImportRequest {
+                root_id: root.id.clone(),
+                archive_policy: ArchivePolicy::Keep,
+                items: items
+                    .iter()
+                    .map(|i| ImportRequestItem {
+                        source: i.source.clone(),
+                        action: i.action,
+                        name: i.name.clone(),
+                    })
+                    .collect(),
+            },
+            |_| {},
+        )
+        .unwrap();
+    assert_eq!(report.projects, vec!["Dropped Folder"]);
+    assert_eq!(report.inbox_files, 1);
+    // the root was rescanned: the new project is listed, the inbox is not a project
+    let list = engine.list_projects(&ListQuery::default()).unwrap();
+    let mut names: Vec<_> = list.iter().map(|p| p.rel_path.as_str()).collect();
+    names.sort();
+    assert_eq!(names, vec!["Dropped Folder", "Existing"]);
+    assert_eq!(engine.list_inbox(&root.id).unwrap().len(), 1);
+    let promoted = engine.promote_inbox(&root.id, &["loose.stl".into()], "From Inbox").unwrap();
+    assert_eq!(promoted.rel_path, "From Inbox");
+    assert_eq!(promoted.model_count, 1);
+    assert!(engine.list_inbox(&root.id).unwrap().is_empty());
+    assert_eq!(engine.list_projects(&ListQuery::default()).unwrap().len(), 3);
+
+    // collections: membership, manual order, rename and delete keep references straight
+    let c = engine.create_collection("Desk").unwrap();
+    let existing = format!("{}:Existing", root.id);
+    engine.add_to_collection(&c.id, &[promoted.id.clone(), existing.clone()]).unwrap();
+    let q = ListQuery {
+        collection_id: Some(c.id.clone()),
+        sort: SortKey::Collection,
+        ..Default::default()
+    };
+    let members = engine.list_projects(&q).unwrap();
+    assert_eq!(
+        members.iter().map(|p| p.rel_path.as_str()).collect::<Vec<_>>(),
+        vec!["From Inbox", "Existing"]
+    );
+    engine.reorder_collection(&c.id, &[existing.clone(), promoted.id.clone()]).unwrap();
+    assert_eq!(engine.list_projects(&q).unwrap()[0].rel_path, "Existing");
+    let renamed = engine.rename_project(&promoted.id, "Inbox Thing").unwrap();
+    assert!(engine.collections()[0].projects.contains(&renamed.id));
+    engine.delete_project(&renamed.id).unwrap();
+    assert_eq!(engine.collections()[0].projects, vec![existing.clone()]);
+    let smart = engine
+        .create_smart_collection(
+            "Everything",
+            ListQuery {
+                text: Some("exist".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    assert_eq!(engine.list_smart_collection(&smart.id, None).unwrap().len(), 1);
+    assert!(matches!(
+        engine.list_projects(&ListQuery {
+            collection_id: Some("nope".into()),
+            ..Default::default()
+        }),
+        Err(EngineError::ProjectNotFound(_))
+    ));
+}

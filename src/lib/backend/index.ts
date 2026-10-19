@@ -1,4 +1,4 @@
-import type { AppInfo, FolderNode, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata } from '@/lib/types';
+import type { AppInfo, Collection, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata } from '@/lib/types';
 
 export type Unlisten = () => void;
 
@@ -36,6 +36,31 @@ export interface Backend {
   thumbnailFailed(projectId: string, reason: string): Promise<void>;
   readThumbnail(key: string): Promise<ArrayBuffer>;
   clearThumbnails(): Promise<void>;
+  pickImportFiles(): Promise<string[]>;
+  analyzeImport(paths: string[]): Promise<ImportItem[]>;
+  executeImport(request: ImportRequest): Promise<ImportReport>;
+  listInbox(rootId: string): Promise<InboxFile[]>;
+  promoteInbox(rootId: string, files: string[], name: string): Promise<Project>;
+  deleteInboxFile(rootId: string, name: string): Promise<void>;
+  getCollections(): Promise<Collection[]>;
+  createCollection(name: string): Promise<Collection>;
+  renameCollection(id: string, name: string): Promise<Collection>;
+  deleteCollection(id: string): Promise<void>;
+  addToCollection(id: string, projectIds: string[]): Promise<Collection>;
+  removeFromCollection(id: string, projectIds: string[]): Promise<Collection>;
+  reorderCollection(id: string, order: string[]): Promise<Collection>;
+  getSmartCollections(): Promise<SmartCollection[]>;
+  createSmartCollection(name: string, query: ListQuery): Promise<SmartCollection>;
+  updateSmartCollection(id: string, name?: string, query?: ListQuery): Promise<SmartCollection>;
+  deleteSmartCollection(id: string): Promise<void>;
+  listSmartCollection(id: string, overrides?: ListQuery): Promise<ProjectSummary[]>;
+  onImportProgress(cb: (p: ImportProgress) => void): Promise<Unlisten>;
+  onCollectionsChanged(cb: () => void): Promise<Unlisten>;
+  onInboxChanged(cb: (e: { rootId: string }) => void): Promise<Unlisten>;
+  /** Native file drops (paths). Resolves to a no-op unlistener where unsupported (browser). */
+  checkUpdate(): Promise<UpdateInfo>;
+  installUpdate(): Promise<void>;
+  onFileDrop(cb: (e: { type: 'enter' | 'drop' | 'leave'; paths: string[] }) => void): Promise<Unlisten>;
   onScanProgress(cb: (p: ScanProgress) => void): Promise<Unlisten>;
   onLibraryChanged(cb: (e: LibraryChanged) => void): Promise<Unlisten>;
   onProjectChanged(cb: (e: { projectId: string }) => void): Promise<Unlisten>;

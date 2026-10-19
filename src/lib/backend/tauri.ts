@@ -1,7 +1,8 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { getCurrentWebview } from '@tauri-apps/api/webview';
 import type { Backend } from './index';
-import type { LibraryChanged, ScanProgress } from '@/lib/types';
+import type { ImportProgress, LibraryChanged, ScanProgress } from '@/lib/types';
 
 export function createTauriBackend(): Backend {
   return {
@@ -38,6 +39,35 @@ export function createTauriBackend(): Backend {
     thumbnailFailed: (projectId, reason) => invoke('thumbnail_failed', { projectId, reason }),
     readThumbnail: (key) => invoke<ArrayBuffer>('read_thumbnail', { key }),
     clearThumbnails: () => invoke('clear_thumbnails'),
+    pickImportFiles: () => invoke('pick_import_files'),
+    analyzeImport: (paths) => invoke('analyze_import', { paths }),
+    executeImport: (request) => invoke('execute_import', { request }),
+    listInbox: (rootId) => invoke('list_inbox', { rootId }),
+    promoteInbox: (rootId, files, name) => invoke('promote_inbox', { rootId, files, name }),
+    deleteInboxFile: (rootId, name) => invoke('delete_inbox_file', { rootId, name }),
+    getCollections: () => invoke('get_collections'),
+    createCollection: (name) => invoke('create_collection', { name }),
+    renameCollection: (id, name) => invoke('rename_collection', { id, name }),
+    deleteCollection: (id) => invoke('delete_collection', { id }),
+    addToCollection: (id, projectIds) => invoke('add_to_collection', { id, projectIds }),
+    removeFromCollection: (id, projectIds) => invoke('remove_from_collection', { id, projectIds }),
+    reorderCollection: (id, order) => invoke('reorder_collection', { id, order }),
+    getSmartCollections: () => invoke('get_smart_collections'),
+    createSmartCollection: (name, query) => invoke('create_smart_collection', { name, query }),
+    updateSmartCollection: (id, name, query) => invoke('update_smart_collection', { id, name: name ?? null, query: query ?? null }),
+    deleteSmartCollection: (id) => invoke('delete_smart_collection', { id }),
+    listSmartCollection: (id, overrides) => invoke('list_smart_collection', { id, overrides: overrides ?? null }),
+    onImportProgress: (cb) => listen<ImportProgress>('import://progress', (e) => cb(e.payload)),
+    onCollectionsChanged: (cb) => listen('collections://changed', () => cb()),
+    onInboxChanged: (cb) => listen<{ rootId: string }>('inbox://changed', (e) => cb(e.payload)),
+    checkUpdate: () => invoke('check_update'),
+    installUpdate: () => invoke('install_update'),
+    onFileDrop: (cb) => getCurrentWebview().onDragDropEvent((e) => {
+      const p = e.payload;
+      if (p.type === 'enter') cb({ type: 'enter', paths: p.paths });
+      else if (p.type === 'drop') cb({ type: 'drop', paths: p.paths });
+      else if (p.type === 'leave') cb({ type: 'leave', paths: [] });
+    }),
     onScanProgress: (cb) => listen<ScanProgress>('scan://progress', (e) => cb(e.payload)),
     onLibraryChanged: (cb) => listen<LibraryChanged>('library://changed', (e) => cb(e.payload)),
     onProjectChanged: (cb) => listen<{ projectId: string }>('project://changed', (e) => cb(e.payload)),
