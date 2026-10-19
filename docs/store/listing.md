@@ -41,8 +41,8 @@ store or transmit personal data, usage data or file contents. The app makes no n
 connections except, in non-Store builds, an optional manual check for updates against
 GitHub. Metadata you enter is saved as files inside the folders you chose.
 
-**Copyright and trademark info:** © Thomas Pentenrieder. MIT-licensed open source
-(github.com/ThomasPe/my-meshes).
+**Copyright and trademark info:** © Thomas Pentenrieder. Source available under the
+PolyForm Noncommercial License 1.0.0 (github.com/ThomasPe/my-meshes).
 
 ## Deutsch
 

@@ -95,6 +95,10 @@ Browser mode (`npm run dev`, Playwright) uses the mock backend, which synthesize
 - Commits: imperative subject, body explains why. Keep the spike (`spike/`) untouched; it
   is reference material until Epic 3 replaces it.
 - Do not add dependencies without a line in the PR description saying why.
+- License: PolyForm Noncommercial 1.0.0 (`LICENSE`); the Store build ships under the
+  copyright holder's own terms. New dependencies must be permissively licensed (MIT,
+  Apache-2.0, BSD, ISC, MPL-2.0 file-level); no GPL/AGPL/LGPL-static, no "noncommercial"
+  third-party code. External contributions fall under the grant in `CONTRIBUTING.md`.
 
 ## Where things are
 

@@ -37,3 +37,12 @@ Working agreements for humans and agents: [`AGENTS.md`](AGENTS.md).
   framework and visual direction are still open in
   [`docs/decisions/0002-ui-framework.md`](docs/decisions/0002-ui-framework.md) with
   interactive HTML mockups in [`docs/mockups/`](docs/mockups/README.md).
+
+## License
+
+Meshkeep is source-available under the
+[PolyForm Noncommercial License 1.0.0](LICENSE): read it, build it, use it and change it
+for any noncommercial purpose. Selling the app or offering it commercially is reserved to
+the copyright holder; the Microsoft Store release is distributed under its own terms.
+Contributions are welcome under the rights grant in [`CONTRIBUTING.md`](CONTRIBUTING.md).
+"Meshkeep" is the name of this project and is not covered by the license.
