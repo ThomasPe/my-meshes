@@ -7,6 +7,7 @@ import { ProjectMenu, type ProjectActions } from '@/features/library/ProjectMenu
 import { Thumb } from '@/features/library/Thumb';
 import { formatBytes, formatDate } from '@/lib/format';
 import type { ProjectSummary, SortKey } from '@/lib/types';
+import { Truncated } from '@/components/ui/truncated';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -49,8 +50,8 @@ export function ProjectList({ projects, selected, sort, onSort, onSelect, onOpen
                 <div data-testid="project-row" data-id={p.id} aria-selected={sel} tabIndex={0} onClick={(e) => onSelect(p.id, e)} onDoubleClick={() => onOpen(p.id)} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(p.id); }}
                   className={cn('absolute left-0 top-0 grid w-full cursor-default items-center gap-3 border-b border-border px-3 text-sm outline-none hover:bg-secondary/60 focus-visible:bg-secondary', cols, sel && 'bg-accent hover:bg-accent')} style={{ height: ROW, transform: `translateY(${row.start}px)` }}>
                   <Thumb thumb={p.thumb} projectId={p.id} className="size-10 overflow-hidden rounded-[10px]" />
-                  <div className="min-w-0"><div className="truncate font-bold">{p.title} {p.offline && <Badge variant="outline" className="ml-1">{t('library.offline')}</Badge>}</div><div className="truncate font-mono text-[11px] text-muted-foreground">{p.rel_path || '/'}</div></div>
-                  <div className="truncate font-semibold text-secondary-foreground">{p.creator ?? <span className="text-muted-foreground">—</span>}</div>
+                  <div className="min-w-0"><div className="flex min-w-0 items-center gap-1 font-bold"><Truncated text={p.title} />{p.offline && <Badge variant="outline" className="shrink-0">{t('library.offline')}</Badge>}</div><Truncated as="div" text={p.rel_path || '/'} className="font-mono text-[11px] text-muted-foreground" /></div>
+                  {p.creator ? <Truncated as="div" text={p.creator} className="font-semibold text-secondary-foreground" /> : <div className="text-muted-foreground">—</div>}
                   <div className="flex flex-wrap gap-1 overflow-hidden">{p.tags.slice(0, 4).map((tag) => <button key={tag} type="button" onClick={(e) => { e.stopPropagation(); onTag(tag); }} className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold hover:bg-accent hover:text-accent-foreground">{tag}</button>)}</div>
                   <div className="text-right text-muted-foreground tabular">{p.file_count}</div>
                   <div className="text-right text-muted-foreground tabular">{formatBytes(p.total_bytes, i18n.language)}</div>

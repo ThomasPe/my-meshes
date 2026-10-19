@@ -414,3 +414,27 @@ test('sidebars resize by dragging, the layout persists, long names truncate inst
   expect((await folder.boundingBox())!.x + (await folder.boundingBox())!.width).toBeLessThanOrEqual(again.x + again.width + 1);
   await page.screenshot({ path: 'test-results/resized-layout.png' });
 });
+
+test('cut-off names show the full text on hover; inbox and folders are siblings', async ({ page }) => {
+  // inbox row and first-level folders share the same icon column
+  const inbox = (await page.getByTestId('filter-inbox').first().locator('svg').first().boundingBox())!;
+  const folder = (await page.getByTestId('filter-folder').first().locator('svg').first().boundingBox())!;
+  expect(Math.abs(inbox.x - folder.x)).toBeLessThan(4);
+  // shrink the sidebar to its minimum so a deep folder name gets cut off
+  const handle = (await page.getByTestId('resize-sidebar').boundingBox())!;
+  await page.mouse.move(handle.x + handle.width / 2, handle.y + 200);
+  await page.mouse.down();
+  await page.mouse.move(handle.x - 200, handle.y + 200, { steps: 8 });
+  await page.mouse.up();
+  await page.getByTestId('filter-folder').filter({ hasText: 'Mechanical' }).first().locator('..').getByRole('button', { name: 'expand' }).click();
+  const name = page.getByTestId('folder-name').filter({ hasText: 'Planetary Gearbox' });
+  await expect(name).toBeVisible();
+  expect(await name.evaluate((el) => el.scrollWidth > el.clientWidth)).toBe(true);
+  await name.hover();
+  await expect(page.getByTestId('truncated-tooltip').filter({ hasText: 'Planetary Gearbox' }).first()).toBeVisible();
+  // a name that fits shows no tooltip
+  await page.mouse.move(5, 5);
+  await page.getByTestId('folder-name').filter({ hasText: 'Desk' }).first().hover();
+  await page.waitForTimeout(600);
+  await expect(page.getByTestId('truncated-tooltip')).toHaveCount(0);
+});

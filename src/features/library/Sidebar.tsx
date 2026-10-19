@@ -8,6 +8,7 @@ import { useCollections, useFolderTree, useInbox, useLibraryStats, useRoots, use
 import { routeHref } from '@/lib/router';
 import { useUi, type LibraryFilter } from '@/lib/store';
 import type { FolderNode, LibraryRoot } from '@/lib/types';
+import { Truncated } from '@/components/ui/truncated';
 import { cn } from '@/lib/utils';
 
 const itemClass = 'flex h-9 w-full items-center gap-2.5 rounded-[10px] px-3 text-left text-[13px] font-semibold text-secondary-foreground hover:bg-secondary [&_svg]:size-4 [&_svg]:shrink-0';
@@ -33,7 +34,7 @@ export function Sidebar() {
 
   return (
     <ScrollArea className="h-full border-r border-border bg-panel" data-testid="sidebar">
-      <nav className="grid gap-4 p-3">
+      <nav className="grid grid-cols-[minmax(0,1fr)] gap-4 p-3">
         <section>
           <h3 className={headClass}>{t('nav.library')}</h3>
           <button type="button" data-testid="filter-all" className={cn(itemClass, filter.kind === 'all' && activeClass)} onClick={() => setFilter({ kind: 'all' })}>
@@ -54,7 +55,7 @@ export function Sidebar() {
               <ContextMenu key={c.id}>
                 <ContextMenuTrigger asChild>
                   <button type="button" data-testid="filter-collection" className={cn(itemClass, same(filter, f) && activeClass)} onClick={() => setFilter(f)}>
-                    <FolderHeart /><span className="truncate">{c.name}</span><span className="ml-auto text-xs tabular text-muted-foreground">{c.projects.length}</span>
+                    <FolderHeart /><Truncated text={c.name} /><span className="ml-auto shrink-0 text-xs tabular text-muted-foreground">{c.projects.length}</span>
                   </button>
                 </ContextMenuTrigger>
                 <ContextMenuContent>
@@ -70,7 +71,7 @@ export function Sidebar() {
               <ContextMenu key={s.id}>
                 <ContextMenuTrigger asChild>
                   <button type="button" data-testid="filter-smart" className={cn(itemClass, same(filter, f) && activeClass)} onClick={() => setFilter(f)} title={t('collections.smartHint')}>
-                    <Sparkles /><span className="truncate">{s.name}</span>
+                    <Sparkles /><Truncated text={s.name} />
                   </button>
                 </ContextMenuTrigger>
                 <ContextMenuContent>
@@ -118,13 +119,14 @@ function RootTree({ root, filter, setFilter }: { root: LibraryRoot; filter: Libr
         <button type="button" data-testid="filter-root" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setFilter(rootFilter)} title={root.path}>
           <span className={cn('size-2 shrink-0 rounded-full', root.status === 'offline' ? 'bg-muted-foreground/50' : 'bg-success')} />
           <HardDrive className="text-muted-foreground" />
-          <span className="truncate">{name}</span>
+          <Truncated text={name} />
         </button>
         <span className="shrink-0 text-[11px] text-muted-foreground">{root.status === 'offline' ? 'offline' : root.mode}</span>
       </div>
       {open && root.status !== 'offline' && (
         <div className={cn(itemClass, 'h-8 font-medium', same(filter, inboxFilter) && activeClass)} style={{ paddingLeft: 28 }}>
-          <button type="button" data-testid="filter-inbox" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setFilter(inboxFilter)}><Inbox className="text-muted-foreground" /><span className="truncate">{t('inbox.title')}</span></button>
+          <span className="w-3.5" />
+          <button type="button" data-testid="filter-inbox" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setFilter(inboxFilter)}><Inbox className="text-muted-foreground" /><Truncated text={t('inbox.title')} /></button>
           <span className="text-[11px] tabular text-muted-foreground" data-testid="inbox-count">{inbox.data?.length ?? 0}</span>
         </div>
       )}
@@ -141,8 +143,8 @@ function FolderItem({ node, depth, rootId, filter, setFilter }: { node: FolderNo
     <div>
       <div className={cn(itemClass, 'h-8 font-medium', same(filter, f) && activeClass)} style={{ paddingLeft: 12 + depth * 16 }}>
         {has ? <button type="button" aria-label={open ? 'collapse' : 'expand'} className="-ml-1 rounded p-0.5 text-muted-foreground hover:text-foreground" onClick={() => setOpen((o) => !o)}>{open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}</button> : <span className="w-3.5" />}
-        <button type="button" data-testid="filter-folder" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setFilter(f)}><Folder className="text-muted-foreground" /><span className="truncate">{node.name}</span></button>
-        <span className="text-[11px] tabular text-muted-foreground">{node.project_count}</span>
+        <button type="button" data-testid="filter-folder" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setFilter(f)}><Folder className="text-muted-foreground" /><Truncated text={node.name} data-testid="folder-name" /></button>
+        <span className="shrink-0 text-[11px] tabular text-muted-foreground">{node.project_count}</span>
       </div>
       {open && has && node.children.map((c) => <FolderItem key={c.rel_path} node={c} depth={depth + 1} rootId={rootId} filter={filter} setFilter={setFilter} />)}
     </div>

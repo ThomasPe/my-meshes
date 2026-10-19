@@ -1,6 +1,7 @@
 import { FileBox, Image as ImageIcon, Layers, LayoutGrid, List, RefreshCw, Scale, Sparkles, Upload, User, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
+import { Truncated } from '@/components/ui/truncated';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
@@ -18,7 +19,7 @@ export function Toolbar({ title, count, onRescan, scanning, sortLocked, onImport
   ];
   return (
     <div className="flex flex-wrap items-center gap-2 px-5 pb-2 pt-3.5" data-testid="toolbar">
-      <h1 className="mr-1 max-w-[40ch] truncate text-lg font-extrabold tracking-tight" title={title}>{title}</h1>
+      <Truncated as="h1" text={title} className="mr-1 max-w-[40ch] text-lg font-extrabold tracking-tight" />
       <span className="text-sm font-semibold text-muted-foreground tabular" data-testid="result-count">{count}</span>
       {tags.map((tag) => (
         <span key={tag} className="inline-flex h-8 items-center gap-1.5 rounded-full bg-accent px-3 text-[13px] font-bold text-accent-foreground" data-testid="tag-chip">
