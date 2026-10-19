@@ -366,6 +366,10 @@ impl Index {
         if q.favorites {
             where_.push("p.favorite = 1".into());
         }
+        if let Some(c) = q.creator.as_deref().map(str::trim).filter(|c| !c.is_empty()) {
+            where_.push("p.creator = ? COLLATE NOCASE".into());
+            args.push(Box::new(c.to_string()));
+        }
         if let Some(ids) = &collection {
             if ids.is_empty() {
                 return Ok(Vec::new());

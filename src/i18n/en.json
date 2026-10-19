@@ -77,7 +77,8 @@
     "sortAdded": "Date added",
     "emptyFavorites": "Star a project to see it here.",
     "slicerProject": "slicer",
-    "sortCollection": "Collection order"
+    "sortCollection": "Collection order",
+    "filterByCreator": "Show everything by {{creator}}"
   },
   "inspector": {
     "open": "Open",
@@ -100,7 +101,13 @@
     "notSet": "not set",
     "offlineHint": "{{path}} is not reachable. The project stays in the library and comes back when the drive reconnects.",
     "warnings": "Scanner notes",
-    "added": "Added"
+    "added": "Added",
+    "multiHint": "Actions apply to every selected project.",
+    "favoriteAll": "Favorite all",
+    "unfavoriteAll": "Remove favorites",
+    "deleteSelected": "Delete selected…",
+    "addAllTo": "Add all to collection",
+    "images": "Images"
   },
   "project": {
     "back": "Library",
@@ -139,7 +146,11 @@
       "attachment": "attachment",
       "other": "file"
     },
-    "attachmentHint": "Archives inside a project are kept as opaque backups. They are never extracted or browsed."
+    "attachmentHint": "Archives inside a project are kept as opaque backups. They are never extracted or browsed.",
+    "images": "Images",
+    "noImages": "No images in this project.",
+    "openImage": "Open in viewer",
+    "imageOf": "{{index}} of {{total}}"
   },
   "settings": {
     "title": "Settings",
@@ -209,7 +220,18 @@
     "updateIdle": "Updates are never installed without asking.",
     "updatesDevChannel": "Dev channel: every push to main becomes a build; checked once on startup.",
     "updateDevHint": "Dev channel build. Installs in the background and restarts the app.",
-    "channel": "{{channel}} channel"
+    "channel": "{{channel}} channel",
+    "scanSummary": "{{projects}} projects · {{files}} files · {{time}} · {{trigger}}",
+    "scanWarnings_one": "{{count}} note",
+    "scanWarnings_other": "{{count}} notes",
+    "lastError": "Problem",
+    "trigger": {
+      "manual": "manual",
+      "watch": "file change",
+      "poll": "poll",
+      "import": "import",
+      "startup": "startup"
+    }
   },
   "status": {
     "watching": "Watching {{path}}",
@@ -220,7 +242,8 @@
     "noRoots": "No library folder yet",
     "total": "{{count}} projects · {{size}}",
     "thumbs": "Rendering previews {{done}}/{{total}}",
-    "thumbsUnavailable": "previews unavailable (no WebGL)"
+    "thumbsUnavailable": "previews unavailable (no WebGL)",
+    "watchError": "Folder cannot be watched"
   },
   "errors": {
     "sidecar_conflict": "project.yaml changed on disk. Reload before saving.",
@@ -258,7 +281,11 @@
     "deleteFileTitle": "Move “{{name}}” to the trash?",
     "deleteFileBody": "Only this file is moved. The project keeps its other files and metadata.",
     "fileDeleted": "{{name}} moved to trash",
-    "projectGone": "The folder no longer contains a model and left the library."
+    "projectGone": "The folder no longer contains a model and left the library.",
+    "deleteManyTitle_one": "Move {{count}} project to the trash?",
+    "deleteManyTitle_other": "Move {{count}} projects to the trash?",
+    "deletedMany_one": "{{count}} project moved to trash",
+    "deletedMany_other": "{{count}} projects moved to trash"
   },
   "import": {
     "title": "Import",
@@ -335,6 +362,8 @@
     "newSmartTitle": "Save as smart collection",
     "newSmartBody": "The current search text, tags, favorites and folder scope are saved and evaluated live every time you open it.",
     "smartSaved": "Smart collection “{{name}}” saved",
-    "smartHint": "Smart collection: a saved search"
+    "smartHint": "Smart collection: a saved search",
+    "addedMany_one": "{{count}} project added to “{{name}}”",
+    "addedMany_other": "{{count}} projects added to “{{name}}”"
   }
 }

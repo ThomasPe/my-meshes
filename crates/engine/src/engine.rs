@@ -6,8 +6,8 @@ use crate::error::{EngineError, Result};
 use crate::import::{self, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile};
 use crate::index::{Index, ThumbSourceState};
 use crate::model::{
-    FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, RootStatus, ScanReport, Sidecar, SidecarStamp, SyncMode, TagCount,
-    ThumbJob, ThumbSource, ThumbStats,
+    FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, RootStatus, ScanReport, ScanSummary, Sidecar, SidecarStamp, SyncMode,
+    TagCount, ThumbJob, ThumbSource, ThumbStats,
 };
 use crate::roots::RootsStore;
 use crate::scan::{self, IgnoreMatcher, ScanOptions};
@@ -158,7 +158,12 @@ impl Engine {
 
     /// Full scan of one root; replaces its index rows. A missing directory marks the root
     /// offline and keeps the index as it was.
-    pub fn scan_root(&mut self, id: &str, mut progress: impl FnMut(ScanProgress)) -> Result<ScanReport> {
+    pub fn scan_root(&mut self, id: &str, progress: impl FnMut(ScanProgress)) -> Result<ScanReport> {
+        self.scan_root_as(id, "manual", progress)
+    }
+
+    /// Like `scan_root`, recording what triggered the scan in the root's status (LIB-6).
+    pub fn scan_root_as(&mut self, id: &str, trigger: &str, mut progress: impl FnMut(ScanProgress)) -> Result<ScanReport> {
         let root = self.root(id)?;
         let started = Instant::now();
         let mut outcome = match scan::scan_root(&root.id, &root.path, &self.scan_opts, |n| {
@@ -169,19 +174,36 @@ impl Engine {
         }) {
             Ok(o) => o,
             Err(EngineError::RootOffline(p)) => {
-                self.roots.update(id, |r| r.status = RootStatus::Offline)?;
+                self.roots.update(id, |r| {
+                    r.status = RootStatus::Offline;
+                    r.last_error = Some(format!("folder not reachable: {}", p.display()));
+                })?;
                 self.index.mark_root_offline(id, true)?;
                 return Err(EngineError::RootOffline(p));
             }
-            Err(e) => return Err(e),
+            Err(e) => {
+                self.roots.update(id, |r| r.last_error = Some(e.to_string()))?;
+                return Err(e);
+            }
         };
         for p in &mut outcome.projects {
             p.favorite = self.collections.is_favorite(&p.id);
         }
         self.index.rebuild_root(id, &outcome.projects)?;
+        let summary = ScanSummary {
+            projects: outcome.projects.len() as u32,
+            files: outcome.files,
+            ignored: outcome.ignored,
+            warnings: outcome.warnings.iter().take(50).cloned().collect(),
+            warning_count: outcome.warnings.len() as u32,
+            millis: started.elapsed().as_millis() as u64,
+            trigger: trigger.to_string(),
+        };
         self.roots.update(id, |r| {
             r.status = RootStatus::Online;
             r.last_scan_at = Some(OffsetDateTime::now_utc());
+            r.last_scan = Some(summary);
+            r.last_error = None;
         })?;
         Ok(ScanReport {
             root_id: id.to_string(),
@@ -197,7 +219,12 @@ impl Engine {
     /// re-scans that root. Fine up to tens of thousands of files (a scan is sub-second
     /// per few thousand projects); project-level rescans are an optimization for later.
     pub fn rescan_for_event(&mut self, ev: &WatchEvent) -> Result<ScanReport> {
-        self.scan_root(&ev.root_id, |_| {})
+        self.scan_root_as(&ev.root_id, "watch", |_| {})
+    }
+
+    /// Records a sync problem the shell noticed (e.g. the watcher could not start on a share).
+    pub fn set_root_error(&mut self, id: &str, message: &str) -> Result<LibraryRoot> {
+        self.roots.update(id, |r| r.last_error = Some(message.to_string()))
     }
 
     pub fn start_watch(&self, root_id: &str, tx: mpsc::Sender<WatchEvent>) -> Result<RootWatcher> {
@@ -364,7 +391,7 @@ impl Engine {
     pub fn execute_import(&mut self, req: &ImportRequest, progress: impl FnMut(ImportProgress)) -> Result<ImportReport> {
         let root = self.root(&req.root_id)?;
         let report = import::execute(&root.path, req, &self.deleter, progress)?;
-        self.scan_root(&req.root_id, |_| {})?;
+        self.scan_root_as(&req.root_id, "import", |_| {})?;
         Ok(report)
     }
 

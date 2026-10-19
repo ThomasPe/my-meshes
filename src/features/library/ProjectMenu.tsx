@@ -15,6 +15,11 @@ export interface ProjectActions {
   /** Present only while a manual collection is being viewed. */
   removeFromCollection?: (p: ProjectSummary) => void;
   collections: Collection[];
+  filterByCreator: (creator: string) => void;
+  /** Multi-selection: delete several projects after one confirmation. */
+  removeMany: (ps: ProjectSummary[]) => void;
+  addManyToCollection: (ps: ProjectSummary[], collectionId: string | null) => void;
+  setFavoriteMany: (ps: ProjectSummary[], favorite: boolean) => void;
 }
 
 export function ProjectMenu({ project: p, actions, children }: { project: ProjectSummary; actions: ProjectActions; children: React.ReactNode }) {

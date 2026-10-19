@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useProjectActions } from '@/features/library/useProjectActions';
 import { FilesTable } from '@/features/project/FilesTable';
+import { ImageGallery } from '@/features/project/ImageGallery';
 import { MetadataForm } from '@/features/project/MetadataForm';
 import { Viewer } from '@/features/project/Viewer';
 import { formatBytes, initials } from '@/lib/format';
@@ -55,6 +56,7 @@ export function ProjectPage({ id }: { id: string }) {
           <TabsList>
             <TabsTrigger value="overview">{t('project.overview')}</TabsTrigger>
             <TabsTrigger value="files">{t('project.files')} <span className="text-muted-foreground">{p.files.length}</span></TabsTrigger>
+            {p.files.some((f) => f.kind === 'image') && <TabsTrigger value="images" data-testid="tab-images">{t('project.images')} <span className="text-muted-foreground">{p.files.filter((f) => f.kind === 'image').length}</span></TabsTrigger>}
           </TabsList>
           <TabsContent value="overview" className="mt-4">
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)]">
@@ -63,6 +65,7 @@ export function ProjectPage({ id }: { id: string }) {
             </div>
           </TabsContent>
           <TabsContent value="files" className="mt-4"><FilesTable projectId={p.id} files={p.files} offline={p.offline} /></TabsContent>
+          <TabsContent value="images" className="mt-4"><ImageGallery projectId={p.id} files={p.files} offline={p.offline} /></TabsContent>
         </Tabs>
       </div>
     </div>

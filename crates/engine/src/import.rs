@@ -17,8 +17,8 @@ pub const ORIGINALS_DIR: &str = "_Originals";
 /// Folders below a root that are never projects: the inbox and kept originals.
 pub const SPECIAL_DIRS: &[&str] = &[INBOX_DIR, ORIGINALS_DIR];
 
-const ARCHIVE_EXTS: &[&str] = &["zip"];
-const UNSUPPORTED_ARCHIVE_EXTS: &[&str] = &["7z", "rar", "tar", "gz", "tgz"];
+const ARCHIVE_EXTS: &[&str] = &["zip", "7z"];
+const UNSUPPORTED_ARCHIVE_EXTS: &[&str] = &["rar", "tar", "gz", "tgz"];
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
@@ -192,6 +192,96 @@ fn summarize_zip(path: &Path) -> Result<ArchiveSummary> {
     })
 }
 
+fn summarize_7z(path: &Path) -> Result<ArchiveSummary> {
+    let archive = sevenz_rust2::Archive::open(path).map_err(|e| EngineError::Io {
+        path: path.to_path_buf(),
+        source: std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
+    })?;
+    let mut entries = Vec::new();
+    let mut warnings = Vec::new();
+    for f in &archive.files {
+        if f.is_directory() {
+            continue;
+        }
+        let name = f.name().replace('\\', "/");
+        if name.starts_with("__MACOSX/") || name.ends_with(".DS_Store") {
+            continue;
+        }
+        if safe_relative(&name).is_none() {
+            warnings.push(format!("skipping unsafe path {name}"));
+            continue;
+        }
+        entries.push((name, f.size()));
+    }
+    Ok(ArchiveSummary {
+        strip_prefix: strip_prefix_of(&entries),
+        entries,
+        warnings,
+    })
+}
+
+fn summarize_archive(path: &Path) -> Result<ArchiveSummary> {
+    if ext_of(path) == "7z" {
+        summarize_7z(path)
+    } else {
+        summarize_zip(path)
+    }
+}
+
+/// One top-level folder holding everything -> strip it, the project dir replaces it.
+fn strip_prefix_of(entries: &[(String, u64)]) -> Option<String> {
+    let mut tops = entries
+        .iter()
+        .filter_map(|(n, _)| n.split_once('/').map(|(t, _)| t.to_string()))
+        .collect::<Vec<_>>();
+    tops.sort();
+    tops.dedup();
+    let all_nested = entries.iter().all(|(n, _)| n.contains('/'));
+    if tops.len() == 1 && all_nested {
+        tops.pop()
+    } else {
+        None
+    }
+}
+
+fn extract_7z(archive: &Path, strip: Option<&str>, target: &Path) -> Result<u32> {
+    let mut reader = sevenz_rust2::ArchiveReader::open(archive, sevenz_rust2::Password::empty()).map_err(|e| EngineError::Io {
+        path: archive.to_path_buf(),
+        source: std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
+    })?;
+    let mut written = 0u32;
+    let target = target.to_path_buf();
+    let strip = strip.map(|s| s.to_string());
+    reader
+        .for_each_entries(|entry, r| {
+            if entry.is_directory() {
+                return Ok(true);
+            }
+            let name = entry.name().replace('\\', "/");
+            if name.starts_with("__MACOSX/") || name.ends_with(".DS_Store") {
+                return Ok(true);
+            }
+            let rel = match &strip {
+                Some(s) => name.strip_prefix(&format!("{s}/")).map(|r| r.to_string()).unwrap_or(name.clone()),
+                None => name.clone(),
+            };
+            let Some(rel) = safe_relative(&rel) else { return Ok(true) };
+            let out = target.join(&rel);
+            if let Some(parent) = out.parent() {
+                std::fs::create_dir_all(parent)?;
+            }
+            let mut file = File::create(&out)?;
+            std::io::copy(r, &mut file)?;
+            written += 1;
+            Ok(true)
+        })
+        .map_err(|e| EngineError::Io {
+            path: archive.to_path_buf(),
+            source: std::io::Error::new(std::io::ErrorKind::InvalidData, e.to_string()),
+        })?;
+    Ok(written)
+}
+
 fn walk_folder(dir: &Path) -> (u32, u32, u64) {
     let mut models = 0;
     let mut files = 0;
@@ -233,7 +323,7 @@ pub fn analyze(paths: &[PathBuf]) -> Vec<ImportItem> {
         }
         let ext = ext_of(p);
         if ARCHIVE_EXTS.contains(&ext.as_str()) {
-            match summarize_zip(p) {
+            match summarize_archive(p) {
                 Ok(s) => {
                     let models = s.entries.iter().filter(|(n, _)| is_model(n)).count() as u32;
                     let mut warnings = s.warnings;
@@ -430,8 +520,12 @@ pub fn execute(root: &Path, req: &ImportRequest, deleter: &Deleter, mut progress
                     if item.source.is_dir() {
                         copy_dir(&item.source, &target)?;
                     } else {
-                        let summary = summarize_zip(&item.source)?;
-                        extract_zip(&item.source, summary.strip_prefix.as_deref(), &target)?;
+                        let summary = summarize_archive(&item.source)?;
+                        if ext_of(&item.source) == "7z" {
+                            extract_7z(&item.source, summary.strip_prefix.as_deref(), &target)?;
+                        } else {
+                            extract_zip(&item.source, summary.strip_prefix.as_deref(), &target)?;
+                        }
                         let archive_name = item.source.file_name().and_then(|n| n.to_str()).unwrap_or("original.zip");
                         match req.archive_policy {
                             ArchivePolicy::Keep => {
@@ -580,6 +674,18 @@ mod tests {
         std::fs::create_dir_all(p.parent().unwrap()).unwrap();
         std::fs::write(p, vec![0u8; bytes]).unwrap();
     }
+    fn write_7z(path: &Path, files: &[(&str, &[u8])]) {
+        std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let mut w = sevenz_rust2::ArchiveWriter::create(path).unwrap();
+        for (name, bytes) in files {
+            w.push_archive_entry(
+                sevenz_rust2::ArchiveEntry::new_file(name),
+                Some(std::io::Cursor::new(bytes.to_vec())),
+            )
+            .unwrap();
+        }
+        w.finish().unwrap();
+    }
     fn remover() -> Deleter {
         Box::new(|p: &Path| {
             if p.is_dir() {
@@ -610,7 +716,8 @@ mod tests {
         touch(&d.join("Empty/notes.txt"), 5);
         touch(&d.join("loose.stl"), 7);
         touch(&d.join("photo.jpg"), 7);
-        touch(&d.join("pack.7z"), 7);
+        touch(&d.join("pack.rar"), 7);
+        write_7z(&d.join("Seven.7z"), &[("Seven/part.stl", b"solid"), ("Seven/notes.txt", b"n")]);
         let items = analyze(
             &[
                 "Cable Clip.zip",
@@ -622,7 +729,8 @@ mod tests {
                 "Empty",
                 "loose.stl",
                 "photo.jpg",
-                "pack.7z",
+                "pack.rar",
+                "Seven.7z",
             ]
             .iter()
             .map(|n| d.join(n))
@@ -651,7 +759,39 @@ mod tests {
             (SourceKind::File, ImportAction::Inbox)
         );
         assert_eq!(by("photo.jpg").action, ImportAction::Inbox);
-        assert!(by("pack.7z").warnings[0].contains("not extracted yet"));
+        assert!(by("pack.rar").warnings[0].contains("not extracted yet"));
+        let seven = by("Seven.7z");
+        assert_eq!(
+            (seven.kind, seven.action, seven.model_count, seven.file_count),
+            (SourceKind::Archive, ImportAction::Project, 1, 2)
+        );
+        assert_eq!(seven.strip_prefix.as_deref(), Some("Seven"));
+    }
+
+    #[test]
+    fn execute_extracts_7z() {
+        let t = tempfile::tempdir().unwrap();
+        let src = t.path().join("src");
+        let root = t.path().join("root");
+        std::fs::create_dir_all(&root).unwrap();
+        write_7z(
+            &src.join("Seven.7z"),
+            &[("Seven/part.stl", b"solid"), ("Seven/sub/notes.txt", b"n")],
+        );
+        let req = ImportRequest {
+            root_id: "r".into(),
+            archive_policy: ArchivePolicy::Trash,
+            items: vec![ImportRequestItem {
+                source: src.join("Seven.7z"),
+                action: ImportAction::Project,
+                name: "Seven".into(),
+            }],
+        };
+        let report = execute(&root, &req, &remover(), |_| {}).unwrap();
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        assert!(root.join("Seven/part.stl").is_file());
+        assert_eq!(std::fs::read(root.join("Seven/sub/notes.txt")).unwrap(), b"n");
+        assert!(!src.join("Seven.7z").exists());
     }
 
     #[test]

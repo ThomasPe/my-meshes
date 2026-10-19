@@ -1,4 +1,4 @@
-import { Image as ImageIcon, LayoutGrid, List, RefreshCw, Sparkles, Upload, X } from 'lucide-react';
+import { Image as ImageIcon, LayoutGrid, List, RefreshCw, Sparkles, Upload, User, X } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -9,7 +9,7 @@ import type { SortKey } from '@/lib/types';
 
 export function Toolbar({ title, count, onRescan, scanning, sortLocked, onImport, onSaveSmart, collectionSort }: { title: string; count: number; onRescan?: () => void; scanning?: boolean; sortLocked?: boolean; onImport?: () => void; onSaveSmart?: () => void; collectionSort?: boolean }) {
   const { t } = useTranslation();
-  const { tags, removeTag, text, setText, sort, setSort, view, setView, tile, setTile } = useUi();
+  const { tags, removeTag, text, setText, creator, setCreator, sort, setSort, view, setView, tile, setTile } = useUi();
   return (
     <div className="flex flex-wrap items-center gap-2 px-5 pb-2 pt-3.5" data-testid="toolbar">
       <h1 className="mr-1 truncate text-lg font-extrabold tracking-tight">{title}</h1>
@@ -19,6 +19,9 @@ export function Toolbar({ title, count, onRescan, scanning, sortLocked, onImport
           {tag}<button type="button" aria-label={`remove ${tag}`} onClick={() => removeTag(tag)} className="rounded-full p-0.5 opacity-70 hover:bg-black/10 hover:opacity-100"><X className="size-3.5" /></button>
         </span>
       ))}
+      {creator && (
+        <span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-accent px-3 text-[13px] font-bold text-accent-foreground" data-testid="creator-chip"><User className="size-3.5" />{creator}<button type="button" aria-label="clear creator" onClick={() => setCreator(null)} className="rounded-full p-0.5 opacity-70 hover:bg-black/10 hover:opacity-100"><X className="size-3.5" /></button></span>
+      )}
       {text && (
         <span className="inline-flex h-8 items-center gap-1.5 rounded-full bg-accent px-3 text-[13px] font-bold text-accent-foreground">“{text}”<button type="button" aria-label="clear search" onClick={() => setText('')} className="rounded-full p-0.5 opacity-70 hover:bg-black/10 hover:opacity-100"><X className="size-3.5" /></button></span>
       )}

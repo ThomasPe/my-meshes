@@ -75,8 +75,8 @@ const BAD_NAME = /[\\/:*?"<>|]/;
 
 export function createMockBackend(): Backend {
   const roots: LibraryRoot[] = [
-    { id: 'r1', path: 'D:\\3D Models', mode: 'watch', poll_interval_secs: 900, added_at: '2026-01-10T10:00:00Z', last_scan_at: new Date(Date.now() - 120_000).toISOString(), status: 'online' },
-    { id: 'r2', path: '\\\\nas\\models', mode: 'poll', poll_interval_secs: 900, added_at: '2026-02-01T10:00:00Z', last_scan_at: new Date(Date.now() - 3 * 864e5).toISOString(), status: 'offline' },
+    { id: 'r1', path: 'D:\\3D Models', mode: 'watch', poll_interval_secs: 900, added_at: '2026-01-10T10:00:00Z', last_scan_at: new Date(Date.now() - 120_000).toISOString(), status: 'online', last_scan: { projects: 72, files: 131, ignored: 12, warnings: ['Projects/Robotics/Arm v4: nested project.yaml ignored: parts/project.yaml'], warning_count: 1, millis: 340, trigger: 'startup' }, last_error: null },
+    { id: 'r2', path: '\\\\nas\\models', mode: 'poll', poll_interval_secs: 900, added_at: '2026-02-01T10:00:00Z', last_scan_at: new Date(Date.now() - 3 * 864e5).toISOString(), status: 'offline', last_scan: { projects: 1, files: 3, ignored: 0, warnings: [], warning_count: 0, millis: 1200, trigger: 'poll' }, last_error: 'folder not reachable: \\\\nas\\models' },
   ];
   const projects: MockProject[] = [
     mk('r1', 'Projects/Gridfinity/Baseplates', 'Gridfinity Baseplates', { creator: 'Zach Freedman', license: 'CC-BY-NC-SA-4.0', source_url: 'https://thangs.com/designer/ZackFreedman', tags: ['gridfinity', 'organizer'], material: 'PLA', supports_required: false, description: 'Parametric baseplates for the Gridfinity storage system.', files: [f('Baseplate_2x2.stl', 6.1 * MB), f('Baseplate_3x3.stl', 13.4 * MB), f('Baseplate_4x4.stl', 23.9 * MB), f('plate.3mf', 4 * MB), f('photo_desk.png', 0.7 * MB), f('README.md', 2048), f('original_download.zip', 41 * MB)], daysAgo: 3 }),
@@ -109,6 +109,7 @@ export function createMockBackend(): Backend {
     if (q.root_id) list = list.filter((p) => p.root_id === q.root_id);
     if (q.path_prefix) list = list.filter((p) => p.rel_path === q.path_prefix || p.rel_path.startsWith(q.path_prefix + '/'));
     if (q.favorites) list = list.filter((p) => p.favorite);
+    if (q.creator) list = list.filter((p) => (p.creator ?? '').toLowerCase() === q.creator!.toLowerCase());
     for (const t of q.tags ?? []) list = list.filter((p) => p.tags.includes(t.toLowerCase()));
     if (q.text?.trim()) {
       const terms = q.text.toLowerCase().split(/\s+/).filter(Boolean);
@@ -130,7 +131,7 @@ export function createMockBackend(): Backend {
     async getRoots() { await delay(); return roots.map((r) => ({ ...r })); },
     async addRoot(path, mode = 'watch') {
       if (roots.some((r) => r.path === path)) throw err('root_exists', `root already registered: ${path}`);
-      const r: LibraryRoot = { id: 'r' + (roots.length + 1), path, mode, poll_interval_secs: 900, added_at: new Date().toISOString(), last_scan_at: null, status: 'online' };
+      const r: LibraryRoot = { id: 'r' + (roots.length + 1), path, mode, poll_interval_secs: 900, added_at: new Date().toISOString(), last_scan_at: null, status: 'online', last_scan: null, last_error: null };
       roots.push(r);
       return r;
     },
@@ -350,6 +351,7 @@ export function createMockBackend(): Backend {
     onImportProgress: (cb) => sub(listeners.imp, cb),
     onCollectionsChanged: (cb) => sub(listeners.coll, cb),
     onInboxChanged: (cb) => sub(listeners.inbox, cb),
+    async onWatchError() { return () => {}; },
     async checkUpdate() { await delay(300); return { available: true, version: '0.2.0', notes: 'Mock release notes', date: null }; },
     async installUpdate() { await delay(300); },
     async onFileDrop() { return () => {}; },

@@ -21,7 +21,7 @@ import type { ListQuery } from '@/lib/types';
 
 export function LibraryPage({ scanning, onScanEnd }: { scanning: ScanState; onScanEnd: (rootId: string) => void }) {
   const { t } = useTranslation();
-  const { filter, tags, text, sort, view, tile, selected, select, toggleTag, clearFilters, setSort } = useUi();
+  const { filter, tags, text, creator, sort, view, tile, selected, select, toggleTag, clearFilters, setSort } = useUi();
   const roots = useRoots();
   const collections = useCollections();
   const smart = useSmartCollections();
@@ -43,9 +43,10 @@ export function LibraryPage({ scanning, onScanEnd }: { scanning: ScanState; onSc
     text: text || null,
     favorites: filter.kind === 'favorites',
     collection_id: collectionId,
+    creator,
     sort: effectiveSort,
     limit: filter.kind === 'recent' ? 200 : null,
-  }), [filter, tags, text, effectiveSort, rootScoped, collectionId]);
+  }), [filter, tags, text, creator, effectiveSort, rootScoped, collectionId]);
   const projects = useProjects(filter.kind === 'inbox' || smartId ? { ...query, limit: 0 } : query);
   const smartOverrides = useMemo<ListQuery>(() => ({ sort: sort === 'collection' ? 'modified' : sort, text: text || null }), [sort, text]);
   const smartProjects = useSmartProjects(smartId, smartOverrides);
@@ -75,15 +76,16 @@ export function LibraryPage({ scanning, onScanEnd }: { scanning: ScanState; onSc
     : filter.kind === 'smart' ? smart.data?.find((c) => c.id === filter.id)?.name ?? ''
     : rootName(filter.rootId);
   const activeRoot = rootScoped ? filter.rootId : roots.data?.[0]?.id;
-  const filtered = tags.length > 0 || !!text;
+  const filtered = tags.length > 0 || !!text || !!creator;
   const single = selected.length === 1 ? list.find((p) => p.id === selected[0]) : undefined;
   const onKey = (e: React.KeyboardEvent) => {
     if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
     if (e.key === 'Escape' && selected.length) select([]);
     if (e.key === 'Delete' && single) { e.preventDefault(); actions.remove(single); }
+    else if (e.key === 'Delete' && selected.length > 1) { e.preventDefault(); actions.removeMany(list.filter((p) => selected.includes(p.id))); }
     if (e.key === 'F2' && single) { e.preventDefault(); actions.rename(single); }
   };
-  const saveSmart = () => openCollectionDialog({ kind: 'createSmart', query: { root_id: query.root_id, path_prefix: query.path_prefix, tags: query.tags, text: query.text, favorites: query.favorites, sort: effectiveSort === 'collection' ? 'modified' : effectiveSort } });
+  const saveSmart = () => openCollectionDialog({ kind: 'createSmart', query: { root_id: query.root_id, path_prefix: query.path_prefix, tags: query.tags, text: query.text, favorites: query.favorites, creator, sort: effectiveSort === 'collection' ? 'modified' : effectiveSort } });
   const onReorder = collectionId && effectiveSort === 'collection' ? (ids: string[]) => reorder.mutate({ id: collectionId, order: ids }, { onError: reportError }) : undefined;
 
   return (

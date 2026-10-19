@@ -343,3 +343,37 @@ fn import_inbox_and_collections_through_the_engine() {
         Err(EngineError::ProjectNotFound(_))
     ));
 }
+
+#[test]
+fn scan_status_and_creator_filter() {
+    let data = tempfile::tempdir().unwrap();
+    let lib = tempfile::tempdir().unwrap();
+    touch(&lib.path().join("A/a.stl"), 10);
+    touch(&lib.path().join("B/b.stl"), 10);
+    fs::write(lib.path().join("B/project.yaml"), "metadata:\n  creator: Lena Hofer\n").unwrap();
+    fs::write(lib.path().join("A/project.yaml"), "metadata: [broken").unwrap();
+    let mut engine = Engine::open(data.path()).unwrap();
+    let root = engine.add_root(lib.path(), SyncMode::Manual).unwrap();
+    engine.scan_root_as(&root.id, "startup", |_| {}).unwrap();
+    let r = engine.root(&root.id).unwrap();
+    let s = r.last_scan.expect("summary recorded");
+    assert_eq!((s.projects, s.files, s.trigger.as_str()), (2, 2, "startup"));
+    assert_eq!(s.warning_count, 1, "{:?}", s.warnings);
+    assert!(r.last_error.is_none());
+    engine.set_root_error(&root.id, "cannot watch").unwrap();
+    assert_eq!(engine.root(&root.id).unwrap().last_error.as_deref(), Some("cannot watch"));
+    engine.scan_root(&root.id, |_| {}).unwrap();
+    assert!(engine.root(&root.id).unwrap().last_error.is_none(), "a good scan clears the error");
+    let by_creator = engine
+        .list_projects(&ListQuery {
+            creator: Some("lena hofer".into()),
+            ..Default::default()
+        })
+        .unwrap();
+    assert_eq!(by_creator.len(), 1);
+    assert_eq!(by_creator[0].rel_path, "B");
+    // persisted across reopen
+    drop(engine);
+    let engine = Engine::open(data.path()).unwrap();
+    assert!(engine.root(&root.id).unwrap().last_scan.is_some());
+}

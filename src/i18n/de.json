@@ -77,7 +77,8 @@
     "sortAdded": "Hinzugefügt am",
     "emptyFavorites": "Markiere ein Projekt mit einem Stern, dann erscheint es hier.",
     "slicerProject": "Slicer",
-    "sortCollection": "Reihenfolge der Sammlung"
+    "sortCollection": "Reihenfolge der Sammlung",
+    "filterByCreator": "Alles von {{creator}} zeigen"
   },
   "inspector": {
     "open": "Öffnen",
@@ -100,7 +101,13 @@
     "notSet": "nicht gesetzt",
     "offlineHint": "{{path}} ist nicht erreichbar. Das Projekt bleibt in der Bibliothek und kommt zurück, sobald das Laufwerk wieder da ist.",
     "warnings": "Hinweise des Scanners",
-    "added": "Hinzugefügt"
+    "added": "Hinzugefügt",
+    "multiHint": "Aktionen gelten für alle ausgewählten Projekte.",
+    "favoriteAll": "Alle favorisieren",
+    "unfavoriteAll": "Favoriten entfernen",
+    "deleteSelected": "Auswahl löschen…",
+    "addAllTo": "Alle zu Sammlung hinzufügen",
+    "images": "Bilder"
   },
   "project": {
     "back": "Bibliothek",
@@ -139,7 +146,11 @@
       "attachment": "Anhang",
       "other": "Datei"
     },
-    "attachmentHint": "Archive innerhalb eines Projekts bleiben als Backups liegen. Sie werden nie entpackt oder durchsucht."
+    "attachmentHint": "Archive innerhalb eines Projekts bleiben als Backups liegen. Sie werden nie entpackt oder durchsucht.",
+    "images": "Bilder",
+    "noImages": "Keine Bilder in diesem Projekt.",
+    "openImage": "Im Betrachter öffnen",
+    "imageOf": "{{index}} von {{total}}"
   },
   "settings": {
     "title": "Einstellungen",
@@ -209,7 +220,18 @@
     "updateIdle": "Updates werden nie ohne Nachfrage installiert.",
     "updatesDevChannel": "Dev-Kanal: jeder Push auf main wird ein Build; wird beim Start einmal geprüft.",
     "updateDevHint": "Dev-Kanal-Build. Installiert im Hintergrund und startet die App neu.",
-    "channel": "Kanal {{channel}}"
+    "channel": "Kanal {{channel}}",
+    "scanSummary": "{{projects}} Projekte · {{files}} Dateien · {{time}} · {{trigger}}",
+    "scanWarnings_one": "{{count}} Hinweis",
+    "scanWarnings_other": "{{count}} Hinweise",
+    "lastError": "Problem",
+    "trigger": {
+      "manual": "manuell",
+      "watch": "Dateiänderung",
+      "poll": "Poll",
+      "import": "Import",
+      "startup": "Start"
+    }
   },
   "status": {
     "watching": "Beobachte {{path}}",
@@ -220,7 +242,8 @@
     "noRoots": "Noch kein Bibliotheksordner",
     "total": "{{count}} Projekte · {{size}}",
     "thumbs": "Vorschauen werden gerendert {{done}}/{{total}}",
-    "thumbsUnavailable": "Vorschauen nicht verfügbar (kein WebGL)"
+    "thumbsUnavailable": "Vorschauen nicht verfügbar (kein WebGL)",
+    "watchError": "Ordner kann nicht überwacht werden"
   },
   "errors": {
     "sidecar_conflict": "project.yaml wurde auf der Platte geändert. Vor dem Speichern neu laden.",
@@ -258,7 +281,11 @@
     "deleteFileTitle": "„{{name}}“ in den Papierkorb verschieben?",
     "deleteFileBody": "Nur diese Datei wird verschoben. Das Projekt behält seine übrigen Dateien und Metadaten.",
     "fileDeleted": "{{name}} in den Papierkorb verschoben",
-    "projectGone": "Der Ordner enthält kein Modell mehr und ist aus der Bibliothek verschwunden."
+    "projectGone": "Der Ordner enthält kein Modell mehr und ist aus der Bibliothek verschwunden.",
+    "deleteManyTitle_one": "{{count}} Projekt in den Papierkorb verschieben?",
+    "deleteManyTitle_other": "{{count}} Projekte in den Papierkorb verschieben?",
+    "deletedMany_one": "{{count}} Projekt in den Papierkorb verschoben",
+    "deletedMany_other": "{{count}} Projekte in den Papierkorb verschoben"
   },
   "import": {
     "title": "Importieren",
@@ -335,6 +362,8 @@
     "newSmartTitle": "Als smarte Sammlung speichern",
     "newSmartBody": "Suchtext, Tags, Favoriten und Ordnerbereich werden gespeichert und bei jedem Öffnen live ausgewertet.",
     "smartSaved": "Smarte Sammlung „{{name}}“ gespeichert",
-    "smartHint": "Smarte Sammlung: eine gespeicherte Suche"
+    "smartHint": "Smarte Sammlung: eine gespeicherte Suche",
+    "addedMany_one": "{{count}} Projekt zu „{{name}}“ hinzugefügt",
+    "addedMany_other": "{{count}} Projekte zu „{{name}}“ hinzugefügt"
   }
 }

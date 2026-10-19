@@ -53,7 +53,7 @@ export const ProjectCard = memo(function ProjectCard({ project: p, selected, onS
         <div className="grid gap-1.5 p-3.5">
           <h4 className="truncate text-[15px] font-extrabold tracking-tight" title={p.title}>{p.title}</h4>
           <div className="flex items-center gap-1.5 text-[13px] font-semibold text-muted-foreground">
-            {p.creator ? <><span className="grid size-4.5 place-items-center rounded-full bg-accent text-[9px] font-extrabold text-accent-foreground">{initials(p.creator)}</span><span className="truncate">{p.creator}</span></> : <span className="italic">{t('library.unknownCreator')}</span>}
+            {p.creator ? <button type="button" className="flex min-w-0 items-center gap-1.5 hover:text-foreground" title={t('library.filterByCreator', { creator: p.creator })} onClick={(e) => { e.stopPropagation(); actions.filterByCreator(p.creator!); }} onDoubleClick={(e) => e.stopPropagation()} data-testid="card-creator"><span className="grid size-4.5 place-items-center rounded-full bg-accent text-[9px] font-extrabold text-accent-foreground">{initials(p.creator)}</span><span className="truncate">{p.creator}</span></button> : <span className="italic">{t('library.unknownCreator')}</span>}
           </div>
           <div className="flex min-h-5.5 flex-wrap gap-1.5">
             {p.tags.slice(0, 3).map((tag) => (

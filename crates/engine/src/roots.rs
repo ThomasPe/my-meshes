@@ -70,6 +70,8 @@ impl RootsStore {
             added_at: OffsetDateTime::now_utc(),
             last_scan_at: None,
             status: RootStatus::Online,
+            last_scan: None,
+            last_error: None,
         };
         self.roots.push(root.clone());
         self.save()?;

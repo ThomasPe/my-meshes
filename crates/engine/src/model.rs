@@ -37,6 +37,28 @@ pub struct LibraryRoot {
     pub last_scan_at: Option<OffsetDateTime>,
     #[serde(default = "default_status")]
     pub status: RootStatus,
+    /// Outcome of the last successful scan (LIB-6).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_scan: Option<ScanSummary>,
+    /// Last sync problem (scan failure, watcher that could not start); cleared by a good scan.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last_error: Option<String>,
+}
+
+/// Compact record of a scan, kept per root in `roots.json` for the status view.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ScanSummary {
+    pub projects: u32,
+    pub files: u32,
+    pub ignored: u32,
+    /// First warnings (capped) so the status log stays small.
+    #[serde(default)]
+    pub warnings: Vec<String>,
+    pub warning_count: u32,
+    pub millis: u64,
+    /// What triggered it: "manual", "watch", "poll", "import", "startup".
+    #[serde(default)]
+    pub trigger: String,
 }
 
 fn default_poll_interval() -> u64 {
@@ -304,6 +326,9 @@ pub struct ListQuery {
     /// Only members of this manual collection (in collection order unless sorted otherwise).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub collection_id: Option<String>,
+    /// Exact creator name, case-insensitive (NAV-5).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub creator: Option<String>,
     #[serde(default)]
     pub sort: SortKey,
     #[serde(default)]

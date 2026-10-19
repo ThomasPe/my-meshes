@@ -268,3 +268,62 @@ test('smart collections: the sample one evaluates live, a search can be saved as
   await page.getByRole('button', { name: 'clear search' }).click();
   await expect(page.getByTestId('result-count')).toHaveText('1');
 });
+
+// ---- D4: creator filter, multi-select actions, image viewer, root status ----------------
+
+test('creator filter: click a creator on a card, chip appears, clear it', async ({ page }) => {
+  await page.getByTestId('project-card').filter({ hasText: 'Gridfinity Baseplates' }).getByTestId('card-creator').click();
+  await expect(page.getByTestId('creator-chip')).toContainText('Zach Freedman');
+  await expect(page.getByTestId('result-count')).toHaveText('2');
+  await page.getByRole('button', { name: 'clear creator' }).click();
+  expect(Number(await page.getByTestId('result-count').textContent())).toBeGreaterThan(60);
+  // from the inspector summary as well
+  await page.getByTestId('inspector-creator').filter({ hasText: 'Lena Hofer' }).click();
+  await expect(page.getByTestId('result-count')).toHaveText('2');
+  await page.getByRole('button', { name: 'clear creator' }).click();
+});
+
+test('multi-selection: inspector actions add to a collection, favorite and delete', async ({ page }) => {
+  const a = page.getByTestId('project-card').filter({ hasText: 'Planetary Gearbox' });
+  const b = page.getByTestId('project-card').filter({ hasText: 'Self-watering Planter' });
+  await a.click();
+  await b.click({ modifiers: ['Control'] });
+  await expect(page.getByTestId('status-selected')).toHaveText('2 selected');
+  await expect(page.getByTestId('multi-actions')).toBeVisible();
+  await page.getByTestId('multi-add-collection').click();
+  await page.getByTestId('multi-collection').filter({ hasText: 'Desk setup' }).click();
+  await expect(page.getByText('2 projects added to “Desk setup”')).toBeVisible();
+  await page.getByTestId('multi-favorite').click();
+  await expect(page.getByTestId('favorites-count')).toHaveText('4');
+  await expect(page.getByTestId('multi-unfavorite')).toBeVisible();
+  const before = Number(await page.getByTestId('result-count').textContent());
+  await page.getByTestId('multi-delete').click();
+  await expect(page.getByTestId('delete-many-dialog')).toContainText('Move 2 projects to the trash?');
+  await page.getByTestId('delete-many-confirm').click();
+  await expect(page.getByText('2 projects moved to trash')).toBeVisible();
+  await expect(page.getByTestId('result-count')).toHaveText(String(before - 2));
+});
+
+test('image viewer: images tab shows tiles, lightbox navigates', async ({ page }) => {
+  await page.getByTestId('project-card').filter({ hasText: 'Gridfinity Baseplates' }).dblclick();
+  await page.getByTestId('tab-images').click();
+  await expect(page.getByTestId('image-tile')).toHaveCount(1);
+  await expect(page.getByTestId('image-tile').locator('img')).toBeVisible();
+  await page.getByTestId('image-tile').click();
+  await expect(page.getByTestId('lightbox-img')).toBeVisible();
+  await expect(page.getByTestId('lightbox-name')).toHaveText('photo_desk.png');
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('lightbox')).toBeHidden();
+  await page.getByTestId('back').click();
+  await page.getByTestId('project-card').filter({ hasText: 'Robotic Arm v4' }).dblclick();
+  await page.getByTestId('tab-images').click();
+  await page.getByTestId('image-tile').first().click();
+  await expect(page.getByText('1 of 1')).toBeVisible();
+});
+
+test('settings shows the last scan summary and the sync problem per root', async ({ page }) => {
+  await page.getByTestId('nav-settings').click();
+  await expect(page.getByTestId('root-scan-summary').first()).toContainText('72 projects · 131 files');
+  await expect(page.getByTestId('root-scan-summary').first()).toContainText('1 note');
+  await expect(page.getByTestId('root-error')).toContainText('not reachable');
+});

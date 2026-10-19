@@ -84,7 +84,10 @@ account, name reservation, screenshots (`docs/store/README.md`).
 - [x] **Watcher** (LIB-3) done (debounced, whole-root rescan); **poll mode** (LIB-4) with a
       per-root interval (1 min to 3 h) and a 30 s due-check in the shell.
 - [x] **Offline handling** (LIB-5).
-- [ ] **Sync status & background activity** (LIB-6, LIB-7, APP-7).
+- [x] **Sync status & background activity** (LIB-6, LIB-7, APP-7): per-root last scan
+      summary (counts, duration, trigger, scanner notes) and last sync problem in settings;
+      status bar shows scans and preview rendering; toasts for scan/import results and
+      watcher failures.
 - [x] **Sidecar read/write** (META-1..4): parsing, lazy creation, optimistic save,
       conflict detection with reload/overwrite dialog.
 - [x] **Project rename = directory rename** (META-5): Windows-safe name validation,
@@ -99,7 +102,8 @@ account, name reservation, screenshots (`docs/store/README.md`).
       fallback, PNG cache in app data keyed per project + source file, invalidated by
       size/mtime; status bar progress; "clear cache" in settings. Per-project `.cache`
       location (user setting) pending.
-- [ ] **Image viewer & open-with-OS** (VIEW-5): open-with-OS done, built-in viewer pending.
+- [x] **Image viewer & open-with-OS** (VIEW-5): images tab with tiles and a lightbox
+      (keyboard navigation, open with the OS app).
 - [~] **GPU fallback** (VIEW-6): placeholders plus a status-bar notice when no WebGL is
       available anywhere; viewer shows a message instead of crashing.
 
@@ -108,8 +112,8 @@ account, name reservation, screenshots (`docs/store/README.md`).
       Favorites, Inbox per root, collections and smart collections.
 - [x] **Grid view** (NAV-2) virtualized with zoom slider.
 - [x] **List view** (NAV-3) with sortable columns.
-- [~] **Search & filters** (NAV-4 done via FTS5; NAV-5 tags and folders done, other
-      attributes pending).
+- [~] **Search & filters** (NAV-4 done via FTS5; NAV-5 tags, folders and creator done;
+      license and material filters pending).
 - [x] **Detail view** (NAV-6): inspector and project page.
 - [x] **Collections & smart collections** (NAV-7, NAV-8) persisted in `collections.json`:
       create/rename/delete, add via context menu, remove, drag-to-reorder in the collection
@@ -118,8 +122,8 @@ account, name reservation, screenshots (`docs/store/README.md`).
 ### Epic 5: Import & file operations
 - [~] **Staging area & archive import** (IMP-1, IMP-2): native drop or picker opens the
       staging dialog; zips and folders become projects, loose files go to the inbox,
-      archive policy keep/_Originals/trash with the space each costs. 7z/rar are not
-      extracted yet (reported, routed to the inbox).
+      archive policy keep/_Originals/trash with the space each costs. zip and 7z are
+      extracted; rar is reported and routed to the inbox.
 - [x] **Inbox** (IMP-3): `_Inbox` per root with its own view, promote-to-project, delete.
 - [x] **Passive sync of OS drops; archives as attachments** (IMP-4): the watcher picks up
       files that appear on disk; archives inside projects stay opaque attachments.
@@ -136,7 +140,8 @@ account, name reservation, screenshots (`docs/store/README.md`).
 
 ### Epic 7: Metadata & hygiene
 - [ ] **Duplicate detection** (LIB-8).
-- [ ] **Batch editing** (META-6).
+- [~] **Batch editing** (META-6): multi-selection can be favorited, added to a collection
+      and deleted together; batch tag/creator edits pending.
 - [ ] **External enrichment** (META-7).
 - [ ] **Organizational rules & maintenance tools** (IMP-7, IMP-8).
 

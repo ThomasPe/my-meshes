@@ -57,6 +57,7 @@ export interface Backend {
   onImportProgress(cb: (p: ImportProgress) => void): Promise<Unlisten>;
   onCollectionsChanged(cb: () => void): Promise<Unlisten>;
   onInboxChanged(cb: (e: { rootId: string }) => void): Promise<Unlisten>;
+  onWatchError(cb: (e: { rootId: string; message: string }) => void): Promise<Unlisten>;
   /** Native file drops (paths). Resolves to a no-op unlistener where unsupported (browser). */
   checkUpdate(): Promise<UpdateInfo>;
   installUpdate(): Promise<void>;

@@ -16,6 +16,7 @@ interface UiState {
   filter: LibraryFilter;
   tags: string[];
   text: string;
+  creator: string | null;
   sort: SortKey;
   view: ViewMode;
   tile: number;
@@ -24,6 +25,7 @@ interface UiState {
   toggleTag: (t: string) => void;
   removeTag: (t: string) => void;
   setText: (t: string) => void;
+  setCreator: (c: string | null) => void;
   setSort: (s: SortKey) => void;
   setView: (v: ViewMode) => void;
   setTile: (n: number) => void;
@@ -38,6 +40,7 @@ export const useUi = create<UiState>((set) => ({
   filter: { kind: 'all' },
   tags: [],
   text: '',
+  creator: null,
   sort: persisted.sort ?? 'modified',
   view: persisted.view ?? 'grid',
   tile: persisted.tile ?? 230,
@@ -46,11 +49,12 @@ export const useUi = create<UiState>((set) => ({
   toggleTag: (t) => set((s) => ({ tags: s.tags.includes(t) ? s.tags.filter((x) => x !== t) : [...s.tags, t] })),
   removeTag: (t) => set((s) => ({ tags: s.tags.filter((x) => x !== t) })),
   setText: (text) => set({ text }),
+  setCreator: (creator) => set({ creator, selected: [] }),
   setSort: (sort) => { persist({ sort }); set({ sort }); },
   setView: (view) => { persist({ view }); set({ view }); },
   setTile: (tile) => { persist({ tile }); set({ tile }); },
   select: (selected) => set({ selected }),
-  clearFilters: () => set({ tags: [], text: '' }),
+  clearFilters: () => set({ tags: [], text: '', creator: null }),
 }));
 
 export type Theme = 'light' | 'dark' | 'system';

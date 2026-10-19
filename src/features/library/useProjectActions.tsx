@@ -35,6 +35,8 @@ export function useProjectActions(opts: { onRenamed?: (oldId: string, newId: str
   const [name, setName] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Target | null>(null);
+  const [deletingMany, setDeletingMany] = useState<Target[]>([]);
+  const setCreator = useUi((s) => s.setCreator);
 
   const actions = useMemo<ProjectActions>(() => ({
     open: (p) => navigate({ page: 'project', id: p.id }),
@@ -48,7 +50,26 @@ export function useProjectActions(opts: { onRenamed?: (oldId: string, newId: str
     },
     removeFromCollection: collectionId ? (p) => removeFrom.mutate({ id: collectionId, projectIds: [p.id] }, { onError: reportError }) : undefined,
     collections: collections.data ?? [],
-  }), [favorite, collections.data, addTo, removeFrom, collectionId, openCollectionDialog, t]);
+    filterByCreator: (c) => setCreator(c),
+    removeMany: (ps) => setDeletingMany(ps.filter((p) => !p.offline && p.rel_path !== '')),
+    addManyToCollection: (ps, cid) => {
+      const ids = ps.map((p) => p.id);
+      if (cid === null) { openCollectionDialog({ kind: 'create', addProjectIds: ids }); return; }
+      addTo.mutate({ id: cid, projectIds: ids }, { onSuccess: (c) => toast.success(t('collections.addedMany', { count: ids.length, name: c.name })), onError: reportError });
+    },
+    setFavoriteMany: (ps, fav) => { for (const p of ps) if (p.favorite !== fav) favorite.mutate({ id: p.id, favorite: fav }, { onError: reportError }); },
+  }), [favorite, collections.data, addTo, removeFrom, collectionId, openCollectionDialog, setCreator, t]);
+
+  const confirmDeleteMany = useCallback(async () => {
+    const targets = deletingMany;
+    setDeletingMany([]);
+    let ok = 0;
+    for (const p of targets) {
+      try { await remove.mutateAsync(p.id); ok++; } catch (e) { reportError(e); }
+    }
+    select([]);
+    if (ok) toast.success(t('actions.deletedMany', { count: ok }));
+  }, [deletingMany, remove, select, t]);
 
   const submitRename = useCallback(() => {
     if (!renaming) return;
@@ -92,6 +113,16 @@ export function useProjectActions(opts: { onRenamed?: (oldId: string, newId: str
               <Button type="submit" disabled={rename.isPending || !name.trim()} data-testid="rename-confirm">{t('actions.rename')}</Button>
             </DialogFooter>
           </form>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={deletingMany.length > 0} onOpenChange={(o) => !o && setDeletingMany([])}>
+        <DialogContent data-testid="delete-many-dialog">
+          <DialogHeader><DialogTitle>{t('actions.deleteManyTitle', { count: deletingMany.length })}</DialogTitle><DialogDescription>{t('actions.deleteBody')}</DialogDescription></DialogHeader>
+          <ul className="max-h-40 overflow-auto text-sm font-semibold">{deletingMany.map((p) => <li key={p.id} className="truncate">{p.title}</li>)}</ul>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDeletingMany([])}>{t('common.cancel')}</Button>
+            <Button variant="destructive" disabled={remove.isPending} onClick={() => void confirmDeleteMany()} data-testid="delete-many-confirm">{t('actions.moveToTrash')}</Button>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
       <Dialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>

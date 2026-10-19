@@ -69,7 +69,7 @@ pub fn seed_test_fixture(app: &AppHandle) {
             return;
         }
     };
-    match engine.scan_root(&id, |_| {}) {
+    match engine.scan_root_as(&id, "startup", |_| {}) {
         Ok(r) => log::info!("fixture root scanned: {} projects", r.projects),
         Err(e) => log::error!("fixture scan failed: {e}"),
     }
@@ -97,7 +97,9 @@ pub fn start_watcher_for(app: &AppHandle, root_id: &str) {
         }
         Err(e) => {
             log::warn!("cannot watch root {root_id}: {e}");
-            let _ = app.emit("watch://error", serde_json::json!({ "rootId": root_id, "message": e.to_string() }));
+            let msg = format!("cannot watch for changes ({e}); switch this folder to Poll");
+            let _ = state.engine.lock().unwrap().set_root_error(root_id, &msg);
+            let _ = app.emit("watch://error", serde_json::json!({ "rootId": root_id, "message": msg }));
         }
     }
 }

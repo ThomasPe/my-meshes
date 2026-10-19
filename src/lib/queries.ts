@@ -1,5 +1,7 @@
 import { QueryClient, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
+import { toast } from 'sonner';
+import i18n from '@/i18n';
 import { getBackend } from '@/lib/backend';
 import { kickThumbQueue, useThumbs } from '@/lib/thumbs/queue';
 import type { ImportRequest, ListQuery, Project, ProjectSummary, UpdateMetadata } from '@/lib/types';
@@ -69,7 +71,8 @@ export function useBackendEvents(onScan?: (rootId: string, found: number) => voi
       const s = await b.onScanProgress((p) => onScan?.(p.root_id, p.projects_found));
       const d = await b.onCollectionsChanged(() => { qc.invalidateQueries({ queryKey: keys.collections }); qc.invalidateQueries({ queryKey: keys.smart }); qc.invalidateQueries({ queryKey: ['projects'] }); qc.invalidateQueries({ queryKey: ['smartProjects'] }); });
       const i = await b.onInboxChanged((e) => { qc.invalidateQueries({ queryKey: keys.inbox(e.rootId) }); });
-      if (dead) { a(); c(); s(); d(); i(); } else unlisten.push(a, c, s, d, i);
+      const w = await b.onWatchError((e) => { qc.invalidateQueries({ queryKey: keys.roots }); toast.warning(i18n.t('status.watchError'), { description: e.message, duration: 12_000 }); });
+      if (dead) { a(); c(); s(); d(); i(); w(); } else unlisten.push(a, c, s, d, i, w);
     });
     // Thumbnails: patch cards as PNGs land, and refetch lists once a batch settles.
     import('@/lib/thumbs/queue').then(({ startThumbnails }) => {

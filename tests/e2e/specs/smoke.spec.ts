@@ -54,6 +54,7 @@ describe('Meshkeep (test mode, fixture library)', () => {
     await $('[data-testid="settings"]').waitForDisplayed();
     const dir = await $('[data-testid="data-dir"]').getText();
     expect(dir).toContain('meshkeep-e2e-');
+    expect(await $('[data-testid="root-scan-summary"]').getText()).toMatch(/^\d+ projects · \d+ files/);
     const info = await browser.tauri.execute(({ core }) => core.invoke('app_info')) as { testMode: boolean; e2eBuild: boolean };
     expect(info.testMode).toBe(true);
     expect(info.e2eBuild).toBe(true);

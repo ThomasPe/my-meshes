@@ -15,6 +15,18 @@ export interface LibraryRoot {
   added_at: string;
   last_scan_at: string | null;
   status: RootStatus;
+  last_scan: ScanSummary | null;
+  last_error: string | null;
+}
+
+export interface ScanSummary {
+  projects: number;
+  files: number;
+  ignored: number;
+  warnings: string[];
+  warning_count: number;
+  millis: number;
+  trigger: string;
 }
 
 export interface FileEntry {
@@ -88,6 +100,7 @@ export interface ListQuery {
   text?: string | null;
   favorites?: boolean;
   collection_id?: string | null;
+  creator?: string | null;
   sort?: SortKey;
   limit?: number | null;
   offset?: number | null;

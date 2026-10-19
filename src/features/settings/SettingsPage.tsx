@@ -13,7 +13,7 @@ import { useLibraryActions } from '@/features/library/useLibraryActions';
 import { LANGUAGES, setLanguage, type Language } from '@/i18n';
 import { getBackend } from '@/lib/backend';
 import { reportError } from '@/lib/errors';
-import { formatDate } from '@/lib/format';
+import { formatDate, formatDuration } from '@/lib/format';
 import { invalidateLibrary, keys, useAppInfo, useContainerDirs, useIgnorePatterns, useRoots, useThumbStats } from '@/lib/queries';
 import { kickThumbQueue, useThumbs } from '@/lib/thumbs/queue';
 import { dropThumbnailCache } from '@/lib/thumbs/useThumbnail';
@@ -66,7 +66,9 @@ export function SettingsPage({ scanning, onScanEnd }: { scanning: ScanState; onS
         <Card title={t('settings.roots')} hint={t('settings.rootsHint')} action={<Button size="sm" onClick={() => void addRootViaPicker()} data-testid="add-root"><Plus />{t('settings.addFolder')}</Button>}>
           {(roots.data ?? []).map((r) => (
             <div key={r.id} className="grid grid-cols-[minmax(0,1fr)_170px_auto_auto] items-center gap-3.5 border-b border-border py-3.5 last:border-0" data-testid="root-row">
-              <div className="flex min-w-0 items-center gap-2.5"><FolderOpen className="size-4 shrink-0 text-muted-foreground" /><div className="min-w-0"><div className="truncate font-extrabold" title={r.path}>{r.path}</div><div className="text-xs font-semibold text-muted-foreground">{r.last_scan_at ? t('settings.lastScan', { when: formatDate(r.last_scan_at, i18n.language) }) : t('settings.neverScanned')}</div></div></div>
+              <div className="flex min-w-0 items-center gap-2.5"><FolderOpen className="size-4 shrink-0 text-muted-foreground" /><div className="min-w-0"><div className="truncate font-extrabold" title={r.path}>{r.path}</div><div className="text-xs font-semibold text-muted-foreground">{r.last_scan_at ? t('settings.lastScan', { when: formatDate(r.last_scan_at, i18n.language) }) : t('settings.neverScanned')}</div>
+                {r.last_scan && <div className="text-xs text-muted-foreground tabular" data-testid="root-scan-summary">{t('settings.scanSummary', { projects: r.last_scan.projects, files: r.last_scan.files, time: formatDuration(r.last_scan.millis), trigger: t(`settings.trigger.${r.last_scan.trigger}`, { defaultValue: r.last_scan.trigger }) })}{r.last_scan.warning_count > 0 && <details className="inline"><summary className="ml-2 inline cursor-pointer text-warning">{t('settings.scanWarnings', { count: r.last_scan.warning_count })}</summary><ul className="mt-1 list-disc pl-4 text-warning">{r.last_scan.warnings.map((w) => <li key={w} className="break-all">{w}</li>)}</ul></details>}</div>}
+                {r.last_error && <div className="text-xs font-semibold text-warning" data-testid="root-error">{t('settings.lastError')}: {r.last_error}</div>}</div></div>
               <div className="grid gap-1">
                 <Select value={r.mode} onValueChange={(v) => void setMode(r, v as SyncMode)}>
                   <SelectTrigger size="sm" className="w-full shadow-none" data-testid="root-mode"><SelectValue /></SelectTrigger>

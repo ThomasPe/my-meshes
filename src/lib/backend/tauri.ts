@@ -60,6 +60,7 @@ export function createTauriBackend(): Backend {
     onImportProgress: (cb) => listen<ImportProgress>('import://progress', (e) => cb(e.payload)),
     onCollectionsChanged: (cb) => listen('collections://changed', () => cb()),
     onInboxChanged: (cb) => listen<{ rootId: string }>('inbox://changed', (e) => cb(e.payload)),
+    onWatchError: (cb) => listen<{ rootId: string; message: string }>('watch://error', (e) => cb(e.payload)),
     checkUpdate: () => invoke('check_update'),
     installUpdate: () => invoke('install_update'),
     onFileDrop: (cb) => getCurrentWebview().onDragDropEvent((e) => {
