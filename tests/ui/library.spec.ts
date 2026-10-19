@@ -454,3 +454,18 @@ test('sidebar context menus: root rescans or reveals, folders reveal in the file
   const projectsIcon = (await page.getByTestId('filter-folder').filter({ hasText: 'Projects' }).first().locator('svg').first().boundingBox())!;
   expect(Math.abs(inboxIcon.x - projectsIcon.x)).toBeLessThan(4);
 });
+
+test('import: archives can be left where they are, the choice is remembered', async ({ page }) => {
+  await page.getByTestId('import-open').click();
+  await expect(page.getByTestId('import-dialog')).toBeVisible();
+  await page.getByTestId('import-policy').click();
+  await page.getByRole('option', { name: 'Leave where it is' }).click();
+  await page.getByTestId('import-confirm').click();
+  await expect(page.getByTestId('import-dialog')).toBeHidden();
+  // no archive attachment inside the new project: 3 files instead of 4
+  await expect(page.getByTestId('project-card').filter({ hasText: 'Cable Clip' }).first()).toContainText('3');
+  await page.reload();
+  await expect(page.getByTestId('library')).toBeVisible();
+  await page.getByTestId('import-open').click();
+  await expect(page.getByTestId('import-policy')).toContainText('Leave where it is');
+});

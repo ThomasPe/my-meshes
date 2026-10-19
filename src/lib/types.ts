@@ -209,7 +209,7 @@ export interface SmartCollection {
 
 export type SourceKind = 'archive' | 'folder' | 'file';
 export type ImportAction = 'project' | 'inbox' | 'skip';
-export type ArchivePolicy = 'keep' | 'originals' | 'trash';
+export type ArchivePolicy = 'keep' | 'originals' | 'trash' | 'leave';
 
 export interface ImportItem {
   source: string;

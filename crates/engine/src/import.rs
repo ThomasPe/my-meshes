@@ -64,6 +64,8 @@ pub enum ArchivePolicy {
     Originals,
     /// Send the archive to the trash after a successful extraction.
     Trash,
+    /// Leave the archive where it is (e.g. in Downloads); the library gets only the files.
+    Leave,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -550,6 +552,7 @@ pub fn execute(root: &Path, req: &ImportRequest, deleter: &Deleter, mut progress
                                     source: e,
                                 })?;
                             }
+                            ArchivePolicy::Leave => {}
                         }
                     }
                     report
@@ -870,6 +873,18 @@ mod tests {
         .unwrap();
         assert!(!src.join("Gone.zip").exists());
         assert!(root.join("Gone/g.stl").is_file());
+        write_zip(&src.join("Stay.zip"), &[("s.stl", b"0123456789")]);
+        execute(
+            &root,
+            &req(ArchivePolicy::Leave, vec![("Stay.zip", ImportAction::Project, "Stay")]),
+            &remover(),
+            |_| {},
+        )
+        .unwrap();
+        assert!(src.join("Stay.zip").is_file(), "leave: the source archive is untouched");
+        assert!(root.join("Stay/s.stl").is_file());
+        assert!(!root.join("Stay/Stay.zip").exists());
+        assert!(!root.join(ORIGINALS_DIR).join("Stay.zip").exists());
 
         // collisions are refused before anything is written
         let err = execute(

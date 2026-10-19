@@ -338,7 +338,8 @@
     "policy": {
       "keep": "Im Projekt behalten (+{{size}})",
       "originals": "Nach _Originals verschieben (+{{size}})",
-      "trash": "Nach dem Entpacken in den Papierkorb"
+      "trash": "Nach dem Entpacken in den Papierkorb",
+      "leave": "Am Ursprungsort belassen"
     },
     "summary": {
       "projects_one": "{{count}} Projekt",

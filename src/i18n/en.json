@@ -338,7 +338,8 @@
     "policy": {
       "keep": "Keep inside the project (+{{size}})",
       "originals": "Move to _Originals (+{{size}})",
-      "trash": "Move to trash after extracting"
+      "trash": "Move to trash after extracting",
+      "leave": "Leave where it is"
     },
     "summary": {
       "projects_one": "{{count}} project",

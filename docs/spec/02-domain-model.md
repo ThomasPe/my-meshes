@@ -61,7 +61,7 @@ with a warning. 7z and rar are not extracted yet. Dropped archives or scanned in
 are analyzed and the app proposes a project structure; single files are proposed for the
 inbox. Nothing is written to the library until the user confirms (Q6). After extracting
 an archive into a new project, the original archive is **kept as an attachment inside the
-project by default**; settings allow moving it to `_Originals` below the root or sending
+project by default**; the import dialog can instead move it to `_Originals` below the root, leave it untouched where it came from, or send
 it to the Recycle Bin. The import dialog shows the space each choice costs (Q7).
 
 ### Collection

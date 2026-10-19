@@ -23,7 +23,8 @@ export function ImportDialog() {
   const roots = useRoots();
   const online = useMemo(() => (roots.data ?? []).filter((r) => r.status !== 'offline'), [roots.data]);
   const [rootId, setRootId] = useState<string>('');
-  const [policy, setPolicy] = useState<ArchivePolicy>('keep');
+  const [policy, setPolicyState] = useState<ArchivePolicy>(() => { try { const p = localStorage.getItem('mm.import.policy'); return p === 'originals' || p === 'trash' || p === 'leave' ? p : 'keep'; } catch { return 'keep'; } });
+  const setPolicy = (p: ArchivePolicy) => { setPolicyState(p); try { localStorage.setItem('mm.import.policy', p); } catch { /* ignore */ } };
   const [error, setError] = useState<string | null>(null);
   const run = useExecuteImport();
   const setFilter = useUi((s) => s.setFilter);
@@ -99,6 +100,7 @@ export function ImportDialog() {
                     <SelectItem value="keep">{t('import.policy.keep', { size: formatBytes(archiveBytes, i18n.language) })}</SelectItem>
                     <SelectItem value="originals">{t('import.policy.originals', { size: formatBytes(archiveBytes, i18n.language) })}</SelectItem>
                     <SelectItem value="trash">{t('import.policy.trash')}</SelectItem>
+                    <SelectItem value="leave">{t('import.policy.leave')}</SelectItem>
                   </SelectContent>
                 </Select>
               </label>
