@@ -2,9 +2,10 @@ use crate::state::{self, AppState};
 use meshkeep_engine::collections::{Collection, SmartCollection};
 use meshkeep_engine::import::{ImportItem, ImportReport, ImportRequest, InboxFile};
 use meshkeep_engine::model::{
-    FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, ScanReport, SyncMode, TagCount, ThumbJob, ThumbStats,
+    Facets, FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, ScanReport, SyncMode, TagCount, ThumbJob, ThumbLocation,
+    ThumbStats,
 };
-use meshkeep_engine::{EngineError, UpdateMetadata};
+use meshkeep_engine::{BatchReport, BatchUpdate, EngineError, UpdateMetadata};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -188,6 +189,11 @@ pub fn tag_counts(state: State<AppState>, root_id: Option<String>) -> CmdResult<
 }
 
 #[tauri::command]
+pub fn facets(state: State<AppState>, root_id: Option<String>) -> CmdResult<Facets> {
+    Ok(state.engine.lock().unwrap().facets(root_id.as_deref())?)
+}
+
+#[tauri::command]
 pub fn folder_tree(state: State<AppState>, root_id: String) -> CmdResult<Vec<FolderNode>> {
     Ok(state.engine.lock().unwrap().folder_tree(&root_id)?)
 }
@@ -236,6 +242,21 @@ pub fn update_metadata(app: AppHandle, state: State<AppState>, project_id: Strin
     let project = { state.engine.lock().unwrap().update_metadata(&project_id, update)? };
     let _ = app.emit("project://changed", serde_json::json!({ "projectId": project.id }));
     Ok(project)
+}
+
+/// META-6: one change for a multi-selection, written by the engine project by project.
+#[tauri::command]
+pub fn batch_update_metadata(
+    app: AppHandle,
+    state: State<AppState>,
+    project_ids: Vec<String>,
+    update: BatchUpdate,
+) -> CmdResult<BatchReport> {
+    let report = { state.engine.lock().unwrap().batch_update_metadata(&project_ids, &update)? };
+    for id in &project_ids {
+        let _ = app.emit("project://changed", serde_json::json!({ "projectId": id }));
+    }
+    Ok(report)
 }
 
 #[tauri::command]
@@ -326,10 +347,20 @@ pub fn get_container_dirs(state: State<AppState>) -> Vec<String> {
 }
 
 #[tauri::command]
-pub fn set_container_dirs(state: State<AppState>, names: Vec<String>) -> Vec<String> {
+pub fn set_container_dirs(state: State<AppState>, names: Vec<String>) -> CmdResult<Vec<String>> {
     let mut engine = state.engine.lock().unwrap();
-    engine.set_container_dirs(names);
-    engine.container_dirs().to_vec()
+    engine.set_container_dirs(names)?;
+    Ok(engine.container_dirs().to_vec())
+}
+
+#[tauri::command]
+pub fn get_thumb_location(state: State<AppState>) -> ThumbLocation {
+    state.engine.lock().unwrap().thumb_location()
+}
+
+#[tauri::command]
+pub fn set_thumb_location(state: State<AppState>, location: ThumbLocation) -> CmdResult<ThumbLocation> {
+    Ok(state.engine.lock().unwrap().set_thumb_location(location)?)
 }
 
 // ---- favorites, rename, delete ---------------------------------------------------------

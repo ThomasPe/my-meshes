@@ -156,8 +156,10 @@ reference along.
   embedded preview (extracted, no rendering), else the largest previewable model (STL,
   OBJ, 3MF) rendered off-thread, else the first image in the project. Failures are
   recorded per source state and not retried until the file changes.
-- Alternative location (user setting): `<project>/.cache/preview.png` for people who
-  want previews to travel with the project.
+- Alternative location (user setting, implemented): `<project>/.cache/thumbs/<key>.png` for
+  people who want previews to travel with the project. `.cache` and `.meshkeep` inside a
+  project are never indexed, whatever the ignore patterns say. Lookups try the app cache
+  first, then the owning project, so switching the setting keeps existing previews.
 - A user-provided image ("set view as thumbnail", or an uploaded photo) replaces the
   generated preview and is referenced from `project.yaml`.
 
@@ -168,6 +170,13 @@ descriptions, tags and file names. It is **read-only from the user's perspective
 rebuilt from disk whenever needed and never holds data that does not also exist on disk,
 with one exception: per-file content hashes (SHA-256) used for duplicate detection may
 be cached there because recomputing them is expensive.
+
+## Settings store: `settings.json`
+
+Engine-side preferences live in `<app data>/settings.json` (schema 1): ignore patterns,
+bundle folder names (`container_dirs`) and `thumb_location` (`app_data` | `project`).
+Written atomically, unknown keys survive. UI-only preferences (theme, language, view,
+notifications) stay in the webview's local storage. Per-root sync mode lives in `roots.json`.
 
 ## State machine for a library root
 

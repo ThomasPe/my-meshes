@@ -6,11 +6,12 @@ use crate::error::{EngineError, Result};
 use crate::import::{self, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile};
 use crate::index::{Index, ThumbSourceState};
 use crate::model::{
-    FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, RootStatus, ScanReport, ScanSummary, Sidecar, SidecarStamp, SyncMode,
-    TagCount, ThumbJob, ThumbSource, ThumbStats,
+    Facets, FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, RootStatus, ScanReport, ScanSummary, Sidecar, SidecarStamp,
+    SyncMode, TagCount, ThumbJob, ThumbLocation, ThumbSource, ThumbStats,
 };
 use crate::roots::RootsStore;
 use crate::scan::{self, IgnoreMatcher, ScanOptions};
+use crate::settings::{Settings, SettingsStore};
 use crate::sidecar;
 use crate::watch::{RootWatcher, WatchEvent};
 use crate::{threemf, thumbs};
@@ -45,6 +46,30 @@ pub struct UpdateMetadata {
     pub force: bool,
 }
 
+/// One change applied to many projects at once (META-6). Tags are merged, not replaced;
+/// `creator`/`license` set the field when `Some` (an empty string clears it).
+#[derive(Debug, Clone, Default, serde::Deserialize)]
+pub struct BatchUpdate {
+    #[serde(default)]
+    pub add_tags: Vec<String>,
+    #[serde(default)]
+    pub remove_tags: Vec<String>,
+    pub creator: Option<String>,
+    pub license: Option<String>,
+}
+
+#[derive(Debug, Clone, serde::Serialize)]
+pub struct BatchFailure {
+    pub project_id: String,
+    pub message: String,
+}
+
+#[derive(Debug, Clone, Default, serde::Serialize)]
+pub struct BatchReport {
+    pub updated: u32,
+    pub failed: Vec<BatchFailure>,
+}
+
 /// How files leave a library. The default moves them to the OS trash / recycle bin
 /// (IMP-5); tests inject a plain remove.
 pub type Deleter = Box<dyn Fn(&Path) -> std::io::Result<()> + Send>;
@@ -58,6 +83,7 @@ pub struct Engine {
     roots: RootsStore,
     index: Index,
     collections: CollectionsStore,
+    settings: SettingsStore,
     scan_opts: ScanOptions,
     deleter: Deleter,
 }
@@ -68,12 +94,18 @@ impl Engine {
         let roots = RootsStore::open(data_dir)?;
         let index = Index::open(&data_dir.join("index.sqlite"))?;
         let collections = CollectionsStore::open(data_dir)?;
+        let settings = SettingsStore::open(data_dir)?;
+        let scan_opts = ScanOptions {
+            ignore: settings.get().ignore.clone(),
+            container_dirs: settings.get().container_dirs.clone(),
+        };
         Ok(Engine {
             data_dir: data_dir.to_path_buf(),
             roots,
             index,
             collections,
-            scan_opts: ScanOptions::default(),
+            settings,
+            scan_opts,
             deleter: trash_deleter(),
         })
     }
@@ -93,8 +125,24 @@ impl Engine {
 
     pub fn set_ignore_patterns(&mut self, patterns: Vec<String>) -> Result<()> {
         IgnoreMatcher::new(&patterns)?; // validate
+        self.settings.update(|s| s.ignore = patterns.clone())?;
         self.scan_opts.ignore = patterns;
         Ok(())
+    }
+
+    pub fn settings(&self) -> &Settings {
+        self.settings.get()
+    }
+
+    pub fn thumb_location(&self) -> ThumbLocation {
+        self.settings.get().thumb_location
+    }
+
+    /// Switching the location keeps existing previews where they are; they are found by
+    /// `thumbnail_path` either way and re-created at the new place when their source changes.
+    pub fn set_thumb_location(&mut self, location: ThumbLocation) -> Result<ThumbLocation> {
+        self.settings.update(|s| s.thumb_location = location)?;
+        Ok(location)
     }
 
     /// Sub-folder names that mark a download bundle (see `scan::DEFAULT_CONTAINER_DIRS`).
@@ -102,8 +150,11 @@ impl Engine {
         &self.scan_opts.container_dirs
     }
 
-    pub fn set_container_dirs(&mut self, names: Vec<String>) {
-        self.scan_opts.container_dirs = names.into_iter().map(|n| n.trim().to_string()).filter(|n| !n.is_empty()).collect();
+    pub fn set_container_dirs(&mut self, names: Vec<String>) -> Result<()> {
+        let clean: Vec<String> = names.into_iter().map(|n| n.trim().to_string()).filter(|n| !n.is_empty()).collect();
+        self.settings.update(|s| s.container_dirs = clean.clone())?;
+        self.scan_opts.container_dirs = clean;
+        Ok(())
     }
 
     // ---- roots -------------------------------------------------------------------------
@@ -271,6 +322,10 @@ impl Engine {
         Ok(p)
     }
 
+    pub fn facets(&self, root_id: Option<&str>) -> Result<Facets> {
+        self.index.facets(root_id)
+    }
+
     pub fn tag_counts(&self, root_id: Option<&str>) -> Result<Vec<TagCount>> {
         self.index.tag_counts(root_id)
     }
@@ -435,16 +490,33 @@ impl Engine {
         self.index.thumb_stats()
     }
 
-    /// Absolute path of a cached thumbnail; the key is validated, never joined blindly.
+    /// Absolute path of a cached thumbnail; the key is validated, never joined blindly. Looks
+    /// in the app cache first, then in the owning project's `.cache/thumbs`.
     pub fn thumbnail_path(&self, key: &str) -> Result<PathBuf> {
         let path = thumbs::path_for(&self.data_dir, key)?;
-        if !path.is_file() {
-            return Err(EngineError::Io {
-                path,
-                source: std::io::Error::new(std::io::ErrorKind::NotFound, "thumbnail not found"),
-            });
+        if path.is_file() {
+            return Ok(path);
         }
-        Ok(path)
+        if let Some(pid) = self.index.project_of_thumb(key)? {
+            if let Some(p) = self.index.project(&pid)? {
+                let in_project = thumbs::project_cache_dir(&self.project_dir(&p)?).join(key);
+                if in_project.is_file() {
+                    return Ok(in_project);
+                }
+            }
+        }
+        Err(EngineError::Io {
+            path,
+            source: std::io::Error::new(std::io::ErrorKind::NotFound, "thumbnail not found"),
+        })
+    }
+
+    /// Directory a new preview for this project goes to, per the thumbnail location setting.
+    fn thumb_dir_for(&self, project_id: &str) -> Result<PathBuf> {
+        Ok(match self.thumb_location() {
+            ThumbLocation::AppData => thumbs::cache_dir(&self.data_dir),
+            ThumbLocation::Project => thumbs::project_cache_dir(&self.project_dir(&self.online_project(project_id)?)?),
+        })
     }
 
     fn thumb_source_now(&self, project_id: &str) -> Result<ThumbSourceState> {
@@ -457,7 +529,7 @@ impl Engine {
     pub fn store_thumbnail(&mut self, project_id: &str, png: &[u8]) -> Result<String> {
         let src = self.thumb_source_now(project_id)?;
         let key = thumbs::key_for(project_id, &src.rel_path);
-        thumbs::write(&self.data_dir, &key, png)?;
+        thumbs::write_in(&self.thumb_dir_for(project_id)?, &key, png)?;
         self.index.set_thumb(project_id, &src, Some(&key), None)?;
         Ok(key)
     }
@@ -478,7 +550,7 @@ impl Engine {
             .ok_or_else(|| EngineError::NotAllowed(format!("{}: no embedded preview", src.rel_path)))?;
         let png = threemf::read_entry(&file, &entry)?;
         let key = thumbs::key_for(project_id, &src.rel_path);
-        thumbs::write(&self.data_dir, &key, &png)?;
+        thumbs::write_in(&self.thumb_dir_for(project_id)?, &key, &png)?;
         self.index.set_thumb(project_id, &src, Some(&key), None)?;
         Ok(key)
     }
@@ -490,8 +562,19 @@ impl Engine {
         self.index.set_thumb(project_id, &src, None, Some(reason))
     }
 
-    /// Drops the whole cache; everything re-enters the queue.
+    /// Drops the whole cache (app data and project-side files of reachable projects);
+    /// everything re-enters the queue.
     pub fn clear_thumbnails(&mut self) -> Result<()> {
+        for (pid, key) in self.index.thumb_keys()? {
+            if let Ok(Some(p)) = self.index.project(&pid) {
+                if let Ok(dir) = self.project_dir(&p) {
+                    let cache = thumbs::project_cache_dir(&dir);
+                    let _ = std::fs::remove_file(cache.join(&key));
+                    let _ = std::fs::remove_dir(&cache); // only when empty
+                    let _ = std::fs::remove_dir(dir.join(".cache"));
+                }
+            }
+        }
         self.index.clear_thumbs()?;
         let dir = thumbs::cache_dir(&self.data_dir);
         if dir.is_dir() {
@@ -565,6 +648,62 @@ impl Engine {
         }
         sidecar::write(&dir, &sc, if upd.force { current_stamp(&dir) } else { on_disk })?;
         self.reindex_dir(&current.root_id, &dir)
+    }
+
+    /// Applies one change to many projects (META-6). Each project is written on its own with
+    /// the stamp currently on disk, so one unreadable sidecar does not stop the rest; the
+    /// report says which ones failed and why.
+    pub fn batch_update_metadata(&mut self, project_ids: &[String], upd: &BatchUpdate) -> Result<BatchReport> {
+        let add: Vec<String> = upd
+            .add_tags
+            .iter()
+            .map(|t| t.trim().to_lowercase())
+            .filter(|t| !t.is_empty())
+            .collect();
+        let remove: Vec<String> = upd
+            .remove_tags
+            .iter()
+            .map(|t| t.trim().to_lowercase())
+            .filter(|t| !t.is_empty())
+            .collect();
+        let mut report = BatchReport::default();
+        for id in project_ids {
+            let result = (|| -> Result<()> {
+                let current = self.online_project(id)?;
+                let dir = self.project_dir(&current)?;
+                let (mut sc, on_disk) = match sidecar::read(&dir)? {
+                    Some((sc, stamp)) => (sc, Some(stamp)),
+                    None => (Sidecar::default(), None),
+                };
+                let md = &mut sc.metadata;
+                if let Some(v) = &upd.creator {
+                    md.creator = non_empty(v.clone());
+                }
+                if let Some(v) = &upd.license {
+                    md.license = non_empty(v.clone());
+                }
+                let mut tags: Vec<String> = md.tags.iter().map(|t| t.trim().to_lowercase()).filter(|t| !t.is_empty()).collect();
+                tags.extend(add.iter().cloned());
+                tags.retain(|t| !remove.contains(t));
+                tags.sort();
+                tags.dedup();
+                md.tags = tags;
+                if md.created.is_none() {
+                    md.created = Some(OffsetDateTime::now_utc().date().to_string());
+                }
+                sidecar::write(&dir, &sc, on_disk)?;
+                self.reindex_dir(&current.root_id, &dir)?;
+                Ok(())
+            })();
+            match result {
+                Ok(()) => report.updated += 1,
+                Err(e) => report.failed.push(BatchFailure {
+                    project_id: id.clone(),
+                    message: e.to_string(),
+                }),
+            }
+        }
+        Ok(report)
     }
 
     /// Re-reads one project directory and refreshes its index row.

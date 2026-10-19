@@ -329,6 +329,15 @@ pub struct ListQuery {
     /// Exact creator name, case-insensitive (NAV-5).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub creator: Option<String>,
+    /// Exact license string, case-insensitive (NAV-5).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub license: Option<String>,
+    /// Recommended material, case-insensitive (NAV-5).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub material: Option<String>,
+    /// Projects containing at least one model file with this extension (lowercase, no dot).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file_type: Option<String>,
     #[serde(default)]
     pub sort: SortKey,
     #[serde(default)]
@@ -355,6 +364,34 @@ pub enum SortKey {
 pub struct TagCount {
     pub tag: String,
     pub count: u32,
+}
+
+/// One value of an attribute filter with the number of projects carrying it (NAV-5).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct FacetCount {
+    pub value: String,
+    pub count: u32,
+}
+
+/// Attribute filters derived from the indexed data, optionally scoped to one root.
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct Facets {
+    pub creators: Vec<FacetCount>,
+    pub licenses: Vec<FacetCount>,
+    pub materials: Vec<FacetCount>,
+    /// Model file extensions (`stl`, `3mf`, ...), counted per project.
+    pub file_types: Vec<FacetCount>,
+}
+
+/// Where rendered previews are stored (Q5, APP-4).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum ThumbLocation {
+    /// `<app data>/thumbs/<key>.png`: nothing is written into a library (default).
+    #[default]
+    AppData,
+    /// `<project>/.cache/thumbs/<key>.png`: previews travel with the project.
+    Project,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]

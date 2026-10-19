@@ -11,6 +11,7 @@ import { ProjectPage } from '@/features/project/ProjectPage';
 import { SettingsPage } from '@/features/settings/SettingsPage';
 import { WelcomePage } from '@/features/welcome/WelcomePage';
 import { queryClient, useAppInfo, useBackendEvents, useRoots } from '@/lib/queries';
+import { useOsNotifications } from '@/features/settings/useOsNotifications';
 import { useStartupUpdateCheck } from '@/features/settings/useStartupUpdateCheck';
 import { navigate, useRoute } from '@/lib/router';
 
@@ -25,6 +26,7 @@ function Shell() {
   useEffect(() => { wireImportEvents(); }, []);
   const info = useAppInfo();
   useStartupUpdateCheck(info.data);
+  useOsNotifications();
   const scanEnd = useCallback((rootId: string) => setScanning((s) => { const n = { ...s }; delete n[rootId]; return n; }), []);
 
   // First run: no roots -> welcome. Keep explicit navigation otherwise.

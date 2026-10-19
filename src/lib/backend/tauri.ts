@@ -1,6 +1,7 @@
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
+import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 import type { Backend } from './index';
 import type { ImportProgress, LibraryChanged, ScanProgress } from '@/lib/types';
 
@@ -16,6 +17,17 @@ export function createTauriBackend(): Backend {
     listProjects: (query) => invoke('list_projects', { query }),
     getProject: (id) => invoke('get_project', { id }),
     tagCounts: (rootId) => invoke('tag_counts', { rootId: rootId ?? null }),
+    facets: (rootId) => invoke('facets', { rootId: rootId ?? null }),
+    batchUpdateMetadata: (projectIds, update) => invoke('batch_update_metadata', { projectIds, update }),
+    getThumbLocation: () => invoke('get_thumb_location'),
+    setThumbLocation: (location) => invoke('set_thumb_location', { location }),
+    notify: async (title, body) => {
+      let ok = await isPermissionGranted();
+      if (!ok) ok = (await requestPermission()) === 'granted';
+      if (!ok) return false;
+      sendNotification({ title, body });
+      return true;
+    },
     folderTree: (rootId) => invoke('folder_tree', { rootId }),
     libraryStats: (rootId) => invoke('library_stats', { rootId: rootId ?? null }),
     readProjectFile: (projectId, relPath) => invoke<ArrayBuffer>('read_project_file', { projectId, relPath }),

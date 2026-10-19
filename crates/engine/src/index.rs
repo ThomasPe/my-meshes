@@ -7,7 +7,8 @@
 
 use crate::error::Result;
 use crate::model::{
-    FileEntry, FileKind, FolderNode, ListQuery, Project, ProjectSummary, SidecarState, SortKey, TagCount, ThumbJob, ThumbSource, ThumbStats,
+    FacetCount, Facets, FileEntry, FileKind, FolderNode, ListQuery, Project, ProjectSummary, SidecarState, SortKey, TagCount, ThumbJob,
+    ThumbSource, ThumbStats,
 };
 use crate::thumbs;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -20,7 +21,7 @@ pub struct Index {
     conn: Connection,
 }
 
-const SCHEMA_VERSION: i64 = 2;
+const SCHEMA_VERSION: i64 = 3;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -37,9 +38,10 @@ CREATE INDEX IF NOT EXISTS projects_added ON projects(added);
 CREATE TABLE IF NOT EXISTS files (
   project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
   rel_path TEXT NOT NULL, name TEXT NOT NULL, kind TEXT NOT NULL, size INTEGER NOT NULL, modified TEXT NOT NULL,
-  slicer TEXT, embedded_thumbnail INTEGER NOT NULL DEFAULT 0,
+  slicer TEXT, embedded_thumbnail INTEGER NOT NULL DEFAULT 0, ext TEXT NOT NULL DEFAULT '',
   PRIMARY KEY (project_id, rel_path)
 );
+CREATE INDEX IF NOT EXISTS files_ext ON files(ext);
 CREATE TABLE IF NOT EXISTS tags (
   project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE, tag TEXT NOT NULL, PRIMARY KEY (project_id, tag)
 );
@@ -66,6 +68,12 @@ fn ts(t: &OffsetDateTime) -> String {
 }
 fn parse_ts(s: &str) -> OffsetDateTime {
     OffsetDateTime::parse(s, &Rfc3339).unwrap_or(OffsetDateTime::UNIX_EPOCH)
+}
+fn ext_of(name: &str) -> String {
+    match name.rsplit_once('.') {
+        Some((stem, ext)) if !stem.is_empty() => ext.to_ascii_lowercase(),
+        _ => String::new(),
+    }
 }
 fn kind_str(k: FileKind) -> &'static str {
     match k {
@@ -120,7 +128,20 @@ impl Index {
     fn init(conn: Connection) -> Result<Index> {
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;")?;
         let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
-        if version != SCHEMA_VERSION {
+        if version == 2 {
+            // v2 -> v3 adds files.ext; migrate in place so cached thumbnails survive.
+            conn.execute_batch("ALTER TABLE files ADD COLUMN ext TEXT NOT NULL DEFAULT '';")?;
+            let rows: Vec<(String, String, String)> = conn
+                .prepare("SELECT project_id, rel_path, name FROM files")?
+                .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get(2)?)))?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            for (pid, rel, name) in rows {
+                conn.execute(
+                    "UPDATE files SET ext = ?3 WHERE project_id = ?1 AND rel_path = ?2",
+                    params![pid, rel, ext_of(&name)],
+                )?;
+            }
+        } else if version != SCHEMA_VERSION {
             conn.execute_batch(DROP)?;
         }
         conn.execute_batch(SCHEMA)?;
@@ -198,7 +219,7 @@ impl Index {
             ],
         )?;
         let mut fs_stmt = tx.prepare_cached(
-            "INSERT INTO files (project_id, rel_path, name, kind, size, modified, slicer, embedded_thumbnail) VALUES (?1,?2,?3,?4,?5,?6,?7,?8)",
+            "INSERT INTO files (project_id, rel_path, name, kind, size, modified, slicer, embedded_thumbnail, ext) VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9)",
         )?;
         for f in &p.files {
             fs_stmt.execute(params![
@@ -209,7 +230,8 @@ impl Index {
                 f.size as i64,
                 ts(&f.modified),
                 f.slicer,
-                f.embedded_thumbnail as i32
+                f.embedded_thumbnail as i32,
+                ext_of(&f.name)
             ])?;
         }
         let mut tag_stmt = tx.prepare_cached("INSERT OR IGNORE INTO tags (project_id, tag) VALUES (?1, ?2)")?;
@@ -370,6 +392,23 @@ impl Index {
             where_.push("p.creator = ? COLLATE NOCASE".into());
             args.push(Box::new(c.to_string()));
         }
+        if let Some(l) = q.license.as_deref().map(str::trim).filter(|c| !c.is_empty()) {
+            where_.push("p.license = ? COLLATE NOCASE".into());
+            args.push(Box::new(l.to_string()));
+        }
+        if let Some(m) = q.material.as_deref().map(str::trim).filter(|c| !c.is_empty()) {
+            where_.push("p.material = ? COLLATE NOCASE".into());
+            args.push(Box::new(m.to_string()));
+        }
+        if let Some(e) = q
+            .file_type
+            .as_deref()
+            .map(|e| e.trim().trim_start_matches('.').to_ascii_lowercase())
+            .filter(|e| !e.is_empty())
+        {
+            where_.push("EXISTS (SELECT 1 FROM files fx WHERE fx.project_id = p.id AND fx.kind = 'model' AND fx.ext = ?)".into());
+            args.push(Box::new(e));
+        }
         if let Some(ids) = &collection {
             if ids.is_empty() {
                 return Ok(Vec::new());
@@ -443,6 +482,41 @@ impl Index {
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
         Ok(rows)
+    }
+
+    /// Attribute filter values with counts (NAV-5), most frequent first.
+    pub fn facets(&self, root_id: Option<&str>) -> Result<Facets> {
+        let column = |col: &str| -> Result<Vec<FacetCount>> {
+            let mut st = self.conn.prepare(&format!(
+                "SELECT p.{col}, COUNT(*) FROM projects p WHERE p.{col} IS NOT NULL AND p.{col} != '' AND (?1 IS NULL OR p.root_id = ?1) GROUP BY p.{col} COLLATE NOCASE ORDER BY COUNT(*) DESC, p.{col} COLLATE NOCASE"
+            ))?;
+            let rows = st
+                .query_map(params![root_id], |r| {
+                    Ok(FacetCount {
+                        value: r.get(0)?,
+                        count: r.get::<_, i64>(1)? as u32,
+                    })
+                })?
+                .collect::<std::result::Result<Vec<_>, _>>()?;
+            Ok(rows)
+        };
+        let mut st = self.conn.prepare(
+            "SELECT f.ext, COUNT(DISTINCT f.project_id) FROM files f JOIN projects p ON p.id = f.project_id WHERE f.kind = 'model' AND f.ext != '' AND (?1 IS NULL OR p.root_id = ?1) GROUP BY f.ext ORDER BY COUNT(DISTINCT f.project_id) DESC, f.ext",
+        )?;
+        let file_types = st
+            .query_map(params![root_id], |r| {
+                Ok(FacetCount {
+                    value: r.get(0)?,
+                    count: r.get::<_, i64>(1)? as u32,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(Facets {
+            creators: column("creator")?,
+            licenses: column("license")?,
+            materials: column("material")?,
+            file_types,
+        })
     }
 
     pub fn count(&self, root_id: Option<&str>) -> Result<(u32, u64)> {
@@ -568,6 +642,23 @@ impl Index {
             params![project_id, src.rel_path, src.size as i64, src.modified, key, error, ts(&OffsetDateTime::now_utc())],
         )?;
         Ok(())
+    }
+
+    /// The project a cached thumbnail belongs to (for `ThumbLocation::Project` lookups).
+    pub fn project_of_thumb(&self, key: &str) -> Result<Option<String>> {
+        Ok(self
+            .conn
+            .query_row("SELECT project_id FROM thumbs WHERE key = ?1", params![key], |r| r.get(0))
+            .optional()?)
+    }
+
+    /// Every stored (project, key) pair, for cache maintenance.
+    pub fn thumb_keys(&self) -> Result<Vec<(String, String)>> {
+        let mut st = self.conn.prepare("SELECT project_id, key FROM thumbs WHERE key IS NOT NULL")?;
+        let rows = st
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
     }
 
     pub fn rename_thumb(&mut self, old_id: &str, new_id: &str) -> Result<()> {
@@ -820,5 +911,45 @@ mod tests {
         }
         let ix = Index::open(&p).unwrap();
         assert_eq!(ix.count(None).unwrap().0, 0);
+    }
+
+    #[test]
+    fn v2_migrates_in_place_keeping_thumbs() {
+        let t = tempfile::tempdir().unwrap();
+        let p = t.path().join("index.sqlite");
+        {
+            // a v2 database: same schema minus files.ext, with one project, its files and a thumb row
+            let c = Connection::open(&p).unwrap();
+            let v2 = SCHEMA
+                .replace(", ext TEXT NOT NULL DEFAULT ''", "")
+                .replace("CREATE INDEX IF NOT EXISTS files_ext ON files(ext);", "");
+            c.execute_batch(&v2).unwrap();
+            c.execute_batch("PRAGMA user_version = 2;").unwrap();
+            c.execute("INSERT INTO projects (id, root_id, rel_path, title, total_bytes, file_count, model_count, modified, added, sidecar_state, warnings, thumb_source, thumb_kind) VALUES ('r1:A','r1','A','A',10,2,1,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z','missing','[]','a.STL','render')", []).unwrap();
+            c.execute("INSERT INTO files (project_id, rel_path, name, kind, size, modified) VALUES ('r1:A','a.STL','a.STL','model',10,'2026-01-01T00:00:00Z'), ('r1:A','README','README','document',1,'2026-01-01T00:00:00Z')", []).unwrap();
+            c.execute("INSERT INTO thumbs (project_id, source_rel, source_size, source_mtime, key, updated) VALUES ('r1:A','a.STL',10,'2026-01-01T00:00:00Z','abcdefabcdefabcdefabcdef.png','2026-01-02T00:00:00Z')", []).unwrap();
+        }
+        let ix = Index::open(&p).unwrap();
+        let version: i64 = ix.conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(version, SCHEMA_VERSION);
+        assert_eq!(
+            ix.project_of_thumb("abcdefabcdefabcdefabcdef.png").unwrap().as_deref(),
+            Some("r1:A")
+        );
+        let f = ix.facets(None).unwrap();
+        assert_eq!(f.file_types.len(), 1);
+        assert_eq!(f.file_types[0].value, "stl");
+        assert_eq!(
+            ix.list(
+                &ListQuery {
+                    file_type: Some("stl".into()),
+                    ..Default::default()
+                },
+                None
+            )
+            .unwrap()
+            .len(),
+            1
+        );
     }
 }

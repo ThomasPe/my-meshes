@@ -78,7 +78,13 @@
     "emptyFavorites": "Star a project to see it here.",
     "slicerProject": "slicer",
     "sortCollection": "Collection order",
-    "filterByCreator": "Show everything by {{creator}}"
+    "filterByCreator": "Show everything by {{creator}}",
+    "facetLicenses": "Licenses",
+    "facetMaterials": "Materials",
+    "facetFileTypes": "File types",
+    "filterBy": "Filter by {{value}}",
+    "more": "+{{count}} more",
+    "less": "less"
   },
   "inspector": {
     "open": "Open",
@@ -107,7 +113,17 @@
     "unfavoriteAll": "Remove favorites",
     "deleteSelected": "Delete selected…",
     "addAllTo": "Add all to collection",
-    "images": "Images"
+    "images": "Images",
+    "batchTags": "Tags of the selection",
+    "batchAddTag": "add tag to all, Enter",
+    "batchRemoveTag": "remove {{tag}} from all",
+    "batchCreator": "Creator for all",
+    "batchCreatorPlaceholder": "set creator for all…",
+    "batchApply": "Apply",
+    "batchDone_one": "{{count}} project updated",
+    "batchDone_other": "{{count}} projects updated",
+    "batchFailed_one": "{{count}} project could not be written",
+    "batchFailed_other": "{{count}} projects could not be written"
   },
   "project": {
     "back": "Library",
@@ -150,7 +166,9 @@
     "images": "Images",
     "noImages": "No images in this project.",
     "openImage": "Open in viewer",
-    "imageOf": "{{index}} of {{total}}"
+    "imageOf": "{{index}} of {{total}}",
+    "loadingProgress": "{{name}} · {{percent}} %",
+    "parsing": "{{name}} · parsing…"
   },
   "settings": {
     "title": "Settings",
@@ -231,7 +249,16 @@
       "poll": "poll",
       "import": "import",
       "startup": "startup"
-    }
+    },
+    "thumbLocation": "Store previews in",
+    "thumbLocationApp": "App data",
+    "thumbLocationProject": "Project folder",
+    "thumbLocationHintApp": "Nothing is written into your library. Previews are lost on reinstall and re-rendered.",
+    "thumbLocationHintProject": "Written to <project>\\\\.cache\\\\thumbs so previews travel with the folder (also into zips and backups). Not indexed, never a thumbnail source.",
+    "thumbLocationSaved": "Preview location saved",
+    "notifications": "Notifications",
+    "notificationsHint": "Windows toasts when a background scan or an import finishes while Meshkeep is not the active window.",
+    "notificationsToggle": "Show notifications"
   },
   "status": {
     "watching": "Watching {{path}}",
@@ -365,5 +392,13 @@
     "smartHint": "Smart collection: a saved search",
     "addedMany_one": "{{count}} project added to “{{name}}”",
     "addedMany_other": "{{count}} projects added to “{{name}}”"
+  },
+  "notify": {
+    "scanTitle": "Library updated",
+    "scanBody": "{{projects}} projects found in {{root}}",
+    "importTitle": "Import finished",
+    "importBody_one": "{{count}} new project",
+    "importBody_other": "{{count}} new projects",
+    "importBodyInbox": "Files were added to the inbox"
   }
 }

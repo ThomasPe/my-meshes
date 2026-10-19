@@ -101,6 +101,10 @@ export interface ListQuery {
   favorites?: boolean;
   collection_id?: string | null;
   creator?: string | null;
+  license?: string | null;
+  material?: string | null;
+  /** Model file extension without the dot (`stl`, `3mf`, ...). */
+  file_type?: string | null;
   sort?: SortKey;
   limit?: number | null;
   offset?: number | null;
@@ -109,6 +113,32 @@ export interface ListQuery {
 export interface TagCount {
   tag: string;
   count: number;
+}
+
+export interface FacetCount {
+  value: string;
+  count: number;
+}
+
+export interface Facets {
+  creators: FacetCount[];
+  licenses: FacetCount[];
+  materials: FacetCount[];
+  file_types: FacetCount[];
+}
+
+export type ThumbLocation = 'app_data' | 'project';
+
+export interface BatchUpdate {
+  add_tags?: string[];
+  remove_tags?: string[];
+  creator?: string;
+  license?: string;
+}
+
+export interface BatchReport {
+  updated: number;
+  failed: Array<{ project_id: string; message: string }>;
 }
 
 export interface FolderNode {

@@ -9,6 +9,7 @@
     "core:event:default",
     "core:webview:default",
     "dialog:allow-open",
-    "opener:default"
+    "opener:default",
+    "notification:default"
   ]
 }

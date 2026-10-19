@@ -3,21 +3,24 @@
 A local-first desktop library manager for 3D printing models (STL, OBJ, 3MF): browse,
 preview, tag and organize the models on your own disks, Lightroom-style.
 
-## Status: rebuild in progress (scaffold + walking skeleton)
+## Status: Phase 1 complete, Store submission pending
 
-The project is being rebuilt from scratch on **Tauri 2 + Rust** with a **React / Tailwind 4 /
-shadcn-style** frontend (decisions in `docs/decisions/`). What works today:
+Built on **Tauri 2 + Rust** with a **React / Tailwind 4 / shadcn-style** frontend (decisions
+in `docs/decisions/`). What works today:
 
-- add library folders, scan them (read-only), browse projects in a virtualized grid or list
-- full-text search, tag and folder filters, inspector with details
-- edit metadata and tags; `project.yaml` is created lazily and written atomically with
-  conflict detection
-- STL preview (Three.js, parsed in a Web Worker), files table, settings (roots, sync mode,
-  ignore patterns, theme, language en/de)
-- offline roots keep their projects; file watching rescans automatically
+- library folders on local disks, network shares and external drives; watch, poll or manual
+  sync; offline roots keep their projects
+- read-only scanning, `project.yaml` sidecars created lazily and written atomically with
+  conflict detection; rename and safe delete to the Recycle Bin
+- virtualized grid and list, full-text search, filters by tag, folder, creator, license,
+  material and file type; favorites, recent additions, collections and smart collections
+- rendered thumbnails (STL, OBJ, 3MF) in a background queue, slicer 3MF previews, a 3D
+  viewer with progressive loading, an image viewer
+- import with a staging step (zip, 7z, folders, loose files), inbox per root, drag and drop
+- settings for ignore patterns, bundle folders, preview location, notifications, theme and
+  language (en/de); self-updater in private builds, Microsoft Store build without it
 
-Not yet: rendered thumbnails, import/staging, collections, 3MF/OBJ preview (see
-`docs/backlog.md`).
+Phase 2 (duplicates, keymap, undo, custom thumbnails, ...) is listed in `docs/backlog.md`.
 
 ```bash
 npm ci && npm run tauri:dev        # needs Rust + (Windows) MSVC Build Tools, see AGENTS.md

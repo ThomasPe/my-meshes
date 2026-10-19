@@ -3,6 +3,9 @@ name: Dev channel
 # Every push to main or a working branch becomes an installable, self-updating Windows
 # build on the rolling pre-release tagged `dev` (the newest push wins; a build in
 # progress is cancelled). Installed dev builds check that feed on startup (APP-9).
+# The release is only touched after the build succeeded, and `latest.json` is replaced
+# last, so the update feed never 404s while a build runs and a failed build leaves the
+# previous dev build installable.
 on:
   push:
     branches: ['main', 'claude/**', 'feat/**', 'fix/**']
@@ -57,27 +60,66 @@ jobs:
           $overlay | ConvertTo-Json -Depth 10 | Set-Content src-tauri/tauri.dev-build.conf.json -Encoding UTF8
           "version=$version" >> $env:GITHUB_OUTPUT
 
-      - name: Reset the rolling dev release
+      - name: Build and sign
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release delete dev --cleanup-tag --yes 2>$null
-          if ($LASTEXITCODE -ne 0) { Write-Host "no previous dev release" }
-          exit 0
-
-      - name: Build, sign and publish
-        uses: tauri-apps/tauri-action@v0
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: npx tauri build --features updater --config src-tauri/tauri.dev-build.conf.json
+
+      - name: Write latest.json
+        id: feed
+        run: |
+          $exe = Get-ChildItem target/release/bundle/nsis/*-setup.exe | Select-Object -First 1
+          if (-not $exe) { Write-Host "::error::no NSIS installer found"; exit 1 }
+          $sig = Get-Content "$($exe.FullName).sig" -Raw
+          $url = "https://github.com/${{ github.repository }}/releases/download/dev/$($exe.Name)"
+          $notes = "Rolling development build from ``${{ github.ref_name }}`` @ ``${{ github.sha }}``.`nInstalled dev builds offer this on the next start. Not for the Store."
+          $platform = [ordered]@{ signature = $sig.Trim(); url = $url }
+          $feed = [ordered]@{
+            version = "${{ steps.ver.outputs.version }}"
+            notes = $notes
+            pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ss.fffZ")
+            platforms = [ordered]@{ "windows-x86_64" = $platform; "windows-x86_64-nsis" = $platform }
+          }
+          New-Item -ItemType Directory -Force dist-dev | Out-Null
+          $feed | ConvertTo-Json -Depth 5 | Set-Content dist-dev/latest.json -Encoding UTF8
+          Copy-Item $exe.FullName dist-dev/
+          Copy-Item "$($exe.FullName).sig" dist-dev/
+          "exe=$($exe.Name)" >> $env:GITHUB_OUTPUT
+          Get-Content dist-dev/latest.json
+
+      # Replace the rolling release in place: new installer first, feed last, stale assets
+      # afterwards. A client fetching latest.json at any moment gets a complete release.
+      - name: Publish to the rolling dev release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TITLE: Dev channel ${{ steps.ver.outputs.version }}
+        run: |
+          $exe = "${{ steps.feed.outputs.exe }}"
+          git tag -f dev ${{ github.sha }}
+          git push -f origin refs/tags/dev
+          $notes = "Rolling development build from ``${{ github.ref_name }}`` @ ``${{ github.sha }}``.`nInstalled dev builds offer this on the next start. Not for the Store."
+          gh release view dev --json id 2>$null | Out-Null
+          if ($LASTEXITCODE -ne 0) {
+            gh release create dev --prerelease --title "$env:TITLE" --notes "$notes" "dist-dev/$exe" "dist-dev/$exe.sig" dist-dev/latest.json
+            if ($LASTEXITCODE -ne 0) { exit 1 }
+            exit 0
+          }
+          gh release upload dev "dist-dev/$exe" "dist-dev/$exe.sig" --clobber
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          gh release upload dev dist-dev/latest.json --clobber
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+          gh release edit dev --prerelease --title "$env:TITLE" --notes "$notes" --target ${{ github.sha }}
+          $keep = @($exe, "$exe.sig", "latest.json")
+          $assets = gh release view dev --json assets --jq '.assets[] | "\(.id) \(.name)"'
+          foreach ($line in $assets) {
+            $id, $name = $line -split ' ', 2
+            if ($keep -notcontains $name) {
+              Write-Host "removing stale asset $name"
+              gh api -X DELETE "repos/${{ github.repository }}/releases/assets/$id" | Out-Null
+            }
+          }
+      - uses: actions/upload-artifact@v4
         with:
-          tagName: dev
-          releaseName: Dev channel ${{ steps.ver.outputs.version }}
-          releaseBody: |
-            Rolling development build from `${{ github.ref_name }}` @ `${{ github.sha }}`.
-            Installed dev builds offer this on the next start. Not for the Store.
-          prerelease: true
-          releaseDraft: false
-          includeUpdaterJson: true
-          args: --features updater --config src-tauri/tauri.dev-build.conf.json
+          name: meshkeep-${{ steps.ver.outputs.version }}-dev
+          path: dist-dev/*

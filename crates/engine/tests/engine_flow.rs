@@ -377,3 +377,153 @@ fn scan_status_and_creator_filter() {
     let engine = Engine::open(data.path()).unwrap();
     assert!(engine.root(&root.id).unwrap().last_scan.is_some());
 }
+
+// ---- D5: persisted settings, facets, batch edits, project-side thumbnails ----------------
+#[test]
+fn settings_facets_batch_and_project_thumbnails() {
+    use meshkeep_engine::model::ThumbLocation;
+    use meshkeep_engine::BatchUpdate;
+    const TINY_PNG: &[u8] = &[
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00,
+        0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63,
+        0x60, 0x00, 0x02, 0x00, 0x00, 0x05, 0x00, 0x01, 0xE2, 0x26, 0x05, 0x9B, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42,
+        0x60, 0x82,
+    ];
+    let data = tempfile::tempdir().unwrap();
+    let lib = tempfile::tempdir().unwrap();
+    touch(&lib.path().join("A/a.stl"), 10);
+    touch(&lib.path().join("B/b.3mf"), 10);
+    touch(&lib.path().join("B/b.STL"), 12);
+    touch(&lib.path().join("C/c.obj"), 10);
+    fs::write(
+        lib.path().join("A/project.yaml"),
+        "metadata:\n  creator: Lena\n  license: CC-BY-4.0\n  tags: [decor]\nprinting:\n  recommended_material: PLA\n",
+    )
+    .unwrap();
+    fs::write(
+        lib.path().join("B/project.yaml"),
+        "metadata:\n  creator: Lena\n  license: cc-by-4.0\nprinting:\n  recommended_material: PETG\n",
+    )
+    .unwrap();
+
+    // settings persist across reopen (ignore patterns were lost on restart before D5)
+    {
+        let mut engine = Engine::open(data.path()).unwrap();
+        assert_eq!(engine.thumb_location(), ThumbLocation::AppData);
+        let mut ignore = engine.ignore_patterns().to_vec();
+        ignore.push("*.bak".into());
+        engine.set_ignore_patterns(ignore).unwrap();
+        engine.set_container_dirs(vec!["files".into(), " ".into()]).unwrap();
+        engine.set_thumb_location(ThumbLocation::Project).unwrap();
+        assert!(
+            engine.set_ignore_patterns(vec!["[".into()]).is_err(),
+            "invalid pattern is rejected and not stored"
+        );
+    }
+    let mut engine = Engine::open(data.path()).unwrap();
+    assert!(engine.ignore_patterns().iter().any(|p| p == "*.bak"));
+    assert_eq!(engine.container_dirs(), ["files"]);
+    assert_eq!(engine.thumb_location(), ThumbLocation::Project);
+    assert!(data.path().join("settings.json").is_file());
+
+    let root = engine.add_root(lib.path(), SyncMode::Manual).unwrap();
+    engine.scan_root(&root.id, |_| {}).unwrap();
+
+    // facets and the matching filters
+    let f = engine.facets(None).unwrap();
+    assert_eq!(f.creators.len(), 1);
+    assert_eq!((f.creators[0].value.as_str(), f.creators[0].count), ("Lena", 2));
+    assert_eq!(f.licenses.len(), 1, "licenses group case-insensitively: {:?}", f.licenses);
+    assert_eq!(f.licenses[0].count, 2);
+    assert_eq!(
+        f.materials.iter().map(|m| (m.value.as_str(), m.count)).collect::<Vec<_>>(),
+        vec![("PETG", 1), ("PLA", 1)]
+    );
+    assert_eq!(
+        f.file_types.iter().map(|m| (m.value.as_str(), m.count)).collect::<Vec<_>>(),
+        vec![("stl", 2), ("3mf", 1), ("obj", 1)]
+    );
+    let q = |license: Option<&str>, material: Option<&str>, file_type: Option<&str>| ListQuery {
+        license: license.map(String::from),
+        material: material.map(String::from),
+        file_type: file_type.map(String::from),
+        ..Default::default()
+    };
+    assert_eq!(engine.list_projects(&q(Some("CC-BY-4.0"), None, None)).unwrap().len(), 2);
+    assert_eq!(engine.list_projects(&q(None, Some("petg"), None)).unwrap().len(), 1);
+    assert_eq!(engine.list_projects(&q(None, None, Some(".STL"))).unwrap().len(), 2);
+    assert_eq!(
+        engine.list_projects(&q(Some("CC-BY-4.0"), Some("PLA"), Some("obj"))).unwrap().len(),
+        0
+    );
+    let root_scoped = engine.facets(Some("nope")).unwrap();
+    assert!(root_scoped.creators.is_empty());
+
+    // batch update: tags merged, creator set, one failing id reported, others still written
+    let ids: Vec<String> = engine
+        .list_projects(&ListQuery::default())
+        .unwrap()
+        .into_iter()
+        .map(|p| p.id)
+        .collect();
+    assert_eq!(ids.len(), 3);
+    let mut with_bad = ids.clone();
+    with_bad.push("r0:missing".into());
+    let report = engine
+        .batch_update_metadata(
+            &with_bad,
+            &BatchUpdate {
+                add_tags: vec!["Batch".into(), " shared ".into()],
+                remove_tags: vec!["decor".into()],
+                creator: Some("Studio".into()),
+                license: None,
+            },
+        )
+        .unwrap();
+    assert_eq!(report.updated, 3);
+    assert_eq!(report.failed.len(), 1);
+    assert_eq!(report.failed[0].project_id, "r0:missing");
+    for id in &ids {
+        let p = engine.get_project(id).unwrap();
+        assert_eq!(p.creator.as_deref(), Some("Studio"));
+        assert!(
+            p.tags.contains(&"batch".to_string()) && p.tags.contains(&"shared".to_string()),
+            "{:?}",
+            p.tags
+        );
+        assert!(!p.tags.contains(&"decor".to_string()));
+    }
+    assert!(
+        lib.path().join("C/project.yaml").is_file(),
+        "lazily created for the sidecar-less project"
+    );
+    let a_id = ids.iter().find(|i| i.ends_with(":A")).unwrap().clone();
+    assert_eq!(
+        engine.get_project(&a_id).unwrap().license.as_deref(),
+        Some("CC-BY-4.0"),
+        "untouched field keeps its value"
+    );
+    assert_eq!(engine.facets(None).unwrap().creators[0].value, "Studio");
+
+    // project-side thumbnails: written under <project>/.cache/thumbs, served by key, never indexed
+    let c_id = ids.iter().find(|i| i.ends_with(":C")).unwrap().clone();
+    let key = engine.store_thumbnail(&c_id, TINY_PNG).unwrap();
+    let in_project = lib.path().join("C/.cache/thumbs").join(&key);
+    assert!(in_project.is_file(), "{}", in_project.display());
+    assert!(!data.path().join("thumbs").join(&key).exists());
+    assert_eq!(engine.thumbnail_path(&key).unwrap(), in_project);
+    engine.scan_root(&root.id, |_| {}).unwrap();
+    let c = engine.get_project(&c_id).unwrap();
+    assert!(c.files.iter().all(|f| !f.rel_path.starts_with(".cache")), "{:?}", c.files);
+    assert_eq!(c.thumb.as_deref(), Some(key.as_str()), "survives a rescan");
+    // back to app data: new renders go there, the old file is still found until cleared
+    engine.set_thumb_location(ThumbLocation::AppData).unwrap();
+    let a_key = engine.store_thumbnail(&a_id, TINY_PNG).unwrap();
+    assert!(data.path().join("thumbs").join(&a_key).is_file());
+    assert!(engine.thumbnail_path(&key).is_ok());
+    engine.clear_thumbnails().unwrap();
+    assert!(!in_project.exists());
+    assert!(!lib.path().join("C/.cache").exists(), "empty cache folders are removed too");
+    assert!(engine.thumbnail_path(&key).is_err());
+    assert_eq!(engine.thumb_stats().unwrap().done, 0);
+}

@@ -2,7 +2,7 @@
 // the Tauri commands, including error codes, so UI tests exercise real flows.
 import type { Backend, Unlisten } from './index';
 import { generate3mf, generateObj, generateStl } from '@/lib/mesh/generate';
-import type { AppError, Collection, FileEntry, FileKind, FolderNode, ImportItem, ImportProgress, InboxFile, LibraryChanged, LibraryRoot, ListQuery, Project, ProjectSummary, ScanProgress, SidecarStamp, SmartCollection, TagCount, ThumbJob, UpdateMetadata } from '@/lib/types';
+import type { AppError, Collection, FacetCount, FileEntry, FileKind, ThumbLocation, FolderNode, ImportItem, ImportProgress, InboxFile, LibraryChanged, LibraryRoot, ListQuery, Project, ProjectSummary, ScanProgress, SidecarStamp, SmartCollection, TagCount, ThumbJob, UpdateMetadata } from '@/lib/types';
 
 const kindOf = (name: string): FileKind => {
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
@@ -98,6 +98,12 @@ export function createMockBackend(): Backend {
   }
   let ignore = ['.git', '__MACOSX', '.DS_Store', 'Thumbs.db', '*.gcode'];
   let containers = ['files', 'stl', 'stls', 'models', '3d'];
+  let thumbLocation: ThumbLocation = 'app_data';
+  const facet = (values: Array<string | null | undefined>): FacetCount[] => {
+    const m = new Map<string, number>();
+    for (const v of values) if (v) m.set(v, (m.get(v) ?? 0) + 1);
+    return [...m.entries()].map(([value, count]) => ({ value, count })).sort((a, b) => b.count - a.count || a.value.localeCompare(b.value));
+  };
   const thumbs = new Map<string, ArrayBuffer>(); // key -> png
   const failed = new Set<string>();
   const listeners = { scan: new Set<(p: ScanProgress) => void>(), lib: new Set<(e: LibraryChanged) => void>(), proj: new Set<(e: { projectId: string }) => void>(), imp: new Set<(p: ImportProgress) => void>(), coll: new Set<() => void>(), inbox: new Set<(e: { rootId: string }) => void>() };
@@ -110,6 +116,9 @@ export function createMockBackend(): Backend {
     if (q.path_prefix) list = list.filter((p) => p.rel_path === q.path_prefix || p.rel_path.startsWith(q.path_prefix + '/'));
     if (q.favorites) list = list.filter((p) => p.favorite);
     if (q.creator) list = list.filter((p) => (p.creator ?? '').toLowerCase() === q.creator!.toLowerCase());
+    if (q.license) list = list.filter((p) => (p.license ?? '').toLowerCase() === q.license!.toLowerCase());
+    if (q.material) list = list.filter((p) => (p.material ?? '').toLowerCase() === q.material!.toLowerCase());
+    if (q.file_type) list = list.filter((p) => p.files.some((x) => x.kind === 'model' && x.name.split('.').pop()?.toLowerCase() === q.file_type!.toLowerCase()));
     for (const t of q.tags ?? []) list = list.filter((p) => p.tags.includes(t.toLowerCase()));
     if (q.text?.trim()) {
       const terms = q.text.toLowerCase().split(/\s+/).filter(Boolean);
@@ -171,6 +180,40 @@ export function createMockBackend(): Backend {
       const m = new Map<string, number>();
       for (const p of projects) if (!rootId || p.root_id === rootId) for (const t of p.tags) m.set(t, (m.get(t) ?? 0) + 1);
       return [...m.entries()].map(([tag, count]): TagCount => ({ tag, count })).sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
+    },
+    async facets(rootId) {
+      const l = projects.filter((p) => !rootId || p.root_id === rootId);
+      return {
+        creators: facet(l.map((p) => p.creator)),
+        licenses: facet(l.map((p) => p.license)),
+        materials: facet(l.map((p) => p.material)),
+        file_types: facet(l.map((p) => [...new Set(p.files.filter((x) => x.kind === 'model').map((x) => x.name.split('.').pop()!.toLowerCase()))]).flat()),
+      };
+    },
+    async batchUpdateMetadata(ids, u) {
+      await delay(100);
+      const report = { updated: 0, failed: [] as Array<{ project_id: string; message: string }> };
+      const add = (u.add_tags ?? []).map((t) => t.trim().toLowerCase()).filter(Boolean);
+      const remove = (u.remove_tags ?? []).map((t) => t.trim().toLowerCase()).filter(Boolean);
+      for (const id of ids) {
+        const p = projects.find((x) => x.id === id);
+        if (!p) { report.failed.push({ project_id: id, message: `project not found: ${id}` }); continue; }
+        if (p.offline) { report.failed.push({ project_id: id, message: 'root is offline' }); continue; }
+        if (u.creator !== undefined) p.creator = u.creator.trim() || null;
+        if (u.license !== undefined) p.license = u.license.trim() || null;
+        p.tags = [...new Set([...p.tags, ...add])].filter((t) => !remove.includes(t)).sort();
+        p.has_sidecar = true; p.sidecar = { state: 'ok' }; p.modified = new Date().toISOString();
+        report.updated++;
+        listeners.proj.forEach((cb) => cb({ projectId: id }));
+      }
+      return report;
+    },
+    async getThumbLocation() { return thumbLocation; },
+    async setThumbLocation(l) { thumbLocation = l; return l; },
+    async notify(title, body) {
+      const w = window as unknown as { __mockNotifications?: Array<{ title: string; body: string }> };
+      (w.__mockNotifications ??= []).push({ title, body });
+      return true;
     },
     async folderTree(rootId) {
       type N = { count: number; children: Map<string, N> };

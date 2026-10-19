@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import i18n from '@/i18n';
 import { getBackend } from '@/lib/backend';
 import { kickThumbQueue, useThumbs } from '@/lib/thumbs/queue';
-import type { ImportRequest, ListQuery, Project, ProjectSummary, UpdateMetadata } from '@/lib/types';
+import type { BatchUpdate, ImportRequest, ListQuery, Project, ProjectSummary, ThumbLocation, UpdateMetadata } from '@/lib/types';
 
 export const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 10_000, retry: false, refetchOnWindowFocus: false } } });
 
@@ -14,6 +14,8 @@ export const keys = {
   projects: (q: ListQuery) => ['projects', q] as const,
   project: (id: string) => ['project', id] as const,
   tags: (rootId: string | null) => ['tags', rootId] as const,
+  facets: (rootId: string | null) => ['facets', rootId] as const,
+  thumbLocation: ['thumbLocation'] as const,
   tree: (rootId: string) => ['tree', rootId] as const,
   stats: ['stats'] as const,
   ignore: ['ignore'] as const,
@@ -30,6 +32,8 @@ export const useRoots = () => useQuery({ queryKey: keys.roots, queryFn: async ()
 export const useProjects = (q: ListQuery) => useQuery({ queryKey: keys.projects(q), queryFn: async () => (await getBackend()).listProjects(q), placeholderData: (prev) => prev });
 export const useProject = (id: string | null) => useQuery({ queryKey: keys.project(id ?? ''), queryFn: async () => (await getBackend()).getProject(id!), enabled: !!id });
 export const useTagCounts = (rootId: string | null = null) => useQuery({ queryKey: keys.tags(rootId), queryFn: async () => (await getBackend()).tagCounts(rootId) });
+export const useFacets = (rootId: string | null = null) => useQuery({ queryKey: keys.facets(rootId), queryFn: async () => (await getBackend()).facets(rootId) });
+export const useThumbLocation = () => useQuery({ queryKey: keys.thumbLocation, queryFn: async () => (await getBackend()).getThumbLocation() });
 export const useFolderTree = (rootId: string) => useQuery({ queryKey: keys.tree(rootId), queryFn: async () => (await getBackend()).folderTree(rootId) });
 export const useLibraryStats = () => useQuery({ queryKey: keys.stats, queryFn: async () => (await getBackend()).libraryStats() });
 export const useIgnorePatterns = () => useQuery({ queryKey: keys.ignore, queryFn: async () => (await getBackend()).getIgnorePatterns() });
@@ -40,6 +44,7 @@ export function invalidateLibrary(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ['smartProjects'] });
   qc.invalidateQueries({ queryKey: ['inbox'] });
   qc.invalidateQueries({ queryKey: ['tags'] });
+  qc.invalidateQueries({ queryKey: ['facets'] });
   qc.invalidateQueries({ queryKey: ['tree'] });
   qc.invalidateQueries({ queryKey: keys.stats });
   qc.invalidateQueries({ queryKey: keys.roots });
@@ -67,7 +72,7 @@ export function useBackendEvents(onScan?: (rootId: string, found: number) => voi
         if (e.reason === 'thumbs_cleared') useThumbs.setState({ fresh: {} });
         void kickThumbQueue();
       });
-      const c = await b.onProjectChanged((e) => { qc.invalidateQueries({ queryKey: keys.project(e.projectId) }); qc.invalidateQueries({ queryKey: ['projects'] }); qc.invalidateQueries({ queryKey: ['tags'] }); qc.invalidateQueries({ queryKey: keys.stats }); void kickThumbQueue(); });
+      const c = await b.onProjectChanged((e) => { qc.invalidateQueries({ queryKey: keys.project(e.projectId) }); qc.invalidateQueries({ queryKey: ['projects'] }); qc.invalidateQueries({ queryKey: ['tags'] }); qc.invalidateQueries({ queryKey: ['facets'] }); qc.invalidateQueries({ queryKey: keys.stats }); void kickThumbQueue(); });
       const s = await b.onScanProgress((p) => onScan?.(p.root_id, p.projects_found));
       const d = await b.onCollectionsChanged(() => { qc.invalidateQueries({ queryKey: keys.collections }); qc.invalidateQueries({ queryKey: keys.smart }); qc.invalidateQueries({ queryKey: ['projects'] }); qc.invalidateQueries({ queryKey: ['smartProjects'] }); });
       const i = await b.onInboxChanged((e) => { qc.invalidateQueries({ queryKey: keys.inbox(e.rootId) }); });
@@ -85,6 +90,23 @@ export function useBackendEvents(onScan?: (rootId: string, found: number) => voi
     });
     return () => { dead = true; unlisten.forEach((u) => u()); if (flush) clearTimeout(flush); };
   }, [qc, onScan]);
+}
+
+/** META-6: one metadata change for a multi-selection; the backend emits per-project events. */
+export function useBatchUpdate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ ids, update }: { ids: string[]; update: BatchUpdate }) => (await getBackend()).batchUpdateMetadata(ids, update),
+    onSettled: () => { qc.invalidateQueries({ queryKey: ['projects'] }); qc.invalidateQueries({ queryKey: ['project'] }); qc.invalidateQueries({ queryKey: ['tags'] }); qc.invalidateQueries({ queryKey: ['facets'] }); qc.invalidateQueries({ queryKey: ['smartProjects'] }); },
+  });
+}
+
+export function useSetThumbLocation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (location: ThumbLocation) => (await getBackend()).setThumbLocation(location),
+    onSuccess: (l) => qc.setQueryData(keys.thumbLocation, l),
+  });
 }
 
 /** Favorite toggle, optimistic in every list. */

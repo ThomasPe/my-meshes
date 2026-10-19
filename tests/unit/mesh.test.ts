@@ -73,3 +73,29 @@ describe('parseModel', () => {
     expect(Math.hypot(n[0]!, n[1]!, n[2]!)).toBeCloseTo(1);
   });
 });
+
+describe('STL progressive (VIEW-1)', () => {
+  it('streams binary files in slices that add up to the whole mesh', async () => {
+    const { parseStlProgressive } = await import('@/lib/mesh/stl');
+    const buf = generateStl(2500, 3);
+    const whole = parseModel(buf.slice(0), 'stl');
+    const chunks: Array<{ offset: number; triangles: number; positions: Float32Array }> = [];
+    let total = 0;
+    const n = parseStlProgressive(buf, (c, t) => { chunks.push(c); total = t; }, 1000);
+    expect(n).toBe(whole.triangles);
+    expect(total).toBe(whole.triangles);
+    expect(chunks.length).toBe(Math.ceil(whole.triangles / 1000));
+    expect(chunks.map((c) => c.offset)).toEqual(chunks.map((_, i) => i * 1000));
+    const joined = new Float32Array(whole.triangles * 9);
+    for (const c of chunks) joined.set(c.positions, c.offset * 9);
+    expect(joined).toEqual(whole.positions);
+  });
+  it('delivers ASCII files as one slice', async () => {
+    const { parseStlProgressive } = await import('@/lib/mesh/stl');
+    const ascii = 'solid a\nfacet normal 0 0 1\nouter loop\nvertex 0 0 0\nvertex 1 0 0\nvertex 0 1 0\nendloop\nendfacet\nendsolid a\n';
+    const chunks: number[] = [];
+    const n = parseStlProgressive(new TextEncoder().encode(ascii).buffer as ArrayBuffer, (c) => chunks.push(c.triangles));
+    expect(n).toBe(1);
+    expect(chunks).toEqual([1]);
+  });
+});

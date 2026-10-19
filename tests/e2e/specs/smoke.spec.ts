@@ -182,3 +182,49 @@ describe('Meshkeep D3 (import, inbox, collections)', () => {
     fs.rmSync(path.join(fixture(), '_Inbox'), { recursive: true, force: true });
   });
 });
+
+// ---- D5: facets, batch edits, persisted settings, project-side previews -----------------
+describe('Meshkeep D5 (facets, batch edit, settings)', () => {
+  const fixture = () => process.env.MESHKEEP_E2E_FIXTURE!;
+  const dataDir = async () => (await browser.tauri.execute(({ core }) => core.invoke('app_info')) as { dataDir: string }).dataDir;
+
+  it('filters by file type from the inspector facets', async () => {
+    await $('[data-testid="nav-library"]').click();
+    await $('[data-testid="filter-all"]').click();
+    await browser.keys('Escape');
+    const obj = await $('[data-testid="facet-filetype"]=OBJ 1');
+    await obj.waitForDisplayed();
+    await obj.click();
+    await browser.waitUntil(async () => (await $('[data-testid="result-count"]').getText()) === '1', { timeout: 10000 });
+    expect(await $('[data-testid="project-card"]').getText()).toContain('Arm v4');
+    await $('button[aria-label="clear file type"]').click();
+    await browser.waitUntil(async () => Number(await $('[data-testid="result-count"]').getText()) > 1, { timeout: 10000 });
+  });
+
+  it('batch edit writes project.yaml for every selected project', async () => {
+    const ids = (await browser.tauri.execute(({ core }) => core.invoke('list_projects', { query: { text: 'bin' } })) as Array<{ id: string }>).map((p) => p.id);
+    expect(ids.length).toBeGreaterThanOrEqual(1);
+    const report = await browser.tauri.execute(({ core }, ids) => core.invoke('batch_update_metadata', { projectIds: ids, update: { add_tags: ['Batch-E2E'] } }), ids) as { updated: number; failed: unknown[] };
+    expect(report.updated).toBe(ids.length);
+    expect(report.failed).toEqual([]);
+    const yaml = fs.readFileSync(path.join(fixture(), 'Gridfinity', 'Bins', 'project.yaml'), 'utf8');
+    expect(yaml).toContain('batch-e2e');
+    await $('[data-testid="nav-library"]').click();
+    await browser.waitUntil(async () => (await $$('[data-testid="project-card"] button=batch-e2e')).length >= ids.length, { timeout: 10000 });
+  });
+
+  it('preview location persists in settings.json and renders into <project>/.cache/thumbs', async () => {
+    await $('[data-testid="nav-settings"]').click();
+    await $('[data-testid="thumb-location-project"]').click();
+    const file = path.join(await dataDir(), 'settings.json');
+    await browser.waitUntil(() => fs.existsSync(file) && JSON.parse(fs.readFileSync(file, 'utf8')).thumb_location === 'project', { timeout: 10000 });
+    await $('[data-testid="clear-thumbs"]').click();
+    const cache = path.join(fixture(), 'Gridfinity', 'Bins', '.cache', 'thumbs');
+    await browser.waitUntil(() => fs.existsSync(cache) && fs.readdirSync(cache).some((f) => f.endsWith('.png')), { timeout: 60000, timeoutMsg: 'no project-side thumbnail rendered' });
+    // back to the default: the project-side files are removed by the next cache clear
+    await $('[data-testid="thumb-location-app"]').click();
+    await browser.waitUntil(() => JSON.parse(fs.readFileSync(file, 'utf8')).thumb_location === 'app_data', { timeout: 10000 });
+    await $('[data-testid="clear-thumbs"]').click();
+    await browser.waitUntil(() => !fs.existsSync(cache), { timeout: 10000 });
+  });
+});

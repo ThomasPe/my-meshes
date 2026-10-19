@@ -1,4 +1,4 @@
-import type { AppInfo, Collection, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata } from '@/lib/types';
+import type { AppInfo, BatchReport, BatchUpdate, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata } from '@/lib/types';
 
 export type Unlisten = () => void;
 
@@ -14,6 +14,12 @@ export interface Backend {
   listProjects(query: ListQuery): Promise<ProjectSummary[]>;
   getProject(id: string): Promise<Project>;
   tagCounts(rootId?: string | null): Promise<TagCount[]>;
+  facets(rootId?: string | null): Promise<Facets>;
+  batchUpdateMetadata(projectIds: string[], update: BatchUpdate): Promise<BatchReport>;
+  getThumbLocation(): Promise<ThumbLocation>;
+  setThumbLocation(location: ThumbLocation): Promise<ThumbLocation>;
+  /** OS notification; asks for permission on first use. Resolves false when not shown. */
+  notify(title: string, body: string): Promise<boolean>;
   folderTree(rootId: string): Promise<FolderNode[]>;
   libraryStats(rootId?: string | null): Promise<LibraryStats>;
   readProjectFile(projectId: string, relPath: string): Promise<ArrayBuffer>;

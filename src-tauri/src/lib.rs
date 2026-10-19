@@ -15,6 +15,7 @@ pub fn run() {
     let builder = tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_notification::init())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(if config.test_mode {
@@ -82,6 +83,10 @@ pub fn run() {
             commands::set_ignore_patterns,
             commands::get_container_dirs,
             commands::set_container_dirs,
+            commands::get_thumb_location,
+            commands::set_thumb_location,
+            commands::facets,
+            commands::batch_update_metadata,
             commands::set_favorite,
             commands::rename_project,
             commands::delete_project,

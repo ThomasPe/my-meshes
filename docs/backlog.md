@@ -39,8 +39,13 @@ mode with intervals, safe delete to trash, rename): the author's real library ca
 on it. **D3 Store-ready** (done 2026-10-19: import with staging and inbox, collections and
 smart collections, onboarding, MSIX pipeline with the updater compiled out of Store
 builds, self-updater for private builds, release workflow, Store assets and listing
-texts). What remains before the first submission is outside the code: Partner Center
-account, name reservation, screenshots (`docs/store/README.md`).
+texts). **D4 polish** (done 2026-10-19: image viewer, per-root sync status, 7z import,
+creator filter, multi-selection actions). **D5 close-out** (done 2026-10-19: attribute
+filters for license, material and file type, batch tag/creator edits, progressive loading in
+the viewer, previews optionally inside the project folder, OS notifications, and the
+scanner settings finally persisted in `settings.json`). What remains before the first
+submission is outside the code: Partner Center identity values, screenshots
+(`docs/store/README.md`).
 
 ### Epic 1: Scaffold & foundation (Tauri 2 + Rust)
 - [x] **Repository layout.** Cargo workspace with `crates/engine` (shell-agnostic
@@ -94,14 +99,15 @@ account, name reservation, screenshots (`docs/store/README.md`).
       collision check before touching disk, favorites and thumbnail follow the new id.
 
 ### Epic 3: Preview & thumbnails
-- [~] **3D viewport** (VIEW-1): STL, OBJ and 3MF parsed in a worker, render on demand;
-      progressive loading of very large files pending.
+- [x] **3D viewport** (VIEW-1): STL, OBJ and 3MF parsed in a worker, render on demand;
+      binary STL streams in 100k-triangle slices with a progress bar, so a million-triangle
+      file appears while it loads.
 - [x] **3MF support** (VIEW-2): geometry incl. components and build transforms, embedded
       preview extracted by the engine, slicer detection (PrusaSlicer, Bambu/Orca) as a badge.
-- [~] **Thumbnail queue** (VIEW-3): engine-driven queue, worker rendering with main-thread
+- [x] **Thumbnail queue** (VIEW-3): engine-driven queue, worker rendering with main-thread
       fallback, PNG cache in app data keyed per project + source file, invalidated by
-      size/mtime; status bar progress; "clear cache" in settings. Per-project `.cache`
-      location (user setting) pending.
+      size/mtime; status bar progress; "clear cache" in settings. Optional location
+      `<project>/.cache/thumbs` (setting), never indexed, cleared together with the app cache.
 - [x] **Image viewer & open-with-OS** (VIEW-5): images tab with tiles and a lightbox
       (keyboard navigation, open with the OS app).
 - [~] **GPU fallback** (VIEW-6): placeholders plus a status-bar notice when no WebGL is
@@ -112,8 +118,9 @@ account, name reservation, screenshots (`docs/store/README.md`).
       Favorites, Inbox per root, collections and smart collections.
 - [x] **Grid view** (NAV-2) virtualized with zoom slider.
 - [x] **List view** (NAV-3) with sortable columns.
-- [~] **Search & filters** (NAV-4 done via FTS5; NAV-5 tags, folders and creator done;
-      license and material filters pending).
+- [x] **Search & filters** (NAV-4 via FTS5; NAV-5 tags, folders, creator, license,
+      material and model file type as inspector facets with counts; all of them can be
+      saved into a smart collection).
 - [x] **Detail view** (NAV-6): inspector and project page.
 - [x] **Collections & smart collections** (NAV-7, NAV-8) persisted in `collections.json`:
       create/rename/delete, add via context menu, remove, drag-to-reorder in the collection
@@ -132,16 +139,17 @@ account, name reservation, screenshots (`docs/store/README.md`).
 - [ ] **Drag-out to other applications** (IMP-6).
 
 ### Epic 6: Settings
-- [~] **Settings module** (APP-4): roots, sync mode with poll interval, ignore patterns,
-      bundle folders, preview cache, updates, theme, language done; thumbnail location
-      and notifications pending.
+- [x] **Settings module** (APP-4): roots, sync mode with poll interval, ignore patterns,
+      bundle folders, preview cache and location, OS notifications for background
+      scans/imports, updates, theme, language. Engine settings persist in `settings.json`.
 
 ## Phase 2: Quality of life
 
 ### Epic 7: Metadata & hygiene
 - [ ] **Duplicate detection** (LIB-8).
-- [~] **Batch editing** (META-6): multi-selection can be favorited, added to a collection
-      and deleted together; batch tag/creator edits pending.
+- [x] **Batch editing** (META-6): multi-selection can be favorited, added to a collection,
+      deleted, tagged/untagged and given a creator in one engine call with a per-project
+      failure report.
 - [ ] **External enrichment** (META-7).
 - [ ] **Organizational rules & maintenance tools** (IMP-7, IMP-8).
 

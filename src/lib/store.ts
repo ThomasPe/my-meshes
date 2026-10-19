@@ -17,6 +17,9 @@ interface UiState {
   tags: string[];
   text: string;
   creator: string | null;
+  license: string | null;
+  material: string | null;
+  fileType: string | null;
   sort: SortKey;
   view: ViewMode;
   tile: number;
@@ -26,6 +29,9 @@ interface UiState {
   removeTag: (t: string) => void;
   setText: (t: string) => void;
   setCreator: (c: string | null) => void;
+  setLicense: (c: string | null) => void;
+  setMaterial: (c: string | null) => void;
+  setFileType: (c: string | null) => void;
   setSort: (s: SortKey) => void;
   setView: (v: ViewMode) => void;
   setTile: (n: number) => void;
@@ -41,6 +47,9 @@ export const useUi = create<UiState>((set) => ({
   tags: [],
   text: '',
   creator: null,
+  license: null,
+  material: null,
+  fileType: null,
   sort: persisted.sort ?? 'modified',
   view: persisted.view ?? 'grid',
   tile: persisted.tile ?? 230,
@@ -50,12 +59,23 @@ export const useUi = create<UiState>((set) => ({
   removeTag: (t) => set((s) => ({ tags: s.tags.filter((x) => x !== t) })),
   setText: (text) => set({ text }),
   setCreator: (creator) => set({ creator, selected: [] }),
+  setLicense: (license) => set({ license, selected: [] }),
+  setMaterial: (material) => set({ material, selected: [] }),
+  setFileType: (fileType) => set({ fileType, selected: [] }),
   setSort: (sort) => { persist({ sort }); set({ sort }); },
   setView: (view) => { persist({ view }); set({ view }); },
   setTile: (tile) => { persist({ tile }); set({ tile }); },
   select: (selected) => set({ selected }),
-  clearFilters: () => set({ tags: [], text: '', creator: null }),
+  clearFilters: () => set({ tags: [], text: '', creator: null, license: null, material: null, fileType: null }),
 }));
+
+/** OS notifications for background work (APP-4); a per-machine preference, so it lives in localStorage. */
+export function loadNotifications(): boolean {
+  try { return localStorage.getItem('mm.notify') !== '0'; } catch { return true; }
+}
+export function saveNotifications(on: boolean) {
+  try { localStorage.setItem('mm.notify', on ? '1' : '0'); } catch { /* ignore */ }
+}
 
 export type Theme = 'light' | 'dark' | 'system';
 export function applyTheme(theme: Theme) {

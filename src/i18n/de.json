@@ -78,7 +78,13 @@
     "emptyFavorites": "Markiere ein Projekt mit einem Stern, dann erscheint es hier.",
     "slicerProject": "Slicer",
     "sortCollection": "Reihenfolge der Sammlung",
-    "filterByCreator": "Alles von {{creator}} zeigen"
+    "filterByCreator": "Alles von {{creator}} zeigen",
+    "facetLicenses": "Lizenzen",
+    "facetMaterials": "Materialien",
+    "facetFileTypes": "Dateitypen",
+    "filterBy": "Nach {{value}} filtern",
+    "more": "+{{count}} weitere",
+    "less": "weniger"
   },
   "inspector": {
     "open": "Öffnen",
@@ -107,7 +113,17 @@
     "unfavoriteAll": "Favoriten entfernen",
     "deleteSelected": "Auswahl löschen…",
     "addAllTo": "Alle zu Sammlung hinzufügen",
-    "images": "Bilder"
+    "images": "Bilder",
+    "batchTags": "Tags der Auswahl",
+    "batchAddTag": "Tag für alle, Enter",
+    "batchRemoveTag": "{{tag}} überall entfernen",
+    "batchCreator": "Designer für alle",
+    "batchCreatorPlaceholder": "Designer für alle setzen…",
+    "batchApply": "Übernehmen",
+    "batchDone_one": "{{count}} Projekt aktualisiert",
+    "batchDone_other": "{{count}} Projekte aktualisiert",
+    "batchFailed_one": "{{count}} Projekt konnte nicht geschrieben werden",
+    "batchFailed_other": "{{count}} Projekte konnten nicht geschrieben werden"
   },
   "project": {
     "back": "Bibliothek",
@@ -150,7 +166,9 @@
     "images": "Bilder",
     "noImages": "Keine Bilder in diesem Projekt.",
     "openImage": "Im Betrachter öffnen",
-    "imageOf": "{{index}} von {{total}}"
+    "imageOf": "{{index}} von {{total}}",
+    "loadingProgress": "{{name}} · {{percent}} %",
+    "parsing": "{{name}} · wird gelesen…"
   },
   "settings": {
     "title": "Einstellungen",
@@ -231,7 +249,16 @@
       "poll": "Poll",
       "import": "Import",
       "startup": "Start"
-    }
+    },
+    "thumbLocation": "Vorschauen speichern in",
+    "thumbLocationApp": "App-Daten",
+    "thumbLocationProject": "Projektordner",
+    "thumbLocationHintApp": "In die Bibliothek wird nichts geschrieben. Bei einer Neuinstallation werden die Vorschauen neu gerendert.",
+    "thumbLocationHintProject": "Liegt unter <Projekt>\\\\.cache\\\\thumbs, damit Vorschauen mit dem Ordner wandern (auch in Zips und Backups). Wird nie indexiert oder als Vorschauquelle genutzt.",
+    "thumbLocationSaved": "Speicherort für Vorschauen gespeichert",
+    "notifications": "Benachrichtigungen",
+    "notificationsHint": "Windows-Benachrichtigungen, wenn ein Hintergrund-Scan oder ein Import fertig ist, während Meshkeep nicht im Vordergrund ist.",
+    "notificationsToggle": "Benachrichtigungen anzeigen"
   },
   "status": {
     "watching": "Beobachte {{path}}",
@@ -365,5 +392,13 @@
     "smartHint": "Smarte Sammlung: eine gespeicherte Suche",
     "addedMany_one": "{{count}} Projekt zu „{{name}}“ hinzugefügt",
     "addedMany_other": "{{count}} Projekte zu „{{name}}“ hinzugefügt"
+  },
+  "notify": {
+    "scanTitle": "Bibliothek aktualisiert",
+    "scanBody": "{{projects}} Projekte in {{root}} gefunden",
+    "importTitle": "Import abgeschlossen",
+    "importBody_one": "{{count}} neues Projekt",
+    "importBody_other": "{{count}} neue Projekte",
+    "importBodyInbox": "Dateien wurden in den Posteingang gelegt"
   }
 }

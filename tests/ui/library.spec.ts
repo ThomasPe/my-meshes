@@ -327,3 +327,63 @@ test('settings shows the last scan summary and the sync problem per root', async
   await expect(page.getByTestId('root-scan-summary').first()).toContainText('1 note');
   await expect(page.getByTestId('root-error')).toContainText('not reachable');
 });
+
+test('attribute filters: license, material and file type chips from the inspector', async ({ page }) => {
+  await page.getByTestId('facet-license').filter({ hasText: 'CC-BY-NC-SA-4.0' }).click();
+  await expect(page.getByTestId('license-chip')).toContainText('CC-BY-NC-SA-4.0');
+  await expect(page.getByTestId('result-count')).toHaveText('4');
+  await page.getByTestId('facet-material').filter({ hasText: 'PETG' }).click();
+  await expect(page.getByTestId('material-chip')).toContainText('PETG');
+  await expect(page.getByTestId('result-count')).toHaveText('1');
+  await expect(page.getByTestId('project-card')).toContainText(['Gridfinity Rugged Box']);
+  // a second click on the active chip clears that facet
+  await page.getByTestId('facet-material').filter({ hasText: 'PETG' }).click();
+  await expect(page.getByTestId('material-chip')).toHaveCount(0);
+  await expect(page.getByTestId('result-count')).toHaveText('4');
+  await page.getByRole('button', { name: 'clear license' }).click();
+  await page.getByTestId('facet-filetype').filter({ hasText: 'OBJ' }).click();
+  await expect(page.getByTestId('filetype-chip')).toContainText('OBJ');
+  await expect(page.getByTestId('result-count')).toHaveText('1');
+  await expect(page.getByTestId('project-card')).toContainText(['Phone Stand']);
+  // the filtered state can be saved as a smart collection
+  await expect(page.getByTestId('save-smart')).toBeVisible();
+  await page.getByRole('button', { name: 'clear file type' }).click();
+  expect(Number(await page.getByTestId('result-count').textContent())).toBeGreaterThan(60);
+});
+
+test('batch editing: tags and creator for a multi-selection', async ({ page }) => {
+  const a = page.getByTestId('project-card').filter({ hasText: 'Planetary Gearbox' });
+  const b = page.getByTestId('project-card').filter({ hasText: 'Self-watering Planter' });
+  await a.click();
+  await b.click({ modifiers: ['Control'] });
+  await expect(page.getByTestId('batch-editor')).toBeVisible();
+  await expect(page.getByTestId('batch-tag')).toHaveCount(4); // mechanical, functional, decor, garden
+  await page.getByTestId('batch-add-tag').fill('Workshop');
+  await page.getByTestId('batch-add-tag').press('Enter');
+  await expect(page.getByText('2 projects updated')).toBeVisible();
+  await expect(a.getByRole('button', { name: 'workshop' })).toBeVisible();
+  await expect(b.getByRole('button', { name: 'workshop' })).toBeVisible();
+  await page.getByRole('button', { name: 'remove workshop from all' }).click();
+  await expect(a.getByRole('button', { name: 'workshop' })).toHaveCount(0);
+  await page.getByTestId('batch-creator').fill('Studio Nord');
+  await page.getByTestId('batch-creator-apply').click();
+  await expect(a.getByTestId('card-creator')).toContainText('Studio Nord');
+  await expect(b.getByTestId('card-creator')).toContainText('Studio Nord');
+});
+
+test('settings: preview location and notification toggle; import notifies when unfocused', async ({ page }) => {
+  await page.getByTestId('nav-settings').click();
+  await expect(page.getByTestId('thumb-location')).toBeVisible();
+  await page.getByTestId('thumb-location-project').click();
+  await expect(page.getByText('Preview location saved')).toBeVisible();
+  await expect(page.getByTestId('thumb-location-project')).toHaveAttribute('data-state', 'on');
+  await expect(page.getByTestId('notifications-toggle')).toHaveAttribute('data-state', 'checked');
+  await page.getByTestId('nav-library').click();
+  // pretend the window is in the background: the import then ends in an OS notification
+  await page.evaluate(() => { Object.defineProperty(document, 'hasFocus', { value: () => false }); });
+  await page.getByTestId('import-open').click();
+  await page.getByTestId('import-confirm').click();
+  await expect(page.getByTestId('import-dialog')).toBeHidden();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __mockNotifications?: unknown[] }).__mockNotifications?.length ?? 0)).toBe(1);
+  expect(await page.evaluate(() => (window as unknown as { __mockNotifications: Array<{ title: string }> }).__mockNotifications[0]!.title)).toBe('Import finished');
+});

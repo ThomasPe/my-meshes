@@ -58,6 +58,12 @@ pub fn cache_dir(data_dir: &Path) -> PathBuf {
     data_dir.join("thumbs")
 }
 
+/// Cache folder inside a project when the user chose `ThumbLocation::Project`. `.cache` is
+/// always skipped by the scanner, so these files never show up as project images.
+pub fn project_cache_dir(project_dir: &Path) -> PathBuf {
+    project_dir.join(".cache").join("thumbs")
+}
+
 pub fn path_for(data_dir: &Path, key: &str) -> Result<PathBuf> {
     if !is_valid_key(key) {
         return Err(EngineError::InvalidName(format!("thumbnail key {key}")));
@@ -65,14 +71,21 @@ pub fn path_for(data_dir: &Path, key: &str) -> Result<PathBuf> {
     Ok(cache_dir(data_dir).join(key))
 }
 
-/// Writes PNG bytes atomically into the cache.
+/// Writes PNG bytes atomically into the app data cache.
 pub fn write(data_dir: &Path, key: &str, png: &[u8]) -> Result<PathBuf> {
+    write_in(&cache_dir(data_dir), key, png)
+}
+
+/// Writes PNG bytes atomically into `dir` (app cache or a project's `.cache/thumbs`).
+pub fn write_in(dir: &Path, key: &str, png: &[u8]) -> Result<PathBuf> {
     if png.len() < 8 || &png[..8] != b"\x89PNG\r\n\x1a\n" {
         return Err(EngineError::InvalidName("thumbnail is not a PNG".into()));
     }
-    let dir = cache_dir(data_dir);
-    std::fs::create_dir_all(&dir).map_err(io_err(&dir))?;
-    let path = path_for(data_dir, key)?;
+    if !is_valid_key(key) {
+        return Err(EngineError::InvalidName(format!("thumbnail key {key}")));
+    }
+    std::fs::create_dir_all(dir).map_err(io_err(dir))?;
+    let path = dir.join(key);
     let tmp = dir.join(format!(".{key}.{}.tmp", std::process::id()));
     std::fs::write(&tmp, png).map_err(io_err(&tmp))?;
     if let Err(e) = std::fs::rename(&tmp, &path) {

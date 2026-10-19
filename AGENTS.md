@@ -105,7 +105,7 @@ Browser mode (`npm run dev`, Playwright) uses the mock backend, which synthesize
 | Area | Path |
 |---|---|
 | Spec, backlog, ADRs, mockups, click dummy | `docs/` |
-| Engine | `crates/engine/src/{scan,sidecar,index,watch,roots,collections,import,threemf,thumbs,engine}.rs` |
+| Engine | `crates/engine/src/{scan,sidecar,index,watch,roots,collections,settings,import,threemf,thumbs,engine}.rs` |
 | Import staging, inbox, collections UI | `src/features/import/`, `src/features/library/{InboxView,CollectionDialogs}.tsx` |
 | MSIX packaging, Store docs | `msix/`, `docs/store/` |
 | Shell commands and events | `src-tauri/src/{commands,state}.rs` |

@@ -14,6 +14,9 @@ use std::path::{Component, Path};
 use time::OffsetDateTime;
 use walkdir::WalkDir;
 
+/// Folders the app itself may create inside a project; never indexed, never a thumbnail source.
+pub const APP_DIRS: &[&str] = &[".cache", ".meshkeep"];
+
 pub const DEFAULT_IGNORE: &[&str] = &[
     ".git",
     "__MACOSX",
@@ -199,7 +202,10 @@ pub fn read_project(root_id: &str, root: &Path, project_dir: &Path, ignore: &Ign
             continue;
         }
         let rel_root = path.strip_prefix(root).unwrap_or(path);
-        if ignore.is_ignored(rel_root) {
+        // The app's own folders inside a project are skipped whatever the ignore patterns say,
+        // otherwise a cached preview would become the project's first image.
+        let app_owned = entry.depth() == 1 && APP_DIRS.iter().any(|d| entry.file_name() == *d);
+        if app_owned || ignore.is_ignored(rel_root) {
             out.ignored += 1;
             if entry.file_type().is_dir() {
                 walker.skip_current_dir();

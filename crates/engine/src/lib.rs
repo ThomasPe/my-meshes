@@ -15,11 +15,12 @@ pub mod index;
 pub mod model;
 pub mod roots;
 pub mod scan;
+pub mod settings;
 pub mod sidecar;
 pub mod threemf;
 pub mod thumbs;
 pub mod watch;
 
 mod engine;
-pub use engine::{Deleter, Engine, ScanProgress, UpdateMetadata};
+pub use engine::{BatchReport, BatchUpdate, Deleter, Engine, ScanProgress, UpdateMetadata};
 pub use error::{EngineError, Result};

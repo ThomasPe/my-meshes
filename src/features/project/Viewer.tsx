@@ -9,13 +9,14 @@ import { getBackend } from '@/lib/backend';
 import { isAppError, type FileEntry } from '@/lib/types';
 import { PREVIEWABLE } from '@/lib/mesh';
 import MeshWorker from '@/workers/mesh-worker?worker';
+import type { MeshWorkerMessage } from '@/workers/mesh-worker';
 
 /** Three.js viewport for one model file. Loads bytes through the backend, parses in a worker, renders on demand. */
 export function Viewer({ projectId, files, offline }: { projectId: string; files: FileEntry[]; offline: boolean }) {
   const { t } = useTranslation();
   const models = files.filter((f) => f.kind === 'model');
   const [current, setCurrent] = useState(models[0]?.rel_path ?? '');
-  const [status, setStatus] = useState<{ kind: 'idle' | 'loading' | 'ready' | 'error' | 'unsupported'; text?: string; triangles?: number }>({ kind: 'idle' });
+  const [status, setStatus] = useState<{ kind: 'idle' | 'loading' | 'ready' | 'error' | 'unsupported'; text?: string; triangles?: number; percent?: number }>({ kind: 'idle' });
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<{ renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; controls: OrbitControls; mesh: THREE.Mesh | null; frame: () => void; dispose: () => void } | null>(null);
 
@@ -69,33 +70,72 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
     if (!PREVIEWABLE.has(ext)) { setStatus({ kind: 'unsupported', text: t('project.unsupported', { ext: ext.toUpperCase() }) }); return; }
     if (offline) { setStatus({ kind: 'error', text: t('errors.root_offline') }); return; }
     let cancelled = false;
+    let worker: Worker | null = null;
     setStatus({ kind: 'loading', text: t('project.loading', { name: file.name }) });
-    (async () => {
-      const b = await getBackend();
-      const buf = await b.readProjectFile(projectId, file.rel_path);
-      const parsed = await new Promise<{ positions: Float32Array; normals: Float32Array; triangles: number }>((res, rej) => {
-        const w = new MeshWorker();
-        w.onmessage = (e) => { w.terminate(); e.data.ok ? res(e.data) : rej(new Error(e.data.error)); };
-        w.onerror = (e) => { w.terminate(); rej(e.error ?? new Error(e.message)); };
-        w.postMessage({ buffer: buf, ext }, [buf]);
-      });
-      if (cancelled) return;
-      if (s.mesh) { s.scene.remove(s.mesh); s.mesh.geometry.dispose(); }
-      const geom = new THREE.BufferGeometry();
-      geom.setAttribute('position', new THREE.BufferAttribute(parsed.positions, 3));
-      geom.setAttribute('normal', new THREE.BufferAttribute(parsed.normals, 3));
+    const frameTo = (geom: THREE.BufferGeometry) => {
       geom.computeBoundingSphere();
-      const mesh = new THREE.Mesh(geom, new THREE.MeshStandardMaterial({ color: 0x0f8b8d, roughness: 0.55, metalness: 0.05, side: THREE.DoubleSide }));
-      s.scene.add(mesh);
-      s.mesh = mesh;
       const bs = geom.boundingSphere!;
+      if (!(bs.radius > 0)) return;
       s.controls.target.copy(bs.center);
       s.camera.position.copy(bs.center).add(new THREE.Vector3(bs.radius * 1.6, -bs.radius * 1.9, bs.radius * 1.3));
       s.camera.near = Math.max(bs.radius / 100, 0.01); s.camera.far = bs.radius * 50; s.camera.updateProjectionMatrix();
-      s.frame();
-      setStatus({ kind: 'ready', triangles: parsed.triangles });
+    };
+    (async () => {
+      const b = await getBackend();
+      const buf = await b.readProjectFile(projectId, file.rel_path);
+      if (cancelled) return;
+      setStatus({ kind: 'loading', text: t('project.parsing', { name: file.name }) });
+      // VIEW-1: the worker streams slices; geometry is pre-sized from 'begin' and the draw
+      // range grows per slice, so big files appear progressively instead of after a freeze.
+      await new Promise<void>((res, rej) => {
+        const w = new MeshWorker();
+        worker = w;
+        let geom: THREE.BufferGeometry | null = null;
+        let pos: THREE.BufferAttribute | null = null;
+        let nrm: THREE.BufferAttribute | null = null;
+        let total = 0, done = 0, framed = false;
+        w.onmessage = (e: MessageEvent<MeshWorkerMessage>) => {
+          const m = e.data;
+          if (cancelled) { w.terminate(); return; }
+          if (m.type === 'begin') {
+            total = m.triangles;
+            if (s.mesh) { s.scene.remove(s.mesh); s.mesh.geometry.dispose(); s.mesh = null; }
+            geom = new THREE.BufferGeometry();
+            pos = new THREE.BufferAttribute(new Float32Array(total * 9), 3);
+            nrm = new THREE.BufferAttribute(new Float32Array(total * 9), 3);
+            pos.setUsage(THREE.DynamicDrawUsage); nrm.setUsage(THREE.DynamicDrawUsage);
+            geom.setAttribute('position', pos); geom.setAttribute('normal', nrm);
+            geom.setDrawRange(0, 0);
+            const mesh = new THREE.Mesh(geom, new THREE.MeshStandardMaterial({ color: 0x0f8b8d, roughness: 0.55, metalness: 0.05, side: THREE.DoubleSide }));
+            s.scene.add(mesh);
+            s.mesh = mesh;
+          } else if (m.type === 'chunk' && geom && pos && nrm) {
+            (pos.array as Float32Array).set(m.positions, m.offset * 9);
+            (nrm.array as Float32Array).set(m.normals, m.offset * 9);
+            pos.addUpdateRange(m.offset * 9, m.triangles * 9); nrm.addUpdateRange(m.offset * 9, m.triangles * 9);
+            pos.needsUpdate = true; nrm.needsUpdate = true;
+            done = m.offset + m.triangles;
+            geom.setDrawRange(0, done * 3);
+            if (!framed) { frameTo(geom); framed = true; }
+            s.frame();
+            if (total > 0) setStatus({ kind: 'loading', text: t('project.loadingProgress', { name: file.name, percent: Math.round((done / total) * 100) }), percent: done / total });
+          } else if (m.type === 'done') {
+            w.terminate(); worker = null;
+            if (geom) frameTo(geom);
+            s.frame();
+            res();
+          } else if (m.type === 'error') {
+            w.terminate(); worker = null;
+            rej(new Error(m.error));
+          }
+        };
+        w.onerror = (e) => { w.terminate(); worker = null; rej(e.error ?? new Error(e.message)); };
+        w.postMessage({ buffer: buf, ext }, [buf]);
+      });
+      if (cancelled) return;
+      setStatus({ kind: 'ready', triangles: s.mesh ? (s.mesh.geometry.drawRange.count / 3) : 0 });
     })().catch((e) => { if (!cancelled) setStatus({ kind: 'error', text: isAppError(e) ? e.message : e instanceof Error ? e.message : String(e) }); });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; worker?.terminate(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current, projectId, offline]);
 
@@ -105,7 +145,12 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
     <div className="relative h-[440px] overflow-hidden rounded-2xl bg-background shadow-[inset_0_0_0_1px_var(--border)]" data-testid="viewer">
       <canvas ref={canvasRef} className="block size-full touch-none" />
       {models.length === 0 && <div className="absolute inset-0 grid place-items-center text-sm font-semibold text-muted-foreground">{t('project.noModels')}</div>}
-      {status.kind !== 'ready' && status.kind !== 'idle' && models.length > 0 && <div className="absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm font-semibold text-muted-foreground" data-testid="viewer-status">{status.text}</div>}
+      {status.kind !== 'ready' && status.kind !== 'idle' && models.length > 0 && (
+        <div className={status.kind === 'loading' && status.percent !== undefined ? 'pointer-events-none absolute inset-x-6 top-3 grid gap-1 text-xs font-semibold text-muted-foreground' : 'absolute inset-x-0 top-1/2 -translate-y-1/2 text-center text-sm font-semibold text-muted-foreground'} data-testid="viewer-status" data-progress={status.percent !== undefined ? Math.round(status.percent * 100) : undefined}>
+          <span className="truncate">{status.text}</span>
+          {status.percent !== undefined && <span className="h-1 w-full overflow-hidden rounded-full bg-secondary"><span className="block h-full bg-primary transition-[width]" style={{ width: `${Math.round(status.percent * 100)}%` }} /></span>}
+        </div>
+      )}
       <div className="absolute left-3 right-3 bottom-3 flex items-center gap-3 text-xs font-semibold text-muted-foreground">
         {models.length > 1 && (
           <Select value={current} onValueChange={setCurrent}>

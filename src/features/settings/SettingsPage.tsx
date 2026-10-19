@@ -1,4 +1,4 @@
-import { Download, FolderOpen, Images, Monitor, Moon, Plus, RefreshCw, Sun, Trash2, X } from 'lucide-react';
+import { Bell, Download, FolderOpen, HardDrive, Images, Monitor, Moon, Plus, RefreshCw, Sun, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -8,17 +8,18 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Switch } from '@/components/ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useLibraryActions } from '@/features/library/useLibraryActions';
 import { LANGUAGES, setLanguage, type Language } from '@/i18n';
 import { getBackend } from '@/lib/backend';
 import { reportError } from '@/lib/errors';
 import { formatDate, formatDuration } from '@/lib/format';
-import { invalidateLibrary, keys, useAppInfo, useContainerDirs, useIgnorePatterns, useRoots, useThumbStats } from '@/lib/queries';
+import { invalidateLibrary, keys, useAppInfo, useContainerDirs, useIgnorePatterns, useRoots, useSetThumbLocation, useThumbLocation, useThumbStats } from '@/lib/queries';
 import { kickThumbQueue, useThumbs } from '@/lib/thumbs/queue';
 import { dropThumbnailCache } from '@/lib/thumbs/useThumbnail';
-import { applyTheme, loadTheme, type Theme } from '@/lib/store';
-import type { LibraryRoot, SyncMode, UpdateInfo } from '@/lib/types';
+import { applyTheme, loadNotifications, loadTheme, saveNotifications, type Theme } from '@/lib/store';
+import type { LibraryRoot, SyncMode, ThumbLocation, UpdateInfo } from '@/lib/types';
 import { useQueryClient } from '@tanstack/react-query';
 
 export function SettingsPage({ scanning, onScanEnd }: { scanning: ScanState; onScanEnd: (rootId: string) => void }) {
@@ -30,6 +31,9 @@ export function SettingsPage({ scanning, onScanEnd }: { scanning: ScanState; onS
   const containers = useContainerDirs();
   const thumbStats = useThumbStats();
   const thumbs = useThumbs();
+  const thumbLocation = useThumbLocation();
+  const setThumbLocation = useSetThumbLocation();
+  const [notify, setNotify] = useState(loadNotifications());
   const { scan, addRootViaPicker, removeRoot } = useLibraryActions(onScanEnd);
   const [removing, setRemoving] = useState<LibraryRoot | null>(null);
   const [theme, setTheme] = useState<Theme>(loadTheme());
@@ -110,6 +114,21 @@ export function SettingsPage({ scanning, onScanEnd }: { scanning: ScanState; onS
             {t('settings.thumbSummary', { done: thumbStats.data?.done ?? 0, pending: thumbStats.data?.pending ?? 0, failed: thumbStats.data?.failed ?? 0 })}
             {thumbs.unavailable && <span className="ml-2 text-warning" title={thumbs.unavailable}>{t('status.thumbsUnavailable')}</span>}
           </div>
+          <Row label={t('settings.thumbLocation')}>
+            <div className="grid justify-items-end gap-1">
+              <ToggleGroup type="single" value={thumbLocation.data ?? 'app_data'} onValueChange={(v) => { if (v) setThumbLocation.mutate(v as ThumbLocation, { onSuccess: () => toast.success(t('settings.thumbLocationSaved')), onError: reportError }); }} data-testid="thumb-location">
+                <ToggleGroupItem value="app_data" data-testid="thumb-location-app"><HardDrive />{t('settings.thumbLocationApp')}</ToggleGroupItem>
+                <ToggleGroupItem value="project" data-testid="thumb-location-project"><FolderOpen />{t('settings.thumbLocationProject')}</ToggleGroupItem>
+              </ToggleGroup>
+              <span className="max-w-[46ch] text-right text-xs text-muted-foreground">{thumbLocation.data === 'project' ? t('settings.thumbLocationHintProject') : t('settings.thumbLocationHintApp')}</span>
+            </div>
+          </Row>
+        </Card>
+
+        <Card title={t('settings.notifications')} hint={t('settings.notificationsHint')}>
+          <Row label={t('settings.notificationsToggle')}>
+            <label className="flex items-center gap-2 text-sm text-muted-foreground"><Bell className="size-4" /><Switch checked={notify} onCheckedChange={(v) => { setNotify(v); saveNotifications(v); }} data-testid="notifications-toggle" aria-label={t('settings.notificationsToggle')} /></label>
+          </Row>
         </Card>
 
         <Card title={t('settings.appearance')}>
