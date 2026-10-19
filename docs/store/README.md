@@ -88,10 +88,9 @@ Status: account created and the name **Meshkeep** reserved (2026-10-19); the dom
 ### Submission checklist
 
 - Age rating questionnaire: no user-generated content, no purchases, no data collection.
-- Privacy policy: the app is offline-only and collects nothing; the Store form needs a
-  **URL**, so the text in `docs/store/listing.md` has to be published at
-  `https://meshkeep.app/privacy` (a static page is enough). Website and support URL:
-  `https://meshkeep.app`.
+- Privacy policy URL: `https://meshkeep.app/privacy/` (EN) and
+  `https://meshkeep.app/de/datenschutz/` (DE), served from `site/` by `pages.yml`.
+  Website `https://meshkeep.app`, support `https://meshkeep.app/support/`.
 - `runFullTrust` capability: the submission form asks for a reason. Text: "Desktop app
   that indexes user-selected folders of 3D model files; file access is limited to folders
   the user picks through the system dialog."

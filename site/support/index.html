@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Support · Meshkeep</title>
+<meta name="description" content="How to report a problem and answers to common questions about Meshkeep.">
+<link rel="canonical" href="https://meshkeep.app/support/">
+<link rel="alternate" hreflang="en" href="https://meshkeep.app/support/">
+<link rel="alternate" hreflang="de" href="https://meshkeep.app/de/support/">
+<link rel="icon" href="/assets/favicon-32.png" sizes="32x32">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+<meta property="og:title" content="Support · Meshkeep">
+<meta property="og:description" content="How to report a problem and answers to common questions about Meshkeep.">
+<meta property="og:image" content="https://meshkeep.app/assets/library.jpg">
+<link rel="stylesheet" href="/assets/site.css">
+</head>
+<body>
+<div class="wrap">
+<header class="top">
+  <a class="brand" href="/"><img src="/assets/icon.png" alt="">Meshkeep</a>
+  <nav>
+    <a href="/support/">Support</a>
+    <a href="/privacy/">Privacy</a>
+    <a href="/imprint/">Imprint</a>
+    <a href="https://github.com/ThomasPe/my-meshes">GitHub</a>
+    <a class="lang" href="/de/" hreflang="de">Deutsch</a>
+  </nav>
+</header>
+<main class="prose">
+<h1>Support</h1>
+<p class="meta">Questions, bugs and ideas are handled in the open on GitHub.</p>
+<h2>Report a problem</h2>
+<p>Open an issue at <a href="https://github.com/ThomasPe/my-meshes/issues">github.com/ThomasPe/my-meshes/issues</a>. Please include the app version (Settings → About), your Windows version and, if relevant, the log file from the data folder shown under Settings → About.</p>
+<h2>Frequently asked</h2>
+<h3>Where does Meshkeep keep its data?</h3><p>Index, previews, favorites and collections live in the app's data folder (shown in Settings → About). Your models are never moved. Metadata you enter is saved as <code>project.yaml</code> next to the models.</p>
+<h3>Previews are missing or outdated.</h3><p>Settings → Previews → Clear cache rebuilds them. Previews need a working GPU driver; without one the app shows placeholders and says so in the status bar.</p>
+<h3>A folder on my NAS does not update.</h3><p>Network shares often cannot be watched for changes. Switch the folder to Poll in Settings and pick an interval, or use Rescan.</p>
+<h3>Why does Windows warn when installing the dev build?</h3><p>Dev builds are not code-signed, so SmartScreen shows a warning once. Updates fetched by the app are verified with a signature before they are installed.</p>
+<h3>Can I use Meshkeep on macOS or Linux?</h3><p>Windows first. macOS is planned; Linux is not a target for version 1.</p>
+</main>
+<footer class="bottom">
+  <span>© 2026 Thomas Pentenrieder · MIT</span>
+  <a href="/privacy/">Privacy</a>
+  <a href="/imprint/">Imprint</a>
+  <a href="https://github.com/ThomasPe/my-meshes">GitHub</a>
+</footer>
+</div>
+</body>
+</html>
