@@ -1,5 +1,5 @@
 import { Search } from 'lucide-react';
-import { useCallback, useMemo } from 'react';
+import { useCallback, useMemo, useRef } from 'react';
 import { Group, Panel, Separator, type Layout } from 'react-resizable-panels';
 import { useTranslation } from 'react-i18next';
 import type { ScanState } from '@/App';
@@ -20,12 +20,16 @@ import { navigate } from '@/lib/router';
 import { useUi } from '@/lib/store';
 import type { ListQuery } from '@/lib/types';
 
-const LAYOUT_KEY = 'mm.library.layout';
-function loadLayout(): Layout | undefined {
-  try { const l = JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? 'null'); return l && typeof l === 'object' && 'sidebar' in l ? (l as Layout) : undefined; } catch { return undefined; }
+const LAYOUT_KEY = 'mm.library.panels';
+type PanelPx = { sidebar: number; inspector: number };
+/** Sidebar widths are remembered in pixels, so a different window size keeps the same panels. */
+function loadPanels(): Partial<PanelPx> {
+  try { const l = JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? 'null'); return l && typeof l === 'object' ? (l as Partial<PanelPx>) : {}; } catch { return {}; }
 }
-function saveLayout(l: Layout) {
-  try { localStorage.setItem(LAYOUT_KEY, JSON.stringify(l)); } catch { /* ignore */ }
+function savePanels(layout: Layout, groupWidth: number) {
+  if (!groupWidth) return;
+  const px = (k: string) => Math.round(((layout[k] ?? 0) / 100) * groupWidth);
+  try { localStorage.setItem(LAYOUT_KEY, JSON.stringify({ sidebar: px('sidebar'), inspector: px('inspector') })); } catch { /* ignore */ }
 }
 const separatorClass = 'group relative w-1 shrink-0 bg-transparent transition-colors hover:bg-primary/40 data-[separator-active]:bg-primary/60 data-[resize-handle-active]:bg-primary/60';
 
@@ -43,6 +47,8 @@ export function LibraryPage({ scanning, onScanEnd }: { scanning: ScanState; onSc
   const addTo = useAddToCollection();
   const openCollectionDialog = useCollectionDialog((s) => s.open);
   const pickImport = useImport((s) => s.pick);
+  const groupRef = useRef<HTMLDivElement | null>(null);
+  const panels = useMemo(loadPanels, []);
 
   const rootScoped = filter.kind === 'root' || filter.kind === 'folder' || filter.kind === 'inbox';
   const effectiveSort = filter.kind === 'recent' ? 'added' : filter.kind === 'collection' ? (sort === 'collection' || sort === 'modified' ? 'collection' : sort) : sort === 'collection' ? 'modified' : sort;
@@ -103,8 +109,8 @@ export function LibraryPage({ scanning, onScanEnd }: { scanning: ScanState; onSc
   const onReorder = collectionId && effectiveSort === 'collection' ? (ids: string[]) => reorder.mutate({ id: collectionId, order: ids }, { onError: reportError }) : undefined;
 
   return (
-    <Group orientation="horizontal" className="h-full" defaultLayout={loadLayout()} onLayoutChanged={saveLayout} data-testid="library">
-      <Panel id="sidebar" defaultSize={250} minSize={200} maxSize={480} className="min-w-0" data-testid="panel-sidebar"><Sidebar /></Panel>
+    <Group orientation="horizontal" className="h-full" elementRef={groupRef} onLayoutChanged={(l) => savePanels(l, groupRef.current?.clientWidth ?? 0)} data-testid="library">
+      <Panel id="sidebar" defaultSize={panels.sidebar ?? 250} minSize={200} maxSize={480} className="min-w-0" data-testid="panel-sidebar"><Sidebar /></Panel>
       <Separator className={separatorClass} aria-label="resize sidebar" data-testid="resize-sidebar" />
       {dialogs}
       <CollectionDialogs onCreated={(id, addIds) => { if (addIds?.length) addTo.mutate({ id, projectIds: addIds }, { onError: reportError }); }} />
@@ -130,7 +136,7 @@ export function LibraryPage({ scanning, onScanEnd }: { scanning: ScanState; onSc
       </main>
       </Panel>
       <Separator className={separatorClass} aria-label="resize inspector" data-testid="resize-inspector" />
-      <Panel id="inspector" defaultSize={320} minSize={260} maxSize={600} className="min-w-0" data-testid="panel-inspector">
+      <Panel id="inspector" defaultSize={panels.inspector ?? 320} minSize={260} maxSize={600} className="min-w-0" data-testid="panel-inspector">
         <Inspector selectedIds={selected} visible={list} tagCounts={tagCounts.data ?? []} facets={facets.data} filterTitle={filterTitle} onTag={toggleTag} actions={actions} />
       </Panel>
     </Group>

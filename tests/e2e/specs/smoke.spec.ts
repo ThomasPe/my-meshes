@@ -3,6 +3,22 @@ import { browser, $, $$, expect } from '@wdio/globals';
 import fs from 'node:fs';
 import path from 'node:path';
 
+/**
+ * The grid is virtualized and the CI runner's screen is 1024x768, so a card further down
+ * is not in the DOM at all. Narrow the list through the search box first, then look it up.
+ */
+async function findCard(idSuffix: string) {
+  const name = idSuffix.split('/').pop()!;
+  await $('[data-testid="search"]').setValue(name);
+  const card = await $(`[data-testid="project-card"][data-id$="${idSuffix}"]`);
+  await card.waitForDisplayed({ timeout: 15000, timeoutMsg: `card ${idSuffix} did not appear` });
+  return card;
+}
+async function clearSearch() {
+  await $('[data-testid="search"]').clearValue();
+  await browser.waitUntil(async () => (await $('[data-testid="search"]').getValue()) === '', { timeout: 5000 });
+}
+
 // Acceptance for the walking skeleton against the real app (docs/spec/04-quality.md):
 // the window becomes interactive, the seeded fixture root is indexed, and a metadata edit
 // lands on disk as project.yaml.
@@ -27,7 +43,7 @@ describe('Meshkeep (test mode, fixture library)', () => {
   });
 
   it('adds a tag through the inspector and writes project.yaml on disk', async () => {
-    const card = await $('[data-testid="project-card"][data-id$="Decor/Vase"]');
+    const card = await findCard('Decor/Vase');
     await card.click();
     await expect($('[data-testid="inspector-title"]')).toHaveText('Vase');
     await $('[data-testid="tag-add"]').click();
@@ -39,6 +55,7 @@ describe('Meshkeep (test mode, fixture library)', () => {
     const text = fs.readFileSync(sidecar, 'utf8');
     expect(text).toContain('e2e-tag');
     fs.unlinkSync(sidecar); // leave the fixture as it was
+    await clearSearch();
   });
 
   it('opens a project and renders the STL in the viewer', async () => {
@@ -73,16 +90,18 @@ describe('Meshkeep D2 (thumbnails, favorites, rename, 3MF)', () => {
     const thumbs = fs.readdirSync(path.join(dataDir, 'thumbs')).filter((f) => f.endsWith('.png'));
     expect(thumbs.length).toBeGreaterThanOrEqual(3);
     // the slicer 3MF got its embedded preview (no rendering) and a badge
-    const plate = await $('[data-testid="project-card"][data-id$="Slicer/Plate"]');
+    const plate = await findCard('Slicer/Plate');
     await expect(plate.$('[data-testid="slicer-badge"]')).toBeDisplayed();
     await browser.waitUntil(async () => plate.$('[data-testid="thumb-img"]').isDisplayed(), { timeout: 60000, timeoutMsg: 'embedded 3MF preview did not appear' });
+    await clearSearch();
   });
 
   it('favorites persist in collections.json and survive a rescan', async () => {
-    const card = await $('[data-testid="project-card"][data-id$="Gridfinity/Bins"]');
+    const card = await findCard('Gridfinity/Bins');
     await card.moveTo();
     await card.$('[data-testid="card-favorite"]').click();
     await browser.waitUntil(async () => (await $('[data-testid="favorites-count"]').getText()) === '1', { timeout: 10000 });
+    await clearSearch();
     const dataDir = (await browser.tauri.execute(({ core }) => core.invoke('app_info')) as { dataDir: string }).dataDir;
     const file = path.join(dataDir, 'collections.json');
     await browser.waitUntil(() => fs.existsSync(file), { timeout: 5000 });
@@ -95,7 +114,7 @@ describe('Meshkeep D2 (thumbnails, favorites, rename, 3MF)', () => {
   });
 
   it('renames the project directory on disk and refuses collisions', async () => {
-    const card = await $('[data-testid="project-card"][data-id$="Gridfinity/Baseplates"]');
+    const card = await findCard('Gridfinity/Baseplates');
     await card.click();
     await $('[data-testid="inspector-rename"]').click();
     await $('[data-testid="rename-input"]').waitForDisplayed();
@@ -106,19 +125,19 @@ describe('Meshkeep D2 (thumbnails, favorites, rename, 3MF)', () => {
     await $('[data-testid="rename-confirm"]').click();
     const renamed = path.join(fixture(), 'Gridfinity/Baseplates E2E');
     await browser.waitUntil(() => fs.existsSync(renamed), { timeout: 10000, timeoutMsg: 'directory was not renamed' });
-    await browser.waitUntil(async () => (await $$('[data-testid="project-card"][data-id$="Gridfinity/Baseplates E2E"]')).length === 1, { timeout: 10000 });
+    await findCard('Gridfinity/Baseplates E2E');
     // rename back through the UI so the fixture is left untouched
     await $('[data-testid="inspector-rename"]').click();
     await $('[data-testid="rename-input"]').waitForDisplayed();
     await $('[data-testid="rename-input"]').setValue('Baseplates');
     await $('[data-testid="rename-confirm"]').click();
     await browser.waitUntil(() => fs.existsSync(path.join(fixture(), 'Gridfinity/Baseplates')) && !fs.existsSync(renamed), { timeout: 10000 });
+    await clearSearch();
   });
 
   it('opens the 3MF project and renders its geometry in the viewer', async () => {
     await $('[data-testid="filter-all"]').click();
-    const card = await $('[data-testid="project-card"][data-id$="Slicer/Plate"]');
-    await card.scrollIntoView();
+    const card = await findCard('Slicer/Plate');
     await card.click();
     await $('[data-testid="inspector-open"]').click();
     await $('[data-testid="project-page"]').waitForDisplayed();
@@ -148,7 +167,8 @@ describe('Meshkeep D3 (import, inbox, collections)', () => {
     await browser.waitUntil(() => fs.existsSync(path.join(project, 'files/clip_6mm.stl')), { timeout: 10000, timeoutMsg: 'archive was not extracted' });
     expect(fs.existsSync(path.join(project, 'Cable Clip.zip'))).toBe(true); // kept as attachment (default policy)
     expect(fs.existsSync(path.join(fixture(), '_Inbox/loose_hook.stl'))).toBe(true);
-    await browser.waitUntil(async () => (await $$('[data-testid="project-card"][data-id$="Cable Clip"]')).length === 1, { timeout: 10000 });
+    await findCard('Cable Clip');
+    await clearSearch();
     await $('[data-testid="filter-inbox"]').click();
     await $('[data-testid="inbox"]').waitForDisplayed();
     await browser.waitUntil(async () => (await $$('[data-testid="inbox-row"]')).length === 1, { timeout: 10000 });
