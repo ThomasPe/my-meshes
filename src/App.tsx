@@ -13,6 +13,8 @@ import { WelcomePage } from '@/features/welcome/WelcomePage';
 import { queryClient, useAppInfo, useBackendEvents, useRoots } from '@/lib/queries';
 import { useOsNotifications } from '@/features/settings/useOsNotifications';
 import { useStartupUpdateCheck } from '@/features/settings/useStartupUpdateCheck';
+import { isTauri } from '@/lib/backend';
+import { installNativeShellGuards } from '@/lib/native-shell';
 import { navigate, useRoute } from '@/lib/router';
 
 export type ScanState = Record<string, number>; // rootId -> projects found so far
@@ -27,6 +29,10 @@ function Shell() {
   const info = useAppInfo();
   useStartupUpdateCheck(info.data);
   useOsNotifications();
+  useEffect(() => {
+    if (!isTauri || import.meta.env.DEV || info.data?.testMode) return;
+    return installNativeShellGuards();
+  }, [info.data?.testMode]);
   const scanEnd = useCallback((rootId: string) => setScanning((s) => { const n = { ...s }; delete n[rootId]; return n; }), []);
 
   // First run: no roots -> welcome. Keep explicit navigation otherwise.

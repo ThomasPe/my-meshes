@@ -77,6 +77,7 @@ pub fn run() {
             commands::read_project_file,
             commands::update_metadata,
             commands::reveal_project,
+            commands::reveal_folder,
             commands::open_project_file,
             commands::pick_folder,
             commands::get_ignore_patterns,

@@ -260,6 +260,7 @@ export function createMockBackend(): Backend {
       return { ...p };
     },
     async revealProject() {},
+    async revealFolder(rootId, relPath) { const w = window as unknown as { __mockRevealed?: string[] }; (w.__mockRevealed ??= []).push(`${rootId}:${relPath}`); },
     async openProjectFile() {},
     async setFavorite(projectId, favorite) { const p = find(projectId); p.favorite = favorite; listeners.proj.forEach((cb) => cb({ projectId })); return { ...p }; },
     async renameProject(projectId, newName) {

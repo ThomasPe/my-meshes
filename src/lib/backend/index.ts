@@ -25,6 +25,8 @@ export interface Backend {
   readProjectFile(projectId: string, relPath: string): Promise<ArrayBuffer>;
   updateMetadata(projectId: string, update: UpdateMetadata): Promise<Project>;
   revealProject(projectId: string): Promise<void>;
+  /** Opens a folder of a root (tree node, inbox) in the file manager. */
+  revealFolder(rootId: string, relPath: string): Promise<void>;
   openProjectFile(projectId: string, relPath: string): Promise<void>;
   pickFolder(): Promise<string | null>;
   getIgnorePatterns(): Promise<string[]>;

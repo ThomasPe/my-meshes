@@ -84,7 +84,8 @@
     "facetFileTypes": "File types",
     "filterBy": "Filter by {{value}}",
     "more": "+{{count}} more",
-    "less": "less"
+    "less": "less",
+    "showProjects": "Show projects"
   },
   "inspector": {
     "open": "Open",

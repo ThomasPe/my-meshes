@@ -84,7 +84,8 @@
     "facetFileTypes": "Dateitypen",
     "filterBy": "Nach {{value}} filtern",
     "more": "+{{count}} weitere",
-    "less": "weniger"
+    "less": "weniger",
+    "showProjects": "Projekte anzeigen"
   },
   "inspector": {
     "open": "Öffnen",

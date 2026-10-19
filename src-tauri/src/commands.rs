@@ -259,6 +259,18 @@ pub fn batch_update_metadata(
     Ok(report)
 }
 
+/// Opens a folder of a root (tree node, inbox) in the file manager.
+#[tauri::command]
+pub fn reveal_folder(app: AppHandle, state: State<AppState>, root_id: String, rel_path: String) -> CmdResult<()> {
+    let dir = { state.engine.lock().unwrap().resolve_dir(&root_id, &rel_path)? };
+    app.opener()
+        .open_path(dir.to_string_lossy().into_owned(), None::<&str>)
+        .map_err(|e| AppError {
+            code: "shell",
+            message: e.to_string(),
+        })
+}
+
 #[tauri::command]
 pub fn reveal_project(app: AppHandle, state: State<AppState>, project_id: String) -> CmdResult<()> {
     let dir = {

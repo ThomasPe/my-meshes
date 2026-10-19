@@ -362,6 +362,32 @@ impl Engine {
         Ok(p)
     }
 
+    /// Absolute path of a folder inside a root (a tree node, the inbox, a project). Refuses
+    /// anything that escapes the root and anything that does not exist.
+    pub fn resolve_dir(&self, root_id: &str, rel: &str) -> Result<PathBuf> {
+        let root = self.root(root_id)?;
+        let rel_path = Path::new(rel);
+        if rel_path.is_absolute()
+            || rel_path
+                .components()
+                .any(|c| matches!(c, Component::ParentDir | Component::Prefix(_) | Component::RootDir))
+        {
+            return Err(EngineError::NotAllowed(format!("path escapes the root: {rel}")));
+        }
+        let full = if rel.is_empty() {
+            root.path.clone()
+        } else {
+            root.path.join(rel_path)
+        };
+        if !full.is_dir() {
+            return Err(EngineError::Io {
+                path: full,
+                source: std::io::Error::new(std::io::ErrorKind::NotFound, "folder not found"),
+            });
+        }
+        Ok(full)
+    }
+
     /// Absolute path of a file inside a project. Refuses anything that escapes the project.
     pub fn resolve_file(&self, project_id: &str, rel: &str) -> Result<PathBuf> {
         let p = self

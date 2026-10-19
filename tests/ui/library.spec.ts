@@ -438,3 +438,19 @@ test('cut-off names show the full text on hover; inbox and folders are siblings'
   await page.waitForTimeout(600);
   await expect(page.getByTestId('truncated-tooltip')).toHaveCount(0);
 });
+
+test('sidebar context menus: root rescans or reveals, folders reveal in the file manager', async ({ page }) => {
+  await page.getByTestId('root-row').first().click({ button: 'right' });
+  await expect(page.getByTestId('root-menu')).toBeVisible();
+  await expect(page.getByTestId('root-menu')).toContainText('Rescan');
+  await page.getByTestId('root-menu').getByTestId('menu-reveal-folder').click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __mockRevealed?: string[] }).__mockRevealed ?? [])).toEqual(['r1:']);
+  await page.getByTestId('filter-folder').filter({ hasText: 'Decor' }).first().click({ button: 'right' });
+  await expect(page.getByTestId('folder-menu')).toBeVisible();
+  await page.getByTestId('folder-menu').getByTestId('menu-reveal-folder').click();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __mockRevealed?: string[] }).__mockRevealed ?? [])).toEqual(['r1:', 'r1:Projects/Decor']);
+  // leaf folders below a level without any children do not reserve a chevron column
+  const inboxIcon = (await page.getByTestId('filter-inbox').first().locator('svg').first().boundingBox())!;
+  const projectsIcon = (await page.getByTestId('filter-folder').filter({ hasText: 'Projects' }).first().locator('svg').first().boundingBox())!;
+  expect(Math.abs(inboxIcon.x - projectsIcon.x)).toBeLessThan(4);
+});

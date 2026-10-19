@@ -110,7 +110,7 @@ export function LibraryPage({ scanning, onScanEnd }: { scanning: ScanState; onSc
 
   return (
     <Group orientation="horizontal" className="h-full" elementRef={groupRef} onLayoutChanged={(l) => savePanels(l, groupRef.current?.clientWidth ?? 0)} data-testid="library">
-      <Panel id="sidebar" defaultSize={panels.sidebar ?? 250} minSize={200} maxSize={480} className="min-w-0" data-testid="panel-sidebar"><Sidebar /></Panel>
+      <Panel id="sidebar" defaultSize={panels.sidebar ?? 250} minSize={200} maxSize={480} className="min-w-0" data-testid="panel-sidebar"><Sidebar onRescan={(id) => void scan(id)} /></Panel>
       <Separator className={separatorClass} aria-label="resize sidebar" data-testid="resize-sidebar" />
       {dialogs}
       <CollectionDialogs onCreated={(id, addIds) => { if (addIds?.length) addTo.mutate({ id, projectIds: addIds }, { onError: reportError }); }} />
