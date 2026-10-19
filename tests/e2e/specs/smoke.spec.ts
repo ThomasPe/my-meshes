@@ -33,8 +33,11 @@ describe('Meshkeep (test mode, fixture library)', () => {
     await $('[data-testid="app"]').waitForDisplayed({ timeout: 30000 });
     await browser.url(await browser.getUrl().then((u) => u.split('#')[0] + '#/library'));
     await $('[data-testid="library"]').waitForDisplayed({ timeout: 20000 });
-    await browser.waitUntil(async () => (await $$('[data-testid="project-card"]')).length >= 5, { timeout: 30000, timeoutMsg: 'fixture projects did not appear' });
-    const titles = await $$('[data-testid="project-card"] h4').map((h) => h.getText());
+    // the grid is virtualized (one column on the 1024x768 CI screen), so only the first rows
+    // are in the DOM; the full set is asserted through the engine
+    await browser.waitUntil(async () => (await $$('[data-testid="project-card"]')).length >= 3, { timeout: 30000, timeoutMsg: 'fixture projects did not appear' });
+    const titles = (await browser.tauri.execute(({ core }) => core.invoke('list_projects', { query: {} })) as Array<{ title: string }>).map((p) => p.title);
+    expect(titles.length).toBe(6);
     expect(titles).toContain('Gridfinity Bins');   // from project.yaml
     expect(titles).toContain('Baseplates');        // derived from the folder name
     expect(titles).toContain('Arm v4');            // nested project.yaml is a warning, not a project
