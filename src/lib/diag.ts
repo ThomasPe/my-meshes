@@ -21,7 +21,10 @@ export function diag(level: Level, scope: string, message: string) {
 
 /** Uncaught errors and rejected promises are the usual reason for a screen that "does nothing". */
 export function installErrorReporting() {
-  const onError = (e: ErrorEvent) => diag('error', 'window', `${e.message} @ ${e.filename}:${e.lineno}`);
+  const onError = (e: ErrorEvent) => {
+    const stack = (e.error as { stack?: string } | undefined)?.stack?.split('\n').slice(0, 8).join(' | ');
+    diag('error', 'window', `${e.message} @ ${e.filename}:${e.lineno}:${e.colno}${stack ? ` :: ${stack}` : ''}`);
+  };
   const onReject = (e: PromiseRejectionEvent) => { const r = e.reason as { message?: string; stack?: string } | undefined; diag('error', 'promise', r?.stack ?? r?.message ?? String(e.reason)); };
   window.addEventListener('error', onError);
   window.addEventListener('unhandledrejection', onReject);

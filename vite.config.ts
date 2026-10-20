@@ -13,7 +13,8 @@ export default defineConfig({
   build: {
     target: process.env.TAURI_ENV_PLATFORM === 'windows' ? 'chrome105' : 'safari13',
     minify: !process.env.TAURI_ENV_DEBUG ? 'esbuild' : false,
-    sourcemap: !!process.env.TAURI_ENV_DEBUG,
+    // hidden maps for dev-channel builds, so a minified stack from a tester's log can be resolved
+    sourcemap: process.env.MESHKEEP_SOURCEMAP === '1' ? 'hidden' : !!process.env.TAURI_ENV_DEBUG,
     chunkSizeWarningLimit: 900,
   },
   worker: { format: 'es' },

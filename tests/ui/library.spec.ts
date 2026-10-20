@@ -498,3 +498,17 @@ test('viewer: dragging orbits, the wheel zooms, long file names do not widen the
   await page.getByTestId('save-hint').hover();
   await expect(page.getByRole('tooltip')).toContainText('optimistic');
 });
+
+test('viewer: switching the model after the render loop went idle does not overflow the stack', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  await page.getByTestId('project-card').filter({ hasText: 'Cable Clips' }).dblclick();
+  await expect(page.getByTestId('viewer-triangles')).toBeVisible({ timeout: 30000 });
+  await page.waitForTimeout(2500); // the on-demand loop stops after ~30 frames
+  await page.getByTestId('viewer-file').click();
+  await page.getByRole('option', { name: /clip_8mm/ }).click();
+  await expect(page.getByTestId('viewer-file')).toContainText('clip_8mm');
+  await expect(page.getByTestId('viewer-triangles')).toBeVisible({ timeout: 30000 });
+  await page.waitForTimeout(500);
+  expect(errors).toEqual([]);
+});

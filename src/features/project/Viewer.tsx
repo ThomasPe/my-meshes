@@ -55,10 +55,18 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
       canvas.dataset.azimuth = controls.getAzimuthalAngle().toFixed(3);
       canvas.dataset.distance = camera.position.distanceTo(controls.target).toFixed(1);
     };
-    // render on demand: while damping settles, keep animating; otherwise one frame per change
+    // Render on demand: while damping settles, keep animating; otherwise one frame per change.
+    // `kick` only ever schedules a frame. Rendering synchronously from it recursed: frame ->
+    // controls.update() -> 'change' -> kick -> frame ... until the stack overflowed, whenever a
+    // model finished loading while the loop was idle (the camera had just been re-framed).
     let active = 0;
-    const kick = () => { active = 30; if (!raf) loop(); };
-    const loop = () => { frame(); if (active-- > 0) raf = requestAnimationFrame(loop); else raf = 0; };
+    const kick = () => { active = 30; if (!raf) raf = requestAnimationFrame(loop); };
+    const loop = () => {
+      // `raf` stays set while frame() runs, so a 'change' dispatched from controls.update()
+      // cannot schedule a second loop
+      try { frame(); } catch (err) { active = 0; raf = 0; diag('error', 'viewer', `render failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`); return; }
+      if (active-- > 0) raf = requestAnimationFrame(loop); else raf = 0;
+    };
     controls.addEventListener('change', kick);
     const ro = new ResizeObserver(kick); ro.observe(canvas);
     kick();
@@ -111,6 +119,15 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
         let booted = false;
         const handle = (m: MeshWorkerMessage) => {
           if (cancelled || settled) return;
+          try { apply(m); } catch (err) {
+            settled = true;
+            if (watchdog) clearTimeout(watchdog);
+            worker?.terminate(); worker = null;
+            log('error', `${m.type} failed: ${err instanceof Error ? err.stack ?? err.message : String(err)}`);
+            rej(err instanceof Error ? err : new Error(String(err)));
+          }
+        };
+        const apply = (m: MeshWorkerMessage) => {
           if (m.type === 'ready') { booted = true; log('info', 'worker ready'); return; }
           if (m.type === 'begin') {
             log('info', `begin, ${m.triangles} triangles`);

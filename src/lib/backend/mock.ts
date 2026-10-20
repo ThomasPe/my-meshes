@@ -232,7 +232,9 @@ export function createMockBackend(): Backend {
       const file = p.files.find((x) => x.rel_path === relPath);
       if (!file) throw err('not_found', relPath);
       const seed = [...relPath].reduce((a, c) => a + c.charCodeAt(0), 0);
-      const tri = Math.min(20000, Math.max(200, Math.round(file.size / 4096)));
+      // `?mesh=<triangles>` forces a mesh size (stress tests of the viewer and thumbnails)
+      const forced = Number(new URLSearchParams(location.search).get('mesh'));
+      const tri = forced > 0 ? forced : Math.min(20000, Math.max(200, Math.round(file.size / 4096)));
       const ext = relPath.split('.').pop()?.toLowerCase();
       if (ext === 'stl') return generateStl(tri, seed);
       if (ext === 'obj') return generateObj(tri, seed);

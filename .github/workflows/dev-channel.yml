@@ -62,6 +62,7 @@ jobs:
 
       - name: Build and sign
         env:
+          MESHKEEP_SOURCEMAP: "1"
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: npx tauri build --features updater,devtools --config src-tauri/tauri.dev-build.conf.json
@@ -124,4 +125,6 @@ jobs:
       - uses: actions/upload-artifact@v4
         with:
           name: meshkeep-${{ steps.ver.outputs.version }}-dev
-          path: dist-dev/*
+          path: |
+            dist-dev/*
+            dist/assets/*.map
