@@ -67,6 +67,30 @@ test('double-click opens the project page with metadata form and files', async (
   await expect(page.getByTestId('library')).toBeVisible();
 });
 
+test('two edits in a row save without a conflict; reload after a real conflict drops the edit', async ({ page }) => {
+  await page.getByTestId('project-card').filter({ hasText: 'Robotic Arm v4' }).dblclick();
+  const status = page.getByTestId('autosave-status');
+  // set a licence, then back to "not set": the second save hands back the stamp of the first
+  await page.getByTestId('field-license').click();
+  await page.getByRole('option', { name: 'CC-BY-4.0' }).click();
+  await expect(status).toHaveAttribute('data-state', 'saved', { timeout: 5000 });
+  await page.getByTestId('field-license').click();
+  await page.getByRole('option', { name: 'not set' }).click();
+  await expect(status).toHaveAttribute('data-state', 'pending');
+  await expect(status).toHaveAttribute('data-state', 'saved', { timeout: 5000 });
+  await expect(page.getByTestId('conflict-dialog')).toHaveCount(0);
+  // someone else writes project.yaml meanwhile: the next save conflicts, reload keeps the disk version
+  await page.evaluate(() => { const w = window as unknown as { __mockTouched?: Set<string> }; (w.__mockTouched ??= new Set()).add('r1:Projects/Robotics/Arm v4'); });
+  await page.getByTestId('field-creator').fill('Someone Else');
+  await expect(page.getByTestId('conflict-dialog')).toBeVisible({ timeout: 5000 });
+  await page.getByRole('button', { name: 'Reload' }).click();
+  await expect(page.getByTestId('conflict-dialog')).toHaveCount(0);
+  await expect(page.getByTestId('field-creator')).toHaveValue('ExampleCreator');
+  await page.waitForTimeout(1500);
+  await expect(page.getByTestId('conflict-dialog')).toHaveCount(0);
+  await expect(status).not.toHaveAttribute('data-state', 'pending');
+});
+
 test('settings lists roots and switches language', async ({ page }) => {
   await page.getByTestId('nav-settings').click();
   await expect(page.getByTestId('root-row')).toHaveCount(2);

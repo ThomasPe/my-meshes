@@ -40,7 +40,7 @@ function mk(root_id: string, rel_path: string, title: string, o: Partial<MockPro
     model_count: files.filter((x) => x.kind === 'model').length,
     modified,
     sidecar: has ? { state: 'ok' } : { state: 'missing' },
-    sidecar_stamp: has ? { mtime_unix_nanos: Date.now() * 1e6, size: 200 } : null,
+    sidecar_stamp: has ? { mtime_unix_nanos: String(Date.now() * 1e6), size: 200 } : null,
     warnings: o.warnings ?? [],
     offline: o.offline ?? false,
     has_sidecar: has,
@@ -249,6 +249,9 @@ export function createMockBackend(): Backend {
     async updateMetadata(projectId, u: UpdateMetadata) {
       await delay(120);
       const p = find(projectId);
+      // tests simulate an external editor: window.__mockTouchSidecar(id) bumps the stamp silently
+      const touched = (window as unknown as { __mockTouched?: Set<string> }).__mockTouched;
+      if (touched?.delete(projectId)) p.sidecar_stamp = { mtime_unix_nanos: String(Date.now() * 1e6 + 1), size: 999 };
       if (p.offline) throw err('root_offline', 'root is offline');
       const onDisk: SidecarStamp | null = p.sidecar_stamp;
       const same = (a: SidecarStamp | null | undefined, b: SidecarStamp | null) => (!a && !b) || (!!a && !!b && a.mtime_unix_nanos === b.mtime_unix_nanos && a.size === b.size);
@@ -261,7 +264,7 @@ export function createMockBackend(): Backend {
       if (u.tags) p.tags = [...new Set(u.tags.map((t) => t.trim().toLowerCase()).filter(Boolean))].sort();
       if (u.recommended_material !== undefined) p.material = u.recommended_material.trim() || null;
       if (u.supports_required !== undefined) p.supports_required = u.supports_required;
-      p.has_sidecar = true; p.sidecar = { state: 'ok' }; p.sidecar_stamp = { mtime_unix_nanos: Date.now() * 1e6, size: 300 + Math.floor(Math.random() * 100) }; p.modified = new Date().toISOString();
+      p.has_sidecar = true; p.sidecar = { state: 'ok' }; p.sidecar_stamp = { mtime_unix_nanos: String(Date.now() * 1e6), size: 300 + Math.floor(Math.random() * 100) }; p.modified = new Date().toISOString();
       listeners.proj.forEach((cb) => cb({ projectId }));
       return { ...p };
     },

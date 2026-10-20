@@ -189,11 +189,55 @@ pub struct SidecarFile {
 }
 
 /// Opaque stamp identifying a sidecar version on disk (mtime + size). Returned with a
-/// project and handed back on save so an external edit in between is detected.
+/// project and handed back on save so an external edit in between is detected. The mtime
+/// travels as a string: as a JSON number it exceeds JavaScript's 2^53 and came back rounded,
+/// so every second save of a project reported a conflict.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
 pub struct SidecarStamp {
+    #[serde(with = "i128_as_string")]
     pub mtime_unix_nanos: i128,
     pub size: u64,
+}
+
+mod i128_as_string {
+    use serde::{Deserialize, Deserializer, Serializer};
+    pub fn serialize<S: Serializer>(v: &i128, s: S) -> Result<S::Ok, S::Error> {
+        s.serialize_str(&v.to_string())
+    }
+    pub fn deserialize<'de, D: Deserializer<'de>>(d: D) -> Result<i128, D::Error> {
+        #[derive(Deserialize)]
+        #[serde(untagged)]
+        enum Raw {
+            Str(String),
+            Num(i128),
+            Float(f64),
+        }
+        match Raw::deserialize(d)? {
+            Raw::Str(s) => s.parse().map_err(serde::de::Error::custom),
+            Raw::Num(n) => Ok(n),
+            Raw::Float(f) => Ok(f as i128),
+        }
+    }
+}
+
+#[cfg(test)]
+mod stamp_tests {
+    use super::SidecarStamp;
+
+    #[test]
+    fn stamp_survives_json_exactly() {
+        // a Windows mtime in nanoseconds has more bits than a JavaScript number keeps
+        let stamp = SidecarStamp {
+            mtime_unix_nanos: 1_760_950_123_456_789_123,
+            size: 321,
+        };
+        let json = serde_json::to_string(&stamp).unwrap();
+        assert!(json.contains("\"1760950123456789123\""), "{json}");
+        let back: SidecarStamp = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, stamp);
+        let old: SidecarStamp = serde_json::from_str("{\"mtime_unix_nanos\":12345,\"size\":1}").unwrap();
+        assert_eq!(old.mtime_unix_nanos, 12345);
+    }
 }
 
 /// A project as the UI sees it: derived data plus whatever the sidecar says.

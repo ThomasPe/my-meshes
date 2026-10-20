@@ -39,7 +39,9 @@ to the `dev` pre-release (`dev-channel.yml`, newest push wins); `docs/store/READ
 
 1. **Scanning never writes.** `project.yaml` is created on the user's first edit only.
 2. **Sidecar writes are atomic and conflict-checked.** Pass the `sidecar_stamp` you read;
-   handle `sidecar_conflict` in the UI (reload or overwrite, user's choice).
+   handle `sidecar_conflict` in the UI (reload or overwrite, user's choice). The stamp's
+   `mtime_unix_nanos` is a decimal string on the wire: as a JSON number it exceeds 2^53 and
+   JavaScript rounds it, which made every second save conflict.
 3. **Offline roots keep their projects.** Never delete index rows because a path is missing.
 4. **The frontend never touches the file system.** Everything goes through engine commands
    with explicit capabilities; no `fs` plugin exposure.

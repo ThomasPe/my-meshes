@@ -57,6 +57,13 @@ describe('Meshkeep (test mode, fixture library)', () => {
     await browser.waitUntil(() => fs.existsSync(sidecar), { timeout: 10000, timeoutMsg: 'project.yaml was not written' });
     const text = fs.readFileSync(sidecar, 'utf8');
     expect(text).toContain('e2e-tag');
+    // a second edit hands the stamp of the just-written file back: the mtime must round-trip
+    // exactly through JSON (Windows mtimes in nanoseconds overflow a JavaScript number)
+    await $('[data-testid="tag-add"]').click();
+    await $('[data-testid="tag-input"]').setValue('second-tag');
+    await browser.keys('Enter');
+    await browser.waitUntil(() => fs.readFileSync(sidecar, 'utf8').includes('second-tag'), { timeout: 10000, timeoutMsg: 'second edit was not written' });
+    expect(await $$('[data-testid="conflict-dialog"]')).toHaveLength(0);
     fs.unlinkSync(sidecar); // leave the fixture as it was
     await clearSearch();
   });

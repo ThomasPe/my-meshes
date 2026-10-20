@@ -42,7 +42,8 @@ export interface FileEntry {
 export type SidecarState = { state: 'missing' } | { state: 'ok' } | { state: 'malformed'; message: string };
 
 export interface SidecarStamp {
-  mtime_unix_nanos: number;
+  /** Nanoseconds as a decimal string: too large for a JavaScript number. */
+  mtime_unix_nanos: string;
   size: number;
 }
 

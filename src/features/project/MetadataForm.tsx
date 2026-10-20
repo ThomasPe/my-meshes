@@ -32,6 +32,9 @@ export function MetadataForm({ project: p, onReload }: { project: Project; onRel
   useEffect(() => {
     if (sent.current === null || JSON.stringify(formRef.current) === sent.current) { setForm(toForm(p)); sent.current = null; }
   }, [p.id, p.sidecar_stamp?.mtime_unix_nanos, p.sidecar_stamp?.size]); // eslint-disable-line react-hooks/exhaustive-deps
+  // "reload" after a conflict drops the local edits right away: if the refetch brings the same
+  // stamp back, a still-dirty form would auto-save again and show the dialog in a loop
+  const reload = () => { setConflict(null); sent.current = null; setForm(toForm(p)); onReload(); };
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
   const dirty = JSON.stringify(form) !== JSON.stringify(toForm(p));
@@ -105,7 +108,7 @@ export function MetadataForm({ project: p, onReload }: { project: Project; onRel
         <DialogContent data-testid="conflict-dialog">
           <DialogHeader><DialogTitle>{t('project.conflictTitle')}</DialogTitle><DialogDescription>{t('project.conflictBody')}</DialogDescription></DialogHeader>
           <DialogFooter>
-            <Button variant="outline" onClick={() => { setConflict(null); onReload(); }}>{t('project.reload')}</Button>
+            <Button variant="outline" onClick={reload}>{t('project.reload')}</Button>
             <Button variant="destructive" onClick={() => save(true)}>{t('project.overwrite')}</Button>
           </DialogFooter>
         </DialogContent>
