@@ -14,6 +14,7 @@ import { queryClient, useAppInfo, useBackendEvents, useRoots } from '@/lib/queri
 import { useOsNotifications } from '@/features/settings/useOsNotifications';
 import { useStartupUpdateCheck } from '@/features/settings/useStartupUpdateCheck';
 import { isTauri } from '@/lib/backend';
+import { installErrorReporting } from '@/lib/diag';
 import { installNativeShellGuards } from '@/lib/native-shell';
 import { navigate, useRoute } from '@/lib/router';
 
@@ -29,10 +30,11 @@ function Shell() {
   const info = useAppInfo();
   useStartupUpdateCheck(info.data);
   useOsNotifications();
+  useEffect(() => installErrorReporting(), []);
   useEffect(() => {
     if (!isTauri || import.meta.env.DEV || info.data?.testMode) return;
-    return installNativeShellGuards();
-  }, [info.data?.testMode]);
+    return installNativeShellGuards({ allowDevtools: info.data?.channel === 'dev' });
+  }, [info.data?.testMode, info.data?.channel]);
   const scanEnd = useCallback((rootId: string) => setScanning((s) => { const n = { ...s }; delete n[rootId]; return n; }), []);
 
   // First run: no roots -> welcome. Keep explicit navigation otherwise.

@@ -20,5 +20,9 @@ describe('native shell guards', () => {
     expect(shouldBlockKey(k('c', { ctrlKey: true }))).toBe(false);
     expect(shouldBlockKey(k('Delete'))).toBe(false);
     expect(shouldBlockKey(k('F2'))).toBe(false);
+    expect(shouldBlockKey(k('F12'))).toBe(true);
+    expect(shouldBlockKey(k('F12'), true)).toBe(false);
+    expect(shouldBlockKey(k('I', { ctrlKey: true, shiftKey: true }), true)).toBe(false);
+    expect(shouldBlockKey(k('r', { ctrlKey: true }), true)).toBe(true);
   });
 });

@@ -1,4 +1,4 @@
-import { RotateCcw } from 'lucide-react';
+import { RefreshCw, RotateCcw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import * as THREE from 'three';
@@ -6,6 +6,7 @@ import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getBackend } from '@/lib/backend';
+import { diag } from '@/lib/diag';
 import { isAppError, type FileEntry } from '@/lib/types';
 import { parseModel, PREVIEWABLE } from '@/lib/mesh';
 import MeshWorker from '@/workers/mesh-worker?worker';
@@ -16,7 +17,9 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
   const { t } = useTranslation();
   const models = files.filter((f) => f.kind === 'model');
   const [current, setCurrent] = useState(models[0]?.rel_path ?? '');
-  const [status, setStatus] = useState<{ kind: 'idle' | 'loading' | 'ready' | 'error' | 'unsupported'; text?: string; triangles?: number; percent?: number }>({ kind: 'idle' });
+  const [status, setStatus] = useState<{ kind: 'idle' | 'loading' | 'ready' | 'error' | 'unsupported'; text?: string; triangles?: number; percent?: number; detail?: string }>({ kind: 'idle' });
+  const [attempt, setAttempt] = useState(0);
+  const [slow, setSlow] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const sceneRef = useRef<{ renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; controls: OrbitControls; mesh: THREE.Mesh | null; frame: () => void; dispose: () => void } | null>(null);
 
@@ -74,7 +77,12 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
     if (offline) { setStatus({ kind: 'error', text: t('errors.root_offline') }); return; }
     let cancelled = false;
     let worker: Worker | null = null;
+    const t0 = performance.now();
+    const log = (level: 'info' | 'warn' | 'error', msg: string) => diag(level, 'viewer', `${file.name}: ${msg} (+${Math.round(performance.now() - t0)} ms)`);
+    setSlow(false);
+    const slowTimer = setTimeout(() => setSlow(true), 5000);
     setStatus({ kind: 'loading', text: t('project.loading', { name: file.name }) });
+    log('info', `load start, ${file.size} bytes`);
     const frameTo = (geom: THREE.BufferGeometry) => {
       geom.computeBoundingSphere();
       const bs = geom.boundingSphere!;
@@ -87,6 +95,7 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
       const b = await getBackend();
       const buf = await b.readProjectFile(projectId, file.rel_path);
       if (cancelled) return;
+      log('info', `read ${buf.byteLength} bytes`);
       setStatus({ kind: 'loading', text: t('project.parsing', { name: file.name }) });
       // VIEW-1: the worker streams slices; geometry is pre-sized from 'begin' and the draw
       // range grows per slice, so big files appear progressively instead of after a freeze.
@@ -99,9 +108,12 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
         let total = 0, done = 0, framed = false;
         let watchdog: ReturnType<typeof setTimeout> | null = null;
         let settled = false;
+        let booted = false;
         const handle = (m: MeshWorkerMessage) => {
           if (cancelled || settled) return;
+          if (m.type === 'ready') { booted = true; log('info', 'worker ready'); return; }
           if (m.type === 'begin') {
+            log('info', `begin, ${m.triangles} triangles`);
             total = m.triangles;
             if (s.mesh) { s.scene.remove(s.mesh); s.mesh.geometry.dispose(); s.mesh = null; }
             geom = new THREE.BufferGeometry();
@@ -129,17 +141,20 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
             worker?.terminate(); worker = null;
             if (geom) frameTo(geom);
             s.frame();
+            log('info', `done, ${m.triangles} triangles, parse ${Math.round(m.parseMs)} ms`);
             res();
           } else if (m.type === 'error') {
             settled = true;
             if (watchdog) clearTimeout(watchdog);
             worker?.terminate(); worker = null;
+            log('error', `parse failed: ${m.error}`);
             rej(new Error(m.error));
           }
         };
         const mainThread = (reason: string) => {
           worker?.terminate(); worker = null;
-          console.warn(`mesh worker unavailable (${reason}); parsing on the main thread`);
+          log('warn', `mesh worker unavailable (${reason}); parsing on the main thread`);
+          setStatus((st) => ({ ...st, detail: t('project.workerFallback') }));
           try {
             const m = parseModel(buf, ext);
             handle({ type: 'begin', triangles: m.triangles });
@@ -147,22 +162,28 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
             handle({ type: 'done', triangles: m.triangles, parseMs: 0 });
           } catch (err) { handle({ type: 'error', error: err instanceof Error ? err.message : String(err) }); }
         };
-        const arm = () => { if (watchdog) clearTimeout(watchdog); watchdog = setTimeout(() => { if (!settled) mainThread('no answer within 20 s'); }, 20_000); };
+        // 4 s for the worker script to boot, then 30 s between messages while it parses
+        const arm = () => { if (watchdog) clearTimeout(watchdog); watchdog = setTimeout(() => { if (!settled) mainThread(booted ? 'no answer within 30 s' : 'worker did not boot within 4 s'); }, booted ? 30_000 : 4_000); };
         let w: Worker;
         try { w = new MeshWorker(); } catch (err) { mainThread(err instanceof Error ? err.message : String(err)); return; }
         worker = w;
-        w.onmessage = (e: MessageEvent<MeshWorkerMessage>) => { arm(); handle(e.data); };
-        w.onerror = (e) => { if (!settled) mainThread(e.message || 'worker error'); };
+        w.onmessage = (e: MessageEvent<MeshWorkerMessage>) => { handle(e.data); arm(); };
+        w.onerror = (e) => { log('error', `worker error: ${e.message}`); if (!settled) mainThread(e.message || 'worker error'); };
         // the buffer is copied, not transferred: the main-thread fallback may still need it
         w.postMessage({ buffer: buf, ext });
         arm();
       });
       if (cancelled) return;
+      clearTimeout(slowTimer); setSlow(false);
       setStatus({ kind: 'ready', triangles: s.mesh ? (s.mesh.geometry.drawRange.count / 3) : 0 });
-    })().catch((e) => { if (!cancelled) setStatus({ kind: 'error', text: isAppError(e) ? e.message : e instanceof Error ? e.message : String(e) }); });
-    return () => { cancelled = true; worker?.terminate(); };
+    })().catch((e) => {
+      const msg = isAppError(e) ? e.message : e instanceof Error ? e.message : String(e);
+      log('error', `failed: ${msg}`);
+      if (!cancelled) { clearTimeout(slowTimer); setSlow(false); setStatus({ kind: 'error', text: msg }); }
+    });
+    return () => { cancelled = true; clearTimeout(slowTimer); worker?.terminate(); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [current, projectId, offline]);
+  }, [current, projectId, offline, attempt]);
 
   const reset = () => { const s = sceneRef.current; if (!s?.mesh) return; const bs = s.mesh.geometry.boundingSphere!; s.controls.target.copy(bs.center); s.camera.position.copy(bs.center).add(new THREE.Vector3(bs.radius * 1.6, -bs.radius * 1.9, bs.radius * 1.3)); s.frame(); };
 
@@ -174,6 +195,8 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
         <div className={status.kind === 'loading' && status.percent !== undefined ? 'pointer-events-none absolute inset-x-6 top-3 grid gap-1 text-xs font-semibold text-muted-foreground' : 'pointer-events-none absolute inset-x-6 top-1/2 -translate-y-1/2 text-center text-sm font-semibold text-muted-foreground'} data-testid="viewer-status" data-progress={status.percent !== undefined ? Math.round(status.percent * 100) : undefined}>
           <span className="truncate">{status.text}</span>
           {status.percent !== undefined && <span className="h-1 w-full overflow-hidden rounded-full bg-secondary"><span className="block h-full bg-primary transition-[width]" style={{ width: `${Math.round(status.percent * 100)}%` }} /></span>}
+          {status.detail && <span className="text-xs font-medium text-warning">{status.detail}</span>}
+          {(slow || status.kind === 'error') && <span className="pointer-events-auto mt-1 inline-flex justify-center"><Button size="sm" variant="outline" onClick={() => setAttempt((a) => a + 1)} data-testid="viewer-retry"><RefreshCw />{t('project.retry')}</Button></span>}
         </div>
       )}
       <div className="absolute left-3 right-3 bottom-3 flex items-center gap-3 text-xs font-semibold text-muted-foreground">

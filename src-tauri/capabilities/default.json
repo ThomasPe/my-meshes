@@ -10,6 +10,7 @@
     "core:webview:default",
     "dialog:allow-open",
     "opener:default",
-    "notification:default"
+    "notification:default",
+    "log:default"
   ]
 }

@@ -40,3 +40,5 @@ e2e = ["dep:tauri-plugin-wdio", "dep:tauri-plugin-wdio-webdriver"]
 updater = ["dep:tauri-plugin-updater", "dep:tauri-plugin-process"]
 # Microsoft Store build: identical to default, named so CI and scripts say what they build.
 store = []
+# Dev-channel builds keep the WebView DevTools (F12) so testers can report what the frontend sees.
+devtools = ["tauri/devtools"]

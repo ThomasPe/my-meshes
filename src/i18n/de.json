@@ -169,7 +169,9 @@
     "openImage": "Im Betrachter öffnen",
     "imageOf": "{{index}} von {{total}}",
     "loadingProgress": "{{name}} · {{percent}} %",
-    "parsing": "{{name}} · wird gelesen…"
+    "parsing": "{{name}} · wird gelesen…",
+    "workerFallback": "Der Hintergrund-Parser antwortet nicht; es wird im Vordergrund gelesen (langsamer).",
+    "retry": "Erneut versuchen"
   },
   "settings": {
     "title": "Einstellungen",

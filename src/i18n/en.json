@@ -169,7 +169,9 @@
     "openImage": "Open in viewer",
     "imageOf": "{{index}} of {{total}}",
     "loadingProgress": "{{name}} · {{percent}} %",
-    "parsing": "{{name}} · parsing…"
+    "parsing": "{{name}} · parsing…",
+    "workerFallback": "The background parser did not answer; parsing in the foreground instead (slower).",
+    "retry": "Retry"
   },
   "settings": {
     "title": "Settings",

@@ -8,12 +8,17 @@ import { parseModel } from '@/lib/mesh';
 import { parseStlProgressive } from '@/lib/mesh/stl';
 
 export type MeshWorkerMessage =
+  | { type: 'ready' }
   | { type: 'begin'; triangles: number }
   | { type: 'chunk'; offset: number; triangles: number; positions: Float32Array; normals: Float32Array }
   | { type: 'done'; triangles: number; parseMs: number }
   | { type: 'error'; error: string };
 
 const post = (m: MeshWorkerMessage, transfer: Transferable[] = []) => (self as unknown as Worker).postMessage(m, transfer);
+
+// Tells the page the worker script loaded and runs; without it within a few seconds the
+// viewer parses on the main thread instead of waiting on a worker that never booted.
+post({ type: 'ready' });
 
 self.onmessage = (e: MessageEvent<{ buffer: ArrayBuffer; ext: string }>) => {
   const t0 = performance.now();

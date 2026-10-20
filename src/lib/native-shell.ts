@@ -16,18 +16,19 @@ export function shouldBlockContextMenu(target: EventTarget | null): boolean {
 }
 
 /** Browser chrome shortcuts the app does not implement itself. */
-export function shouldBlockKey(e: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey'>): boolean {
+export function shouldBlockKey(e: Pick<KeyboardEvent, 'key' | 'ctrlKey' | 'metaKey' | 'shiftKey' | 'altKey'>, allowDevtools = false): boolean {
   const k = e.key.toLowerCase();
   const mod = e.ctrlKey || e.metaKey;
-  if (k === 'f5' || k === 'f3' || k === 'f7') return true;
+  if (allowDevtools && (k === 'f12' || (mod && e.shiftKey && k === 'i'))) return false;
+  if (k === 'f5' || k === 'f3' || k === 'f7' || k === 'f12') return true;
   if (mod && !e.altKey && ['r', 'p', 'f', 'g', 'u', 'j', 'h', 'd', 's', 'o', 'n', 't', 'w', 'l', 'e'].includes(k)) return true;
   if (mod && e.shiftKey && ['i', 'j', 'c', 'r'].includes(k)) return true;
   return false;
 }
 
-export function installNativeShellGuards(): () => void {
+export function installNativeShellGuards(opts: { allowDevtools?: boolean } = {}): () => void {
   const onContext = (e: MouseEvent) => { if (shouldBlockContextMenu(e.target)) e.preventDefault(); };
-  const onKey = (e: KeyboardEvent) => { if (shouldBlockKey(e)) e.preventDefault(); };
+  const onKey = (e: KeyboardEvent) => { if (shouldBlockKey(e, opts.allowDevtools)) e.preventDefault(); };
   document.addEventListener('contextmenu', onContext);
   document.addEventListener('keydown', onKey);
   return () => { document.removeEventListener('contextmenu', onContext); document.removeEventListener('keydown', onKey); };
