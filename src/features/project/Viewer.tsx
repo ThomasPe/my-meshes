@@ -21,7 +21,7 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
   const [attempt, setAttempt] = useState(0);
   const [slow, setSlow] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const sceneRef = useRef<{ renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; controls: OrbitControls; mesh: THREE.Mesh | null; frame: () => void; dispose: () => void } | null>(null);
+  const sceneRef = useRef<{ renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; controls: OrbitControls; mesh: THREE.Mesh | null; frame: () => void; setGrid: (size: number) => void; home: { target: THREE.Vector3; position: THREE.Vector3 }; dispose: () => void } | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -44,7 +44,16 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
     scene.add(new THREE.HemisphereLight(0xffffff, 0x334155, 1.1));
     const key = new THREE.DirectionalLight(0xffffff, 1.4); key.position.set(100, 80, 160); scene.add(key);
     const fill = new THREE.DirectionalLight(0xffffff, 0.4); fill.position.set(-120, 40, -60); scene.add(fill);
-    const grid = new THREE.GridHelper(400, 40, 0x9ca3af, 0xd1d5db); grid.rotation.x = Math.PI / 2; (grid.material as THREE.Material).transparent = true; (grid.material as THREE.Material).opacity = 0.35; scene.add(grid);
+    // the build plate: resized to the model and always directly under it
+    let grid: THREE.GridHelper | null = null;
+    const setGrid = (size: number) => {
+      if (grid) { scene.remove(grid); grid.geometry.dispose(); (grid.material as THREE.Material).dispose(); }
+      const step = size >= 1000 ? 50 : size >= 300 ? 20 : size >= 100 ? 10 : size >= 20 ? 5 : 1;
+      grid = new THREE.GridHelper(size, Math.max(2, Math.round(size / step)), 0x9ca3af, 0xd1d5db);
+      grid.rotation.x = Math.PI / 2; (grid.material as THREE.Material).transparent = true; (grid.material as THREE.Material).opacity = 0.35;
+      scene.add(grid);
+    };
+    setGrid(400);
     let raf = 0;
     const frame = () => {
       const w = canvas.clientWidth, h = canvas.clientHeight;
@@ -70,7 +79,7 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
     controls.addEventListener('change', kick);
     const ro = new ResizeObserver(kick); ro.observe(canvas);
     kick();
-    const state = { renderer, scene, camera, controls, mesh: null as THREE.Mesh | null, frame: kick, dispose: () => { ro.disconnect(); cancelAnimationFrame(raf); controls.dispose(); renderer.dispose(); } };
+    const state = { renderer, scene, camera, controls, mesh: null as THREE.Mesh | null, frame: kick, setGrid, home: { target: new THREE.Vector3(), position: new THREE.Vector3(120, -140, 100) }, dispose: () => { ro.disconnect(); cancelAnimationFrame(raf); controls.dispose(); renderer.dispose(); } };
     sceneRef.current = state;
     return () => { state.dispose(); sceneRef.current = null; };
   }, []);
@@ -91,13 +100,28 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
     const slowTimer = setTimeout(() => setSlow(true), 5000);
     setStatus({ kind: 'loading', text: t('project.loading', { name: file.name }) });
     log('info', `load start, ${file.size} bytes`);
-    const frameTo = (geom: THREE.BufferGeometry) => {
-      geom.computeBoundingSphere();
-      const bs = geom.boundingSphere!;
-      if (!(bs.radius > 0)) return;
-      s.controls.target.copy(bs.center);
-      s.camera.position.copy(bs.center).add(new THREE.Vector3(bs.radius * 1.6, -bs.radius * 1.9, bs.radius * 1.3));
-      s.camera.near = Math.max(bs.radius / 100, 0.01); s.camera.far = bs.radius * 50; s.camera.updateProjectionMatrix();
+    // Centres the model on the plate (x/y) with its lowest point on z = 0, sizes the plate to
+    // it and frames the camera. `count` limits the scan to the triangles streamed so far.
+    const frameTo = (geom: THREE.BufferGeometry, count?: number) => {
+      const arr = geom.getAttribute('position').array as Float32Array;
+      const n = Math.min(arr.length, (count ?? Infinity) * 9);
+      if (n < 9) return;
+      let minX = Infinity, minY = Infinity, minZ = Infinity, maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+      for (let i = 0; i < n; i += 3) {
+        const x = arr[i]!, y = arr[i + 1]!, z = arr[i + 2]!;
+        if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y; if (z < minZ) minZ = z; if (z > maxZ) maxZ = z;
+      }
+      if (!Number.isFinite(minX + maxX + minY + maxY + minZ + maxZ)) return;
+      const sx = maxX - minX, sy = maxY - minY, sz = maxZ - minZ;
+      const radius = Math.max(0.5 * Math.hypot(sx, sy, sz), 0.001);
+      if (s.mesh) s.mesh.position.set(-(minX + maxX) / 2, -(minY + maxY) / 2, -minZ);
+      const footprint = Math.max(sx, sy, 10);
+      s.setGrid(Math.ceil((footprint * 1.6) / 10) * 10);
+      s.home.target.set(0, 0, sz / 2);
+      s.home.position.set(radius * 1.6, -radius * 1.9, sz / 2 + radius * 1.3);
+      s.controls.target.copy(s.home.target);
+      s.camera.position.copy(s.home.position);
+      s.camera.near = Math.max(radius / 100, 0.01); s.camera.far = radius * 50; s.camera.updateProjectionMatrix();
     };
     (async () => {
       const b = await getBackend();
@@ -149,7 +173,7 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
             pos.needsUpdate = true; nrm.needsUpdate = true;
             done = m.offset + m.triangles;
             geom.setDrawRange(0, done * 3);
-            if (!framed) { frameTo(geom); framed = true; }
+            if (!framed) { frameTo(geom, done); framed = true; }
             s.frame();
             if (total > 0) setStatus({ kind: 'loading', text: t('project.loadingProgress', { name: file.name, percent: Math.round((done / total) * 100) }), percent: done / total });
           } else if (m.type === 'done') {
@@ -202,7 +226,7 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [current, projectId, offline, attempt]);
 
-  const reset = () => { const s = sceneRef.current; if (!s?.mesh) return; const bs = s.mesh.geometry.boundingSphere!; s.controls.target.copy(bs.center); s.camera.position.copy(bs.center).add(new THREE.Vector3(bs.radius * 1.6, -bs.radius * 1.9, bs.radius * 1.3)); s.frame(); };
+  const reset = () => { const s = sceneRef.current; if (!s?.mesh) return; s.controls.target.copy(s.home.target); s.camera.position.copy(s.home.position); s.frame(); };
 
   return (
     <div className="relative h-[440px] overflow-hidden rounded-2xl bg-background shadow-[inset_0_0_0_1px_var(--border)]" data-testid="viewer">

@@ -512,3 +512,26 @@ test('viewer: switching the model after the render loop went idle does not overf
   await page.waitForTimeout(500);
   expect(errors).toEqual([]);
 });
+
+test('grid rows never overlap after the window is resized', async ({ page }) => {
+  const check = async (label: string) => {
+    const rows = page.getByTestId('project-grid').locator('[data-index]');
+    const n = await rows.count();
+    const boxes = [];
+    for (let i = 0; i < n; i++) boxes.push({ i: Number(await rows.nth(i).getAttribute('data-index')), box: (await rows.nth(i).boundingBox())! });
+    boxes.sort((a, b) => a.i - b.i);
+    for (let k = 0; k + 1 < boxes.length; k++) {
+      const a = boxes[k]!, b = boxes[k + 1]!;
+      const cardBottom = (await rows.nth(k).getByTestId('project-card').first().boundingBox())!;
+      expect(cardBottom.y + cardBottom.height, `${label}: row ${a.i} card overlaps row ${b.i}`).toBeLessThanOrEqual(b.box.y + 0.5);
+    }
+  };
+  await expect(page.getByTestId('project-card').first()).toBeVisible();
+  await page.waitForTimeout(300);
+  await check('initial');
+  for (const w of [1100, 1600, 1250, 1400]) {
+    await page.setViewportSize({ width: w, height: 900 });
+    await page.waitForTimeout(400);
+    await check(`width ${w}`);
+  }
+});

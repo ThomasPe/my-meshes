@@ -46,8 +46,11 @@ export function ProjectGrid({ projects, tile, selected, onSelect, onOpen, onTag,
   const cardWidth = (inner - GAP * (columns - 1)) / columns;
   const rowHeight = cardWidth + META_HEIGHT + GAP;
   const rows = Math.ceil(projects.length / columns);
+  // Rows are measured by the virtualizer's ResizeObserver; `estimateSize` only seeds unmeasured
+  // rows. Calling `virt.measure()` on every width change threw the fresh measurements away
+  // after the observer had already delivered them, leaving rows at the (shorter) estimate and
+  // cards overlapping until the next resize.
   const virt = useVirtualizer({ count: rows, getScrollElement: () => parentRef.current, estimateSize: () => rowHeight, overscan: 3 });
-  useEffect(() => { virt.measure(); }, [rowHeight, virt]);
 
   return (
     <div ref={parentRef} className="h-full overflow-auto px-5 pb-6 pt-3" data-testid="project-grid">
