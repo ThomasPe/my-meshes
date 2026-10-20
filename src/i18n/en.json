@@ -267,7 +267,10 @@
     "thumbLocationSaved": "Preview location saved",
     "notifications": "Notifications",
     "notificationsHint": "Windows toasts when a background scan or an import finishes while Meshkeep is not the active window.",
-    "notificationsToggle": "Show notifications"
+    "notificationsToggle": "Show notifications",
+    "feedback": "Feedback",
+    "feedbackHint": "Found a bug or have an idea? Reports open as prefilled GitHub issues; nothing is sent in the background.",
+    "sendFeedback": "Report a bug or idea"
   },
   "status": {
     "watching": "Watching {{path}}",
@@ -410,5 +413,34 @@
     "importBody_one": "{{count}} new project",
     "importBody_other": "{{count}} new projects",
     "importBodyInbox": "Files were added to the inbox"
+  },
+  "feedback": {
+    "title": "Send feedback",
+    "body": "Your report opens as a prefilled issue on GitHub in your browser. You can still edit everything there before posting; a GitHub account is needed.",
+    "kinds": {
+      "bug": "Bug",
+      "idea": "Idea",
+      "other": "Other"
+    },
+    "summary": "Summary",
+    "summaryHint": {
+      "bug": "What goes wrong, in one line",
+      "idea": "What should Meshkeep do?",
+      "other": "Subject"
+    },
+    "details": "Details",
+    "detailsHint": {
+      "bug": "What did you do, what did you expect, what happened instead?",
+      "idea": "The problem you want to solve and how you imagine it working.",
+      "other": "Your message"
+    },
+    "includeEnv": "Include version and system info",
+    "includeLog": "Attach log excerpt",
+    "includeLogHint": "The last {{lines}} log lines are copied to the clipboard; paste them into the \"Log excerpt\" field. User folders are shortened to ~.",
+    "publicNote": "Issues on GitHub are public. Please check the text and the log for anything you would rather not share.",
+    "submit": "Open GitHub issue",
+    "opened": "The issue form opened in your browser.",
+    "openedWithLog": "The issue form opened in your browser; the log excerpt is on your clipboard.",
+    "report": "Report"
   }
 }

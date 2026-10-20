@@ -1,0 +1,18 @@
+name: Idea or feature request
+description: Something Meshkeep should do, or do differently.
+title: "[Idea] "
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What would you like?
+      description: The problem you are trying to solve and how you imagine Meshkeep helping.
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Filled in by the app when the request comes from "Send feedback".
+      render: text

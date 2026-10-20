@@ -3,6 +3,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { TopBar } from '@/components/app-shell/TopBar';
 import { StatusBar } from '@/components/app-shell/StatusBar';
 import { Toaster } from '@/components/ui/sonner';
+import { FeedbackDialog } from '@/features/feedback/FeedbackDialog';
 import { DropOverlay, ImportDialog } from '@/features/import/ImportDialog';
 import { wireImportEvents } from '@/features/import/useImport';
 import { TooltipProvider } from '@/components/ui/tooltip';
@@ -64,6 +65,7 @@ export function App() {
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
         <Shell />
+        <FeedbackDialog />
         <Toaster />
       </TooltipProvider>
     </QueryClientProvider>

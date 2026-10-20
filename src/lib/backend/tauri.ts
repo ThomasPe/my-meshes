@@ -33,6 +33,8 @@ export function createTauriBackend(): Backend {
     readProjectFile: (projectId, relPath) => invoke<ArrayBuffer>('read_project_file', { projectId, relPath }),
     updateMetadata: (projectId, update) => invoke('update_metadata', { projectId, update }),
     revealProject: (projectId) => invoke('reveal_project', { projectId }),
+    logTail: (lines) => invoke('log_tail', { lines }),
+    openUrl: (url) => invoke('open_url', { url }),
     revealFolder: (rootId, relPath) => invoke('reveal_folder', { rootId, relPath }),
     openProjectFile: (projectId, relPath) => invoke('open_project_file', { projectId, relPath }),
     pickFolder: () => invoke('pick_folder'),

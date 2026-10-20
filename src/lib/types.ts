@@ -188,6 +188,7 @@ export interface AppInfo {
   os: string;
   arch: string;
   webview: string;
+  osVersion: string;
 }
 
 export interface LibraryStats {

@@ -20,6 +20,8 @@ in `docs/decisions/`). What works today:
 - import with a staging step (zip, 7z, folders, loose files), inbox per root, drag and drop
 - settings for ignore patterns, bundle folders, preview location, notifications, theme and
   language (en/de); self-updater in private builds, Microsoft Store build without it
+- feedback from inside the app: bug reports and ideas open as prefilled GitHub issues with
+  version and system info, nothing is sent in the background
 
 Phase 2 (duplicates, keymap, undo, custom thumbnails, ...) is listed in `docs/backlog.md`.
 

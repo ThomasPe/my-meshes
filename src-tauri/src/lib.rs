@@ -78,6 +78,8 @@ pub fn run() {
             commands::update_metadata,
             commands::reveal_project,
             commands::reveal_folder,
+            commands::log_tail,
+            commands::open_url,
             commands::open_project_file,
             commands::pick_folder,
             commands::get_ignore_patterns,

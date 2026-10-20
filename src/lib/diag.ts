@@ -13,8 +13,13 @@ function getSink() {
   return sink;
 }
 
+let lastError: string | null = null;
+/** The most recent error line, offered as context when the user files a bug report. */
+export const getLastError = () => lastError;
+
 export function diag(level: Level, scope: string, message: string) {
   const line = `[${scope}] ${message}`;
+  if (level === 'error') lastError = line.slice(0, 600);
   (level === 'error' ? console.error : level === 'warn' ? console.warn : console.info)(line);
   getSink().then((s) => s?.[level](line)).catch(() => {});
 }

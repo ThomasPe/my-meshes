@@ -22,6 +22,10 @@ export interface Backend {
   notify(title: string, body: string): Promise<boolean>;
   folderTree(rootId: string): Promise<FolderNode[]>;
   libraryStats(rootId?: string | null): Promise<LibraryStats>;
+  /** Last lines of the app log with the home directory shortened, for a bug report. */
+  logTail(lines: number): Promise<string>;
+  /** Opens an http(s) link in the default browser. */
+  openUrl(url: string): Promise<void>;
   readProjectFile(projectId: string, relPath: string): Promise<ArrayBuffer>;
   updateMetadata(projectId: string, update: UpdateMetadata): Promise<Project>;
   revealProject(projectId: string): Promise<void>;

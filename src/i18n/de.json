@@ -267,7 +267,10 @@
     "thumbLocationSaved": "Speicherort für Vorschauen gespeichert",
     "notifications": "Benachrichtigungen",
     "notificationsHint": "Windows-Benachrichtigungen, wenn ein Hintergrund-Scan oder ein Import fertig ist, während Meshkeep nicht im Vordergrund ist.",
-    "notificationsToggle": "Benachrichtigungen anzeigen"
+    "notificationsToggle": "Benachrichtigungen anzeigen",
+    "feedback": "Feedback",
+    "feedbackHint": "Fehler gefunden oder eine Idee? Berichte öffnen sich als vorausgefülltes GitHub-Issue; nichts wird im Hintergrund gesendet.",
+    "sendFeedback": "Fehler oder Idee melden"
   },
   "status": {
     "watching": "Beobachte {{path}}",
@@ -410,5 +413,34 @@
     "importBody_one": "{{count}} neues Projekt",
     "importBody_other": "{{count}} neue Projekte",
     "importBodyInbox": "Dateien wurden in den Posteingang gelegt"
+  },
+  "feedback": {
+    "title": "Feedback senden",
+    "body": "Dein Bericht öffnet sich als vorausgefülltes Issue auf GitHub im Browser. Dort kannst du vor dem Absenden noch alles ändern; ein GitHub-Konto ist nötig.",
+    "kinds": {
+      "bug": "Fehler",
+      "idea": "Idee",
+      "other": "Sonstiges"
+    },
+    "summary": "Zusammenfassung",
+    "summaryHint": {
+      "bug": "Was geht schief, in einer Zeile",
+      "idea": "Was soll Meshkeep können?",
+      "other": "Betreff"
+    },
+    "details": "Details",
+    "detailsHint": {
+      "bug": "Was hast du gemacht, was hast du erwartet, was ist stattdessen passiert?",
+      "idea": "Das Problem, das du lösen willst, und wie du dir die Lösung vorstellst.",
+      "other": "Deine Nachricht"
+    },
+    "includeEnv": "Version und Systeminfos mitschicken",
+    "includeLog": "Log-Auszug anhängen",
+    "includeLogHint": "Die letzten {{lines}} Log-Zeilen landen in der Zwischenablage; füge sie im Feld „Log excerpt“ ein. Benutzerordner werden zu ~ gekürzt.",
+    "publicNote": "Issues auf GitHub sind öffentlich. Bitte prüfe Text und Log auf Dinge, die du nicht teilen möchtest.",
+    "submit": "GitHub-Issue öffnen",
+    "opened": "Das Issue-Formular wurde im Browser geöffnet.",
+    "openedWithLog": "Das Issue-Formular wurde im Browser geöffnet; der Log-Auszug liegt in der Zwischenablage.",
+    "report": "Melden"
   }
 }

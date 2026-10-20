@@ -163,6 +163,9 @@ submission is outside the code: Partner Center identity values, screenshots
 - [ ] **Keymap** (APP-5).
 - [ ] **Undo/redo** (APP-6).
 - [ ] **Log viewer** (APP-8).
+- [x] **In-app feedback** (APP-12): Settings card and "Report" action on error toasts open a
+      prefilled GitHub issue form (`.github/ISSUE_TEMPLATE/`) with version, OS, WebView and
+      library size; the log tail goes to the clipboard with user folders shortened.
 - [ ] **Custom thumbnails** (VIEW-4).
 - [ ] **Frameless title bar** (APP-10), if confirmed.
 

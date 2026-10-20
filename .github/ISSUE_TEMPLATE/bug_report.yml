@@ -1,0 +1,24 @@
+name: Bug report
+description: Something in Meshkeep does not work as expected.
+title: "[Bug] "
+labels: ["bug"]
+body:
+  - type: textarea
+    id: description
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Filled in by the app when the report comes from "Send feedback". Otherwise, Meshkeep version (Settings → About), Windows version.
+      render: text
+  - type: textarea
+    id: log
+    attributes:
+      label: Log excerpt
+      description: The app copies the last lines of its log to the clipboard when you tick "attach log excerpt"; paste them here. The full log lives in `%LOCALAPPDATA%\de.devsym.meshkeep\logs\meshkeep.log`. Please check it for anything you do not want public.
+      render: text

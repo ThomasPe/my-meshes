@@ -21,6 +21,8 @@ tauri-plugin-opener = "2.7"
 # OS toasts for finished imports and background scans while the window is in the background (APP-4).
 tauri-plugin-notification = "2"
 tauri-plugin-log = "2.10"
+# OS name/version for the "send feedback" context block (APP-12).
+os_info = { version = "3", default-features = false }
 log = "0.4"
 serde.workspace = true
 serde_json.workspace = true

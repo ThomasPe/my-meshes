@@ -79,6 +79,8 @@ pub struct AppInfo {
     os: String,
     arch: String,
     webview: String,
+    /// "Windows 10.0.26100" style string for bug reports.
+    os_version: String,
 }
 
 #[tauri::command]
@@ -104,7 +106,60 @@ pub fn app_info(app: AppHandle, state: State<AppState>) -> AppInfo {
         os: std::env::consts::OS.into(),
         arch: std::env::consts::ARCH.into(),
         webview: tauri::webview_version().unwrap_or_else(|_| "unknown".into()),
+        os_version: os_info::get().to_string(),
     }
+}
+
+/// Last `lines` lines of the app log for a bug report, with the home directory shortened to
+/// `~` so a pasted excerpt does not carry the user name (APP-12).
+#[tauri::command]
+pub fn log_tail(app: AppHandle, lines: usize) -> CmdResult<String> {
+    let path = app
+        .path()
+        .app_log_dir()
+        .map_err(|e| AppError {
+            code: "io",
+            message: e.to_string(),
+        })?
+        .join("meshkeep.log");
+    let text = match std::fs::read_to_string(&path) {
+        Ok(t) => t,
+        Err(e) if e.kind() == std::io::ErrorKind::NotFound => String::new(),
+        Err(e) => {
+            return Err(AppError {
+                code: "io",
+                message: format!("{}: {e}", path.display()),
+            })
+        }
+    };
+    let all: Vec<&str> = text.lines().collect();
+    let start = all.len().saturating_sub(lines.clamp(1, 2000));
+    let mut tail = all[start..].join("\n");
+    if let Ok(home) = app.path().home_dir() {
+        let home = home.to_string_lossy().into_owned();
+        for h in [home.clone(), home.replace('\\', "/")] {
+            if h.len() > 3 {
+                tail = tail.replace(&h, "~");
+            }
+        }
+    }
+    Ok(tail)
+}
+
+/// Opens a web link in the default browser; only http(s), so a crafted sidecar cannot launch
+/// anything else through this command.
+#[tauri::command]
+pub fn open_url(app: AppHandle, url: String) -> CmdResult<()> {
+    if !(url.starts_with("https://") || url.starts_with("http://")) {
+        return Err(AppError {
+            code: "not_allowed",
+            message: format!("not a web link: {url}"),
+        });
+    }
+    app.opener().open_url(url, None::<&str>).map_err(|e| AppError {
+        code: "shell",
+        message: e.to_string(),
+    })
 }
 
 #[tauri::command]

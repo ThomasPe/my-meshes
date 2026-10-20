@@ -136,7 +136,7 @@ export function createMockBackend(): Backend {
 
   return {
     kind: 'mock',
-    async appInfo() { return { version: '0.1.0-mock', dataDir: 'in-memory', testMode: false, e2eBuild: false, updater: true, store: false, channel: 'stable', os: 'browser', arch: 'n/a', webview: navigator.userAgent.split(') ').pop() ?? '' }; },
+    async appInfo() { return { version: '0.1.0-mock', dataDir: 'in-memory', testMode: false, e2eBuild: false, updater: true, store: false, channel: 'stable', os: 'browser', arch: 'n/a', webview: navigator.userAgent.split(') ').pop() ?? '', osVersion: 'Browser' }; },
     async getRoots() { await delay(); return roots.map((r) => ({ ...r })); },
     async addRoot(path, mode = 'watch') {
       if (roots.some((r) => r.path === path)) throw err('root_exists', `root already registered: ${path}`);
@@ -269,6 +269,8 @@ export function createMockBackend(): Backend {
       return { ...p };
     },
     async revealProject() {},
+    async logTail(lines) { return Array.from({ length: Math.min(lines, 5) }, (_, i) => `[2026-10-20][12:00:0${i}][INFO][meshkeep_engine::scan] mock log line ${i + 1} ~/3D Models`).join('\n'); },
+    async openUrl(url) { const w = window as unknown as { __mockOpened?: string[] }; (w.__mockOpened ??= []).push(url); },
     async revealFolder(rootId, relPath) { const w = window as unknown as { __mockRevealed?: string[] }; (w.__mockRevealed ??= []).push(`${rootId}:${relPath}`); },
     async openProjectFile() {},
     async setFavorite(projectId, favorite) { const p = find(projectId); p.favorite = favorite; listeners.proj.forEach((cb) => cb({ projectId })); return { ...p }; },

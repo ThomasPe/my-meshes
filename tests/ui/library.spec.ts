@@ -91,6 +91,37 @@ test('two edits in a row save without a conflict; reload after a real conflict d
   await expect(status).not.toHaveAttribute('data-state', 'pending');
 });
 
+test('feedback: the dialog opens a prefilled GitHub issue with version and system info', async ({ page }) => {
+  await page.getByTestId('nav-settings').click();
+  await page.getByTestId('send-feedback').click();
+  const dialog = page.getByTestId('feedback-dialog');
+  await expect(dialog).toBeVisible();
+  await expect(page.getByTestId('feedback-submit')).toBeDisabled();
+  await expect(page.getByTestId('feedback-env-preview')).toContainText('Meshkeep 0.1.0-mock');
+  await page.getByTestId('feedback-title').fill('Viewer stays on reading');
+  await page.getByTestId('feedback-details').fill('Opened a 3MF, nothing happens.');
+  await page.getByTestId('feedback-submit').click();
+  await expect(dialog).toHaveCount(0);
+  const opened = await page.evaluate(() => (window as unknown as { __mockOpened?: string[] }).__mockOpened ?? []);
+  expect(opened).toHaveLength(1);
+  const url = new URL(opened[0]!);
+  expect(url.pathname).toBe('/ThomasPe/my-meshes/issues/new');
+  expect(url.searchParams.get('template')).toBe('bug_report.yml');
+  expect(url.searchParams.get('title')).toBe('[Bug] Viewer stays on reading');
+  expect(url.searchParams.get('description')).toBe('Opened a 3MF, nothing happens.');
+  expect(url.searchParams.get('environment')).toContain('Meshkeep 0.1.0-mock (stable channel)');
+  expect(url.searchParams.get('environment')).toContain('Library: 72 projects');
+  // the idea form carries no log field and no bug label
+  await page.getByTestId('send-feedback').click();
+  await page.getByTestId('feedback-kind').getByRole('radio', { name: 'Idea' }).click();
+  await expect(page.getByTestId('feedback-log')).toHaveCount(0);
+  await page.getByTestId('feedback-title').fill('Project tabs');
+  await page.getByTestId('feedback-submit').click();
+  const second = new URL((await page.evaluate(() => (window as unknown as { __mockOpened?: string[] }).__mockOpened ?? []))[1]!);
+  expect(second.searchParams.get('template')).toBe('feature_request.yml');
+  expect(second.searchParams.get('labels')).toBe('enhancement,from-app');
+});
+
 test('settings lists roots and switches language', async ({ page }) => {
   await page.getByTestId('nav-settings').click();
   await expect(page.getByTestId('root-row')).toHaveCount(2);

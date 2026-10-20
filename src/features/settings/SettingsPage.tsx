@@ -1,4 +1,4 @@
-import { Bell, Download, FolderOpen, HardDrive, Images, Monitor, Moon, Plus, RefreshCw, Sun, Trash2, X } from 'lucide-react';
+import { Bell, Bug, Download, FolderOpen, HardDrive, Images, Monitor, Moon, Plus, RefreshCw, Sun, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
+import { openFeedback } from '@/features/feedback/feedback';
 import { useLibraryActions } from '@/features/library/useLibraryActions';
 import { LANGUAGES, setLanguage, type Language } from '@/i18n';
 import { getBackend } from '@/lib/backend';
@@ -157,6 +158,10 @@ export function SettingsPage({ scanning, onScanEnd }: { scanning: ScanState; onS
             )}
             {update.state === 'idle' && (info.data?.updater ? t('settings.updateIdle') : info.data?.store ? t('settings.updatesStore') : t('settings.updatesDev'))}
           </div>
+        </Card>
+
+        <Card title={t('settings.feedback')} hint={t('settings.feedbackHint')} action={<Button size="sm" variant="outline" onClick={() => openFeedback()} data-testid="send-feedback"><Bug />{t('settings.sendFeedback')}</Button>}>
+          <div className="text-[13px] font-semibold text-secondary-foreground"><a className="underline-offset-2 hover:underline" href="https://github.com/ThomasPe/my-meshes/issues" target="_blank" rel="noreferrer">github.com/ThomasPe/my-meshes/issues</a></div>
         </Card>
 
         <Card title={t('settings.about')}>
