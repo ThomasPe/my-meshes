@@ -535,3 +535,31 @@ test('grid rows never overlap after the window is resized', async ({ page }) => 
     await check(`width ${w}`);
   }
 });
+
+test('folder tree: arrow keys navigate and select like Explorer', async ({ page }) => {
+  const title = page.getByTestId('toolbar').locator('h1');
+  await page.getByTestId('filter-root').first().click();
+  await expect(title).toHaveText('3D Models');
+  await page.getByTestId('root-row').first().focus();
+  await page.keyboard.press('ArrowDown');
+  await expect(title).toContainText('Inbox');
+  await page.keyboard.press('ArrowDown');
+  await expect(title).toHaveText('Projects');
+  await page.keyboard.press('ArrowLeft'); // collapse
+  await expect(page.locator('[data-tree-row][data-label="Projects"]')).toHaveAttribute('aria-expanded', 'false');
+  await page.keyboard.press('ArrowRight'); // expand again
+  await expect(page.locator('[data-tree-row][data-label="Projects"]')).toHaveAttribute('aria-expanded', 'true');
+  await page.keyboard.press('ArrowRight'); // step into the first child
+  await expect(title).toHaveText('Calibration');
+  await page.keyboard.press('ArrowLeft'); // leaf: back to the parent
+  await expect(title).toHaveText('Projects');
+  await page.keyboard.type('me'); // type-ahead
+  await expect(title).toHaveText('Mechanical');
+  await page.keyboard.press('End');
+  await expect(title).toHaveText('Helmets');
+  await page.keyboard.press('Home');
+  await expect(title).toHaveText('3D Models');
+  // the tree is one tab stop: Tab leaves it instead of walking every row
+  await page.keyboard.press('Tab');
+  expect(await page.evaluate(() => document.activeElement?.closest('[data-tree-row]') !== null)).toBe(false);
+});

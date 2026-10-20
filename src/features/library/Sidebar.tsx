@@ -1,5 +1,5 @@
 import { ChevronDown, ChevronRight, Clock, Folder, FolderHeart, FolderOpen, HardDrive, Inbox, LayoutGrid, Pencil, Plus, RefreshCw, Settings, Sparkles, Star, Tag, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { getBackend } from '@/lib/backend';
@@ -35,6 +35,64 @@ export function Sidebar({ onRescan }: { onRescan?: (rootId: string) => void } = 
   const toggleTag = useUi((s) => s.toggleTag);
   const openDialog = useCollectionDialog((s) => s.open);
 
+  // Explorer-style keyboard navigation over the folder tree. Rows are plain DOM nodes with
+  // data attributes, so the roving focus and the arrow keys work without lifting the
+  // per-row open state: Right expands (or steps into), Left collapses (or steps out),
+  // Up/Down/Home/End move and select, typing jumps to the next matching name.
+  const treeRef = useRef<HTMLDivElement>(null);
+  const typeahead = useRef({ text: '', at: 0 });
+  const rowsOf = () => Array.from(treeRef.current?.querySelectorAll<HTMLElement>('[data-tree-row]') ?? []);
+  const focusRow = (row: HTMLElement | undefined, select = true) => {
+    if (!row) return;
+    for (const r of rowsOf()) r.tabIndex = r === row ? 0 : -1;
+    row.focus();
+    if (select) row.querySelector<HTMLElement>('[data-select]')?.click();
+  };
+  const onTreeFocus = (e: React.FocusEvent) => {
+    const row = (e.target as HTMLElement).closest<HTMLElement>('[data-tree-row]');
+    if (row) for (const r of rowsOf()) r.tabIndex = r === row ? 0 : -1;
+  };
+  const onTreeKey = (e: React.KeyboardEvent) => {
+    const rows = rowsOf();
+    const current = (e.target as HTMLElement).closest<HTMLElement>('[data-tree-row]');
+    if (!current || rows.length === 0) return;
+    const idx = rows.indexOf(current);
+    const open = current.getAttribute('aria-expanded');
+    const toggle = () => current.querySelector<HTMLElement>('[data-chevron]')?.click();
+    switch (e.key) {
+      case 'ArrowDown': e.preventDefault(); focusRow(rows[Math.min(idx + 1, rows.length - 1)]); break;
+      case 'ArrowUp': e.preventDefault(); focusRow(rows[Math.max(idx - 1, 0)]); break;
+      case 'Home': e.preventDefault(); focusRow(rows[0]); break;
+      case 'End': e.preventDefault(); focusRow(rows[rows.length - 1]); break;
+      case 'ArrowRight':
+        e.preventDefault();
+        if (open === 'false') toggle();
+        else if (open === 'true') { const next = rows[idx + 1]; if (next && next.dataset.parent === current.dataset.key) focusRow(next); }
+        break;
+      case 'ArrowLeft':
+        e.preventDefault();
+        if (open === 'true') toggle();
+        else { const parent = rows.find((r) => r.dataset.key === current.dataset.parent); if (parent) focusRow(parent); }
+        break;
+      case 'Enter': case ' ': e.preventDefault(); current.querySelector<HTMLElement>('[data-select]')?.click(); break;
+      case '*': e.preventDefault(); for (const r of rows) if (r.getAttribute('aria-expanded') === 'false' && r.dataset.parent === current.dataset.parent) r.querySelector<HTMLElement>('[data-chevron]')?.click(); break;
+      default: {
+        if (e.key.length !== 1 || e.ctrlKey || e.metaKey || e.altKey) return;
+        const now = Date.now();
+        const st = typeahead.current;
+        st.text = now - st.at < 800 ? st.text + e.key.toLowerCase() : e.key.toLowerCase();
+        st.at = now;
+        const order = [...rows.slice(idx + (st.text.length === 1 ? 1 : 0)), ...rows.slice(0, idx + (st.text.length === 1 ? 1 : 0))];
+        const hit = order.find((r) => (r.dataset.label ?? '').toLowerCase().startsWith(st.text));
+        if (hit) { e.preventDefault(); focusRow(hit); }
+      }
+    }
+  };
+  useEffect(() => {
+    // one tab stop: the first row (or the selected one) unless the user already moved
+    const rows = rowsOf();
+    if (rows.length && !rows.some((r) => r.tabIndex === 0)) (rows.find((r) => r.getAttribute('aria-selected') === 'true') ?? rows[0])!.tabIndex = 0;
+  });
   return (
     <ScrollArea className="h-full border-r border-border bg-panel" data-testid="sidebar">
       <nav className="grid grid-cols-[minmax(0,1fr)] gap-4 p-3">
@@ -88,7 +146,9 @@ export function Sidebar({ onRescan }: { onRescan?: (rootId: string) => void } = 
         </section>
         <section>
           <h3 className={headClass}>{t('library.roots')}<a href={routeHref({ page: 'settings' })} className="ml-auto rounded-full p-1 hover:bg-secondary" title={t('settings.addFolder')}><Plus className="size-3.5" /></a></h3>
-          {(roots.data ?? []).map((r) => <RootTree key={r.id} root={r} filter={filter} setFilter={setFilter} onRescan={onRescan} />)}
+          <div ref={treeRef} role="tree" aria-label={t('library.roots')} onKeyDown={onTreeKey} onFocusCapture={onTreeFocus} data-testid="folder-tree">
+            {(roots.data ?? []).map((r) => <RootTree key={r.id} root={r} filter={filter} setFilter={setFilter} onRescan={onRescan} />)}
+          </div>
         </section>
         {tags.data && tags.data.length > 0 && (
           <section>
@@ -129,9 +189,9 @@ function RootTree({ root, filter, setFilter, onRescan }: { root: LibraryRoot; fi
     <div>
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <div className={cn(itemClass, 'pr-2 font-extrabold text-foreground', same(filter, rootFilter) ? activeClass : 'bg-secondary/50')} data-testid="root-row">
-            <button type="button" aria-label={open ? 'collapse' : 'expand'} className="-ml-1 rounded p-0.5 text-muted-foreground hover:text-foreground" onClick={() => setOpen((o) => !o)}>{open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}</button>
-            <button type="button" data-testid="filter-root" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setFilter(rootFilter)} title={`${root.path} · ${modeLabel}`}>
+          <div className={cn(itemClass, 'pr-2 font-extrabold text-foreground focus-visible:outline-2 focus-visible:outline-primary', same(filter, rootFilter) ? activeClass : 'bg-secondary/50')} data-testid="root-row" data-tree-row data-key={root.id} data-label={name} role="treeitem" aria-expanded={open} aria-selected={same(filter, rootFilter)} tabIndex={-1}>
+            <button type="button" tabIndex={-1} data-chevron aria-label={open ? 'collapse' : 'expand'} className="-ml-1 rounded p-0.5 text-muted-foreground hover:text-foreground" onClick={() => setOpen((o) => !o)}>{open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}</button>
+            <button type="button" tabIndex={-1} data-select data-testid="filter-root" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setFilter(rootFilter)} title={`${root.path} · ${modeLabel}`}>
               <span className="relative shrink-0"><HardDrive className="text-muted-foreground" /><span className={cn('absolute -bottom-0.5 -right-0.5 size-2 rounded-full ring-2 ring-panel', MODE_DOT[modeKey])} data-testid="root-mode-dot" data-mode={modeKey} aria-label={modeLabel} /></span>
               <Truncated text={name} />
             </button>
@@ -147,9 +207,9 @@ function RootTree({ root, filter, setFilter, onRescan }: { root: LibraryRoot; fi
       {open && online && (
         <ContextMenu>
           <ContextMenuTrigger asChild>
-            <div className={cn(itemClass, 'h-8 font-medium', same(filter, inboxFilter) && activeClass)} style={{ paddingLeft: 12 + INDENT }}>
+            <div className={cn(itemClass, 'h-8 font-medium focus-visible:outline-2 focus-visible:outline-primary', same(filter, inboxFilter) && activeClass)} style={{ paddingLeft: 12 + INDENT }} data-tree-row data-key={`${root.id}:_Inbox`} data-parent={root.id} data-label={t('inbox.title')} role="treeitem" aria-selected={same(filter, inboxFilter)} tabIndex={-1}>
               <span className="w-3.5 shrink-0" />
-              <button type="button" data-testid="filter-inbox" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setFilter(inboxFilter)}><Inbox className="text-muted-foreground" /><Truncated text={t('inbox.title')} /></button>
+              <button type="button" tabIndex={-1} data-select data-testid="filter-inbox" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setFilter(inboxFilter)}><Inbox className="text-muted-foreground" /><Truncated text={t('inbox.title')} /></button>
               <span className="shrink-0 text-[11px] tabular text-muted-foreground" data-testid="inbox-count">{inbox.data?.length ?? 0}</span>
             </div>
           </ContextMenuTrigger>
@@ -172,9 +232,9 @@ function FolderItem({ node, depth, rootId, filter, setFilter, online }: { node: 
     <div>
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <div className={cn(itemClass, 'h-8 font-medium', same(filter, f) && activeClass)} style={{ paddingLeft: 12 + depth * INDENT }}>
-            {has ? <button type="button" aria-label={open ? 'collapse' : 'expand'} className="-ml-1 rounded p-0.5 text-muted-foreground hover:text-foreground" onClick={() => setOpen((o) => !o)}>{open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}</button> : <span className="w-3.5 shrink-0" />}
-            <button type="button" data-testid="filter-folder" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setFilter(f)}><Folder className="text-muted-foreground" /><Truncated text={node.name} data-testid="folder-name" /></button>
+          <div className={cn(itemClass, 'h-8 font-medium focus-visible:outline-2 focus-visible:outline-primary', same(filter, f) && activeClass)} style={{ paddingLeft: 12 + depth * INDENT }} data-tree-row data-key={`${rootId}:${node.rel_path}`} data-parent={node.rel_path.includes('/') ? `${rootId}:${node.rel_path.slice(0, node.rel_path.lastIndexOf('/'))}` : rootId} data-label={node.name} role="treeitem" aria-expanded={has ? open : undefined} aria-selected={same(filter, f)} tabIndex={-1}>
+            {has ? <button type="button" tabIndex={-1} data-chevron aria-label={open ? 'collapse' : 'expand'} className="-ml-1 rounded p-0.5 text-muted-foreground hover:text-foreground" onClick={() => setOpen((o) => !o)}>{open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}</button> : <span className="w-3.5 shrink-0" />}
+            <button type="button" tabIndex={-1} data-select data-testid="filter-folder" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setFilter(f)}><Folder className="text-muted-foreground" /><Truncated text={node.name} data-testid="folder-name" /></button>
             <span className="shrink-0 text-[11px] tabular text-muted-foreground">{node.project_count}</span>
           </div>
         </ContextMenuTrigger>
