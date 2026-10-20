@@ -1,7 +1,6 @@
-import { Check, ExternalLink, Info } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Check, CloudUpload, ExternalLink, Info, Loader2 } from 'lucide-react';
+import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
-import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -25,21 +24,46 @@ export function MetadataForm({ project: p, onReload }: { project: Project; onRel
   const update = useUpdateMetadata();
   const [form, setForm] = useState(() => toForm(p));
   const [conflict, setConflict] = useState<UpdateMetadata | null>(null);
-  useEffect(() => { setForm(toForm(p)); }, [p.id, p.sidecar_stamp?.mtime_unix_nanos, p.sidecar_stamp?.size]); // eslint-disable-line react-hooks/exhaustive-deps
+  const [savedAt, setSavedAt] = useState<number | null>(null);
+  // the form snapshot of the save in flight: edits made meanwhile survive the refetch
+  const sent = useRef<string | null>(null);
+  const formRef = useRef(form);
+  formRef.current = form;
+  useEffect(() => {
+    if (sent.current === null || JSON.stringify(formRef.current) === sent.current) { setForm(toForm(p)); sent.current = null; }
+  }, [p.id, p.sidecar_stamp?.mtime_unix_nanos, p.sidecar_stamp?.size]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const set = <K extends keyof typeof form>(k: K, v: (typeof form)[K]) => setForm((f) => ({ ...f, [k]: v }));
   const dirty = JSON.stringify(form) !== JSON.stringify(toForm(p));
 
   const save = (force = false) => {
+    const snapshot = JSON.stringify(form);
     const upd: UpdateMetadata = { title: form.title, creator: form.creator, license: form.license === NONE ? '' : form.license, source_url: form.source_url, description: form.description, tags: form.tags, recommended_material: form.material === NONE ? '' : form.material, supports_required: form.supports, notes: form.notes, expected_stamp: p.sidecar_stamp ?? null, force };
+    sent.current = snapshot;
     update.mutate({ id: p.id, update: upd }, {
-      onSuccess: () => { setConflict(null); toast.success(p.sidecar.state === 'missing' ? t('project.created') : t('project.saved')); },
-      onError: (e) => { if (isAppError(e) && e.code === 'sidecar_conflict') setConflict(upd); else reportError(e); },
+      onSuccess: () => { setConflict(null); setSavedAt(Date.now()); },
+      onError: (e) => { sent.current = null; if (isAppError(e) && e.code === 'sidecar_conflict') setConflict(upd); else reportError(e); },
     });
   };
 
+  // Auto-save (META-2): a second after the last edit, or at once when focus leaves the form.
+  // Nothing is written while a save runs or a conflict waits for the user's decision.
+  const saveRef = useRef(save);
+  saveRef.current = save;
+  const blocked = update.isPending || !!conflict || p.offline;
+  useEffect(() => {
+    if (!dirty || blocked) return;
+    const timer = setTimeout(() => saveRef.current(), 1000);
+    return () => clearTimeout(timer);
+  }, [form, dirty, blocked]);
+  const onBlur = (e: React.FocusEvent<HTMLFormElement>) => {
+    if (e.relatedTarget && e.currentTarget.contains(e.relatedTarget as Node)) return;
+    if (dirty && !blocked) saveRef.current();
+  };
+  const status = update.isPending ? 'saving' : dirty ? 'pending' : savedAt ? 'saved' : 'idle';
+
   return (
-    <form className="grid gap-4" onSubmit={(e) => { e.preventDefault(); save(); }} data-testid="metadata-form">
+    <form className="grid gap-4" onSubmit={(e) => { e.preventDefault(); if (dirty && !blocked) save(); }} onBlur={onBlur} data-testid="metadata-form">
       <div className="flex items-center gap-2.5">
         <h2 className="text-base font-extrabold tracking-tight">{t('project.metadata')}</h2>
         {p.sidecar.state === 'ok' ? <Badge variant="success"><Check />{t('inspector.sidecarOk')}</Badge> : p.sidecar.state === 'malformed' ? <Badge variant="warning" title={p.sidecar.message}>{t('inspector.sidecarMalformed')}</Badge> : <Badge variant="outline">{t('inspector.sidecarMissing')}</Badge>}
@@ -68,7 +92,9 @@ export function MetadataForm({ project: p, onReload }: { project: Project; onRel
       </div>
       <Field label={t('project.notes')}><Input value={form.notes} placeholder="0.2 mm, 15 % infill…" onChange={(e) => set('notes', e.target.value)} /></Field>
       <div className="flex items-center gap-3">
-        <Button type="submit" disabled={!dirty || update.isPending || p.offline} data-testid="save-metadata"><Check />{t('project.save')}</Button>
+        <span className="inline-flex h-9 items-center gap-1.5 text-xs font-semibold text-muted-foreground" data-testid="autosave-status" data-state={status} aria-live="polite">
+          {status === 'saving' ? <><Loader2 className="size-3.5 animate-spin" />{t('project.autosave.saving')}</> : status === 'pending' ? <><CloudUpload className="size-3.5" />{t('project.autosave.pending')}</> : status === 'saved' ? <><Check className="size-3.5 text-success" />{t('project.autosave.saved')}</> : <>{t('project.autosave.idle')}</>}
+        </span>
         <Tooltip>
           <TooltipTrigger asChild><button type="button" aria-label={t('project.saveHint')} className="rounded-full p-1 text-muted-foreground hover:bg-secondary hover:text-foreground" data-testid="save-hint"><Info className="size-4" /></button></TooltipTrigger>
           <TooltipContent side="right" className="max-w-[40ch]">{t('project.saveHint')}</TooltipContent>

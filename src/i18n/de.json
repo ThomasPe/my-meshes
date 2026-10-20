@@ -144,7 +144,7 @@
     "save": "In project.yaml speichern",
     "saved": "project.yaml gespeichert",
     "created": "project.yaml angelegt",
-    "saveHint": "Speichern ist optimistisch: Die Oberfläche aktualisiert sofort, die YAML wird im Hintergrund atomar geschrieben.",
+    "saveHint": "Änderungen werden automatisch in die project.yaml geschrieben, eine Sekunde nach der letzten Eingabe oder beim Verlassen des Formulars. Die Oberfläche aktualisiert sofort, die Datei wird atomar geschrieben.",
     "openInApp": "Mit Standard-App öffnen",
     "viewer": "Viewer",
     "viewerHint": "Ziehen zum Drehen · Mausrad zum Zoomen",
@@ -171,7 +171,13 @@
     "loadingProgress": "{{name}} · {{percent}} %",
     "parsing": "{{name}} · wird gelesen…",
     "workerFallback": "Der Hintergrund-Parser antwortet nicht; es wird im Vordergrund gelesen (langsamer).",
-    "retry": "Erneut versuchen"
+    "retry": "Erneut versuchen",
+    "autosave": {
+      "idle": "Wird automatisch gespeichert",
+      "pending": "Wird gleich gespeichert…",
+      "saving": "Speichert…",
+      "saved": "Alle Änderungen gespeichert"
+    }
   },
   "settings": {
     "title": "Einstellungen",

@@ -144,7 +144,7 @@
     "save": "Save to project.yaml",
     "saved": "project.yaml saved",
     "created": "project.yaml created",
-    "saveHint": "Saving is optimistic: the UI updates at once, the YAML is written atomically in the background.",
+    "saveHint": "Changes are written to project.yaml automatically, a second after the last edit or when you leave the form. The UI updates at once; the file is written atomically.",
     "openInApp": "Open with default app",
     "viewer": "Viewer",
     "viewerHint": "drag to orbit · wheel to zoom",
@@ -171,7 +171,13 @@
     "loadingProgress": "{{name}} · {{percent}} %",
     "parsing": "{{name}} · parsing…",
     "workerFallback": "The background parser did not answer; parsing in the foreground instead (slower).",
-    "retry": "Retry"
+    "retry": "Retry",
+    "autosave": {
+      "idle": "Saved automatically",
+      "pending": "Saving shortly…",
+      "saving": "Saving…",
+      "saved": "All changes saved"
+    }
   },
   "settings": {
     "title": "Settings",

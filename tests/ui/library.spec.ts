@@ -57,8 +57,9 @@ test('double-click opens the project page with metadata form and files', async (
   await expect(page.getByTestId('project-title')).toHaveText('Robotic Arm v4');
   await expect(page.getByTestId('field-creator')).toHaveValue('ExampleCreator');
   await page.getByTestId('field-title').fill('Robotic Arm v5');
-  await page.getByTestId('save-metadata').click();
-  await expect(page.getByText('project.yaml saved')).toBeVisible();
+  // auto-save: a second after the last keystroke the status flips to saved
+  await expect(page.getByTestId('autosave-status')).toHaveAttribute('data-state', 'pending');
+  await expect(page.getByTestId('autosave-status')).toHaveAttribute('data-state', 'saved', { timeout: 5000 });
   await expect(page.getByTestId('project-title')).toHaveText('Robotic Arm v5');
   await page.getByRole('tab', { name: /Files/ }).click();
   await expect(page.getByTestId('file-row')).toHaveCount(8);
@@ -496,7 +497,7 @@ test('viewer: dragging orbits, the wheel zooms, long file names do not widen the
   expect((await page.getByTestId('viewer-file').boundingBox())!.width).toBeLessThanOrEqual(262);
   // the save hint sits behind an info icon now
   await page.getByTestId('save-hint').hover();
-  await expect(page.getByRole('tooltip')).toContainText('optimistic');
+  await expect(page.getByRole('tooltip')).toContainText('automatically');
 });
 
 test('viewer: switching the model after the render loop went idle does not overflow the stack', async ({ page }) => {
