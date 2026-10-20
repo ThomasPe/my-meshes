@@ -110,3 +110,35 @@ describe('3MF production extension (Bambu Studio / OrcaSlicer)', () => {
     expect(Array.from(m.positions.slice(0, 3))).toEqual([5, 0, 100]);
   });
 });
+
+describe('3MF colours', () => {
+  it('decodes painted triangle states (PrusaSlicer / Bambu encoding)', async () => {
+    const { paintState } = await import('@/lib/mesh/threemf');
+    expect(paintState('8')).toBe(2);   // leaf, state 2
+    expect(paintState('4')).toBe(1);   // leaf, state 1
+    expect(paintState('0C')).toBe(3);  // leaf, state 3 = 11 + extra nibble 0
+    expect(paintState('1C')).toBe(4);  // extra nibble 1
+    expect(paintState('0')).toBe(0);
+    expect(paintState('zz')).toBe(0);
+  });
+  it('core materials: object pid/pindex and per-triangle p1 become vertex colours', () => {
+    const xml = '<?xml version="1.0"?><model xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources><basematerials id="5"><base name="red" displaycolor="#FF0000FF"/><base name="blue" displaycolor="#0000FF"/></basematerials><object id="1" type="model" pid="5" pindex="0"><mesh><vertices><vertex x="0" y="0" z="0"/><vertex x="1" y="0" z="0"/><vertex x="0" y="1" z="0"/><vertex x="0" y="0" z="1"/></vertices><triangles><triangle v1="0" v2="1" v3="2"/><triangle v1="0" v2="1" v3="3" pid="5" p1="1"/></triangles></mesh></object></resources><build><item objectid="1"/></build></model>';
+    const m = parse3mf(generate3mf({ '3D/3dmodel.model': strToU8(xml) }));
+    expect(m.triangles).toBe(2);
+    expect(m.colors).toBeDefined();
+    expect(Array.from(m.colors!.slice(0, 3))).toEqual([1, 0, 0]);
+    expect(Array.from(m.colors!.slice(9, 12))).toEqual([0, 0, 1]);
+  });
+  it('Bambu projects: part extruders and paint_color map to filament colours', () => {
+    const part = '<?xml version="1.0"?><model xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02"><resources><object id="1" type="model"><mesh><vertices><vertex x="0" y="0" z="0"/><vertex x="1" y="0" z="0"/><vertex x="0" y="1" z="0"/></vertices><triangles><triangle v1="0" v2="1" v3="2"/><triangle v1="0" v2="1" v3="2" paint_color="8"/></triangles></mesh></object><object id="2" type="model"><mesh><vertices><vertex x="0" y="0" z="0"/><vertex x="1" y="0" z="0"/><vertex x="0" y="1" z="0"/></vertices><triangles><triangle v1="0" v2="1" v3="2"/></triangles></mesh></object></resources></model>';
+    const root = '<?xml version="1.0"?><model xmlns="http://schemas.microsoft.com/3dmanufacturing/core/2015/02" xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06"><resources><object id="18" type="model"><components><component p:path="/3D/Objects/object_20.model" objectid="1"/><component p:path="/3D/Objects/object_20.model" objectid="2"/></components></object></resources><build><item objectid="18"/></build></model>';
+    const modelSettings = '<?xml version="1.0"?><config><object id="18"><metadata key="extruder" value="1"/><part id="1"><metadata key="extruder" value="1"/></part><part id="2"><metadata key="extruder" value="3"/></part></object></config>';
+    const project = '{ "filament_colour": [ "#FF8040", "#FFFF00", "#000000", "#FFFFFF" ] }';
+    const m = parse3mf(generate3mf({ '3D/3dmodel.model': strToU8(root), '3D/Objects/object_20.model': strToU8(part), 'Metadata/model_settings.config': strToU8(modelSettings), 'Metadata/project_settings.config': strToU8(project) }));
+    expect(m.triangles).toBe(3);
+    const rgb = (i: number) => Array.from(m.colors!.slice(i * 9, i * 9 + 3)).map((x) => Math.round(x * 255));
+    expect(rgb(0)).toEqual([255, 128, 64]); // part 1: extruder 1
+    expect(rgb(1)).toEqual([255, 255, 0]);  // painted state 2: filament 2
+    expect(rgb(2)).toEqual([0, 0, 0]);      // part 2: extruder 3
+  });
+});

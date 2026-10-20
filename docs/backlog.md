@@ -102,8 +102,12 @@ submission is outside the code: Partner Center identity values, screenshots
 - [x] **3D viewport** (VIEW-1): STL, OBJ and 3MF parsed in a worker, render on demand;
       binary STL streams in 100k-triangle slices with a progress bar, so a million-triangle
       file appears while it loads.
-- [x] **3MF support** (VIEW-2): geometry incl. components and build transforms, embedded
-      preview extracted by the engine, slicer detection (PrusaSlicer, Bambu/Orca) as a badge.
+- [x] **3MF support** (VIEW-2): geometry incl. components, build transforms and
+      production-extension parts (Bambu/Orca `3D/Objects`), embedded preview extracted by
+      the engine, slicer detection (PrusaSlicer, Bambu/Orca) as a badge. Colours: core
+      materials (`basematerials`, colour groups, per-object and per-triangle), Bambu/Orca
+      filament colours per part plus `paint_color`, PrusaSlicer volumes plus
+      `mmu_segmentation`; shown in the viewer and in rendered thumbnails.
 - [x] **Thumbnail queue** (VIEW-3): engine-driven queue, worker rendering with main-thread
       fallback, PNG cache in app data keyed per project + source file, invalidated by
       size/mtime; status bar progress; "clear cache" in settings. Optional location

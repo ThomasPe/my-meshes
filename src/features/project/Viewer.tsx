@@ -9,6 +9,7 @@ import { getBackend } from '@/lib/backend';
 import { diag } from '@/lib/diag';
 import { isAppError, type FileEntry } from '@/lib/types';
 import { parseModel, PREVIEWABLE } from '@/lib/mesh';
+import { srgbToLinear } from '@/lib/mesh/types';
 import MeshWorker from '@/workers/mesh-worker?worker';
 import type { MeshWorkerMessage } from '@/workers/mesh-worker';
 
@@ -137,6 +138,7 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
         let geom: THREE.BufferGeometry | null = null;
         let pos: THREE.BufferAttribute | null = null;
         let nrm: THREE.BufferAttribute | null = null;
+        let col: THREE.BufferAttribute | null = null;
         let total = 0, done = 0, framed = false;
         let watchdog: ReturnType<typeof setTimeout> | null = null;
         let settled = false;
@@ -171,6 +173,19 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
             (nrm.array as Float32Array).set(m.normals, m.offset * 9);
             pos.addUpdateRange(m.offset * 9, m.triangles * 9); nrm.addUpdateRange(m.offset * 9, m.triangles * 9);
             pos.needsUpdate = true; nrm.needsUpdate = true;
+            if (m.colors && s.mesh) {
+              // the file carries colours: switch the material to per-vertex colour on first sight
+              if (!col) {
+                col = new THREE.BufferAttribute(new Float32Array(total * 9).fill(1), 3);
+                col.setUsage(THREE.DynamicDrawUsage);
+                geom.setAttribute('color', col);
+                const mat = s.mesh.material as THREE.MeshStandardMaterial;
+                mat.vertexColors = true; mat.color.set(0xffffff); mat.needsUpdate = true;
+              }
+              (col.array as Float32Array).set(srgbToLinear(m.colors), m.offset * 9);
+              col.addUpdateRange(m.offset * 9, m.triangles * 9);
+              col.needsUpdate = true;
+            }
             done = m.offset + m.triangles;
             geom.setDrawRange(0, done * 3);
             if (!framed) { frameTo(geom, done); framed = true; }

@@ -3,6 +3,7 @@
 // One renderer per canvas is kept alive; each call swaps the mesh, frames it, renders a
 // single frame and encodes a PNG. Ported from the spike's thumb-render.ts.
 import * as THREE from 'three';
+import { srgbToLinear } from '@/lib/mesh/types';
 import type { ParsedMesh } from '@/lib/mesh/types';
 
 export const THUMB_SIZE = 512;
@@ -24,6 +25,7 @@ export class ThumbRenderer {
   private scene = new THREE.Scene();
   private camera = new THREE.PerspectiveCamera(32, 1, 0.1, 1000);
   private material = new THREE.MeshStandardMaterial({ color: 0x0f8b8d, roughness: 0.55, metalness: 0.05, side: THREE.DoubleSide });
+  private colored = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.55, metalness: 0.05, side: THREE.DoubleSide });
   private mesh: THREE.Mesh | null = null;
   readonly glRenderer: string;
 
@@ -46,10 +48,11 @@ export class ThumbRenderer {
     const geom = new THREE.BufferGeometry();
     geom.setAttribute('position', new THREE.BufferAttribute(parsed.positions, 3));
     geom.setAttribute('normal', new THREE.BufferAttribute(parsed.normals, 3));
+    if (parsed.colors) geom.setAttribute('color', new THREE.BufferAttribute(srgbToLinear(parsed.colors), 3));
     geom.computeBoundingSphere();
     const bs = geom.boundingSphere!;
     if (!Number.isFinite(bs.radius) || bs.radius <= 0) { geom.dispose(); throw new Error('degenerate geometry'); }
-    const mesh = new THREE.Mesh(geom, this.material);
+    const mesh = new THREE.Mesh(geom, parsed.colors ? this.colored : this.material);
     mesh.position.sub(bs.center);
     this.scene.add(mesh);
     this.mesh = mesh;

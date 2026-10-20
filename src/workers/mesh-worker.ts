@@ -10,7 +10,7 @@ import { parseStlProgressive } from '@/lib/mesh/stl';
 export type MeshWorkerMessage =
   | { type: 'ready' }
   | { type: 'begin'; triangles: number }
-  | { type: 'chunk'; offset: number; triangles: number; positions: Float32Array; normals: Float32Array }
+  | { type: 'chunk'; offset: number; triangles: number; positions: Float32Array; normals: Float32Array; colors?: Float32Array }
   | { type: 'done'; triangles: number; parseMs: number }
   | { type: 'error'; error: string };
 
@@ -34,7 +34,7 @@ self.onmessage = (e: MessageEvent<{ buffer: ArrayBuffer; ext: string }>) => {
       const m = parseModel(e.data.buffer, e.data.ext);
       triangles = m.triangles;
       post({ type: 'begin', triangles });
-      post({ type: 'chunk', offset: 0, triangles, positions: m.positions, normals: m.normals }, [m.positions.buffer, m.normals.buffer]);
+      post({ type: 'chunk', offset: 0, triangles, positions: m.positions, normals: m.normals, colors: m.colors }, [m.positions.buffer, m.normals.buffer, ...(m.colors ? [m.colors.buffer] : [])]);
     }
     post({ type: 'done', triangles, parseMs: performance.now() - t0 });
   } catch (err) {

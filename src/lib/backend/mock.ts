@@ -232,8 +232,12 @@ export function createMockBackend(): Backend {
       const file = p.files.find((x) => x.rel_path === relPath);
       if (!file) throw err('not_found', relPath);
       const seed = [...relPath].reduce((a, c) => a + c.charCodeAt(0), 0);
-      // `?mesh=<triangles>` forces a mesh size (stress tests of the viewer and thumbnails)
-      const forced = Number(new URLSearchParams(location.search).get('mesh'));
+      // `?sample=<url>` serves that file for the models of one project (visual checks with real
+      // files); `?mesh=<triangles>` forces a mesh size (stress tests of the viewer and thumbnails)
+      const params = new URLSearchParams(location.search);
+      const sample = params.get('sample');
+      if (sample && projectId.endsWith('Arm v4') && file.kind === 'model') return fetch(sample).then((r) => r.arrayBuffer());
+      const forced = Number(params.get('mesh'));
       const tri = forced > 0 ? forced : Math.min(20000, Math.max(200, Math.round(file.size / 4096)));
       const ext = relPath.split('.').pop()?.toLowerCase();
       if (ext === 'stl') return generateStl(tri, seed);

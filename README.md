@@ -15,7 +15,8 @@ in `docs/decisions/`). What works today:
 - virtualized grid and list, full-text search, filters by tag, folder, creator, license,
   material and file type; favorites, recent additions, collections and smart collections
 - rendered thumbnails (STL, OBJ, 3MF) in a background queue, slicer 3MF previews, a 3D
-  viewer with progressive loading, an image viewer
+  viewer with progressive loading and 3MF colours (materials, Bambu/Orca and PrusaSlicer
+  painting), an image viewer
 - import with a staging step (zip, 7z, folders, loose files), inbox per root, drag and drop
 - settings for ignore patterns, bundle folders, preview location, notifications, theme and
   language (en/de); self-updater in private builds, Microsoft Store build without it

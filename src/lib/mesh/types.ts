@@ -4,6 +4,25 @@ export interface ParsedMesh {
   positions: Float32Array;
   normals: Float32Array;
   triangles: number;
+  /** Per-vertex RGB in 0..1 (same length as `positions`); absent when the file carries no colours. */
+  colors?: Float32Array;
+}
+
+/** Fallback surface colour for triangles without their own colour, as RGB in 0..1. */
+export const DEFAULT_COLOR: [number, number, number] = [0x0f / 255, 0x8b / 255, 0x8d / 255];
+
+/** Vertex colours in the parsers are sRGB (as in the files); renderers want linear values. */
+export function srgbToLinear(colors: Float32Array): Float32Array {
+  const out = new Float32Array(colors.length);
+  for (let i = 0; i < colors.length; i++) { const c = colors[i]!; out[i] = c <= 0.04045 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); }
+  return out;
+}
+
+export function hexToRgb(hex: string): [number, number, number] | null {
+  const m = /^#?([0-9a-f]{6})/i.exec(hex.trim());
+  if (!m) return null;
+  const n = parseInt(m[1]!, 16);
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
 }
 
 export const PREVIEWABLE = new Set(['stl', 'obj', '3mf']);
