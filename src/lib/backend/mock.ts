@@ -216,13 +216,14 @@ export function createMockBackend(): Backend {
       return true;
     },
     async folderTree(rootId) {
-      type N = { count: number; children: Map<string, N> };
-      const root: N = { count: 0, children: new Map() };
+      type N = { count: number; isProject: boolean; children: Map<string, N> };
+      const root: N = { count: 0, isProject: false, children: new Map() };
       for (const p of projects.filter((x) => x.root_id === rootId)) {
         let cur = root; cur.count++;
-        for (const seg of p.rel_path.split('/').filter(Boolean)) { if (!cur.children.has(seg)) cur.children.set(seg, { count: 0, children: new Map() }); cur = cur.children.get(seg)!; cur.count++; }
+        for (const seg of p.rel_path.split('/').filter(Boolean)) { if (!cur.children.has(seg)) cur.children.set(seg, { count: 0, isProject: false, children: new Map() }); cur = cur.children.get(seg)!; cur.count++; }
+        cur.isProject = true;
       }
-      const build = (prefix: string, n: N): FolderNode[] => [...n.children.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([name, c]) => { const rel = prefix ? `${prefix}/${name}` : name; return { name, rel_path: rel, project_count: c.count, children: build(rel, c) }; });
+      const build = (prefix: string, n: N): FolderNode[] => [...n.children.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([name, c]) => { const rel = prefix ? `${prefix}/${name}` : name; return { name, rel_path: rel, project_count: c.count, is_project: c.isProject, children: build(rel, c) }; });
       return build('', root);
     },
     async libraryStats(rootId) { const l = projects.filter((p) => !rootId || p.root_id === rootId); return { projects: l.length, totalBytes: l.reduce((a, p) => a + p.total_bytes, 0), favorites: projects.filter((p) => p.favorite).length }; },

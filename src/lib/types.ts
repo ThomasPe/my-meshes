@@ -146,6 +146,8 @@ export interface FolderNode {
   name: string;
   rel_path: string;
   project_count: number;
+  /** The folder is a project itself, not only a container of projects. */
+  is_project: boolean;
   children: FolderNode[];
 }
 

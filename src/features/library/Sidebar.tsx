@@ -1,4 +1,4 @@
-import { ChevronDown, ChevronRight, Clock, Folder, FolderHeart, FolderOpen, HardDrive, Inbox, LayoutGrid, Pencil, Plus, RefreshCw, Settings, Sparkles, Star, Tag, Trash2 } from 'lucide-react';
+import { Box, ChevronDown, ChevronRight, Clock, Folder, FolderHeart, FolderOpen, HardDrive, Inbox, LayoutGrid, Pencil, Plus, RefreshCw, Settings, Sparkles, Star, Tag, Trash2 } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
@@ -228,14 +228,16 @@ function FolderItem({ node, depth, rootId, filter, setFilter, online }: { node: 
   const [open, setOpen] = useState(depth < 2);
   const f: LibraryFilter = { kind: 'folder', rootId, path: node.rel_path };
   const has = node.children.length > 0;
+  // a project folder gets the model icon; its own count is implied, so only containers show one
+  const Icon = node.is_project ? Box : Folder;
   return (
     <div>
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <div className={cn(itemClass, 'h-8 font-medium focus-visible:outline-2 focus-visible:outline-primary', same(filter, f) && activeClass)} style={{ paddingLeft: 12 + depth * INDENT }} data-tree-row data-key={`${rootId}:${node.rel_path}`} data-parent={node.rel_path.includes('/') ? `${rootId}:${node.rel_path.slice(0, node.rel_path.lastIndexOf('/'))}` : rootId} data-label={node.name} role="treeitem" aria-expanded={has ? open : undefined} aria-selected={same(filter, f)} tabIndex={-1}>
+          <div className={cn(itemClass, 'h-8 font-medium focus-visible:outline-2 focus-visible:outline-primary', same(filter, f) && activeClass)} style={{ paddingLeft: 12 + depth * INDENT }} data-tree-row data-key={`${rootId}:${node.rel_path}`} data-parent={node.rel_path.includes('/') ? `${rootId}:${node.rel_path.slice(0, node.rel_path.lastIndexOf('/'))}` : rootId} data-label={node.name} data-kind={node.is_project ? 'project' : 'folder'} role="treeitem" aria-expanded={has ? open : undefined} aria-selected={same(filter, f)} tabIndex={-1}>
             {has ? <button type="button" tabIndex={-1} data-chevron aria-label={open ? 'collapse' : 'expand'} className="-ml-1 rounded p-0.5 text-muted-foreground hover:text-foreground" onClick={() => setOpen((o) => !o)}>{open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}</button> : <span className="w-3.5 shrink-0" />}
-            <button type="button" tabIndex={-1} data-select data-testid="filter-folder" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setFilter(f)}><Folder className="text-muted-foreground" /><Truncated text={node.name} data-testid="folder-name" /></button>
-            <span className="shrink-0 text-[11px] tabular text-muted-foreground">{node.project_count}</span>
+            <button type="button" tabIndex={-1} data-select data-testid="filter-folder" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setFilter(f)}><Icon className={node.is_project ? 'text-primary/80' : 'text-muted-foreground'} /><Truncated text={node.name} data-testid="folder-name" /></button>
+            {(!node.is_project || has) && <span className="shrink-0 text-[11px] tabular text-muted-foreground">{node.project_count}</span>}
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent data-testid="folder-menu">

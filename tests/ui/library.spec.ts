@@ -592,6 +592,19 @@ test('grid rows never overlap after the window is resized', async ({ page }) => 
   }
 });
 
+test('folder tree: containers get a folder icon and a count, projects a model icon', async ({ page }) => {
+  const desk = page.locator('[data-tree-row][data-label="Desk"]');
+  await expect(desk).toHaveAttribute('data-kind', 'folder');
+  await expect(desk).toContainText('2');
+  await desk.getByRole('button', { name: 'expand' }).click();
+  const stand = page.locator('[data-tree-row][data-label="Phone Stand"]');
+  await expect(stand).toHaveAttribute('data-kind', 'project');
+  await expect(stand.locator('span.tabular')).toHaveCount(0);
+  // the two rows draw different icons
+  const icon = (row: ReturnType<typeof page.locator>) => row.locator('[data-testid="filter-folder"] svg').first().evaluate((el) => el.getAttribute('class'));
+  expect(await icon(desk)).not.toBe(await icon(stand));
+});
+
 test('folder tree: arrow keys navigate and select like Explorer', async ({ page }) => {
   const title = page.getByTestId('toolbar').locator('h1');
   await page.getByTestId('filter-root').first().click();

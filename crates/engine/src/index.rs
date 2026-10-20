@@ -542,6 +542,7 @@ impl Index {
         #[derive(Default)]
         struct Node {
             count: u32,
+            is_project: bool,
             children: BTreeMap<String, Node>,
         }
         let mut root = Node::default();
@@ -555,6 +556,7 @@ impl Index {
                 cur = cur.children.entry(seg.to_string()).or_default();
                 cur.count += 1;
             }
+            cur.is_project = true;
         }
         fn build(prefix: &str, n: &Node) -> Vec<FolderNode> {
             n.children
@@ -569,6 +571,7 @@ impl Index {
                         name: name.clone(),
                         rel_path: rel.clone(),
                         project_count: child.count,
+                        is_project: child.is_project,
                         children: build(&rel, child),
                     }
                 })
@@ -788,6 +791,9 @@ mod tests {
         assert_eq!(tree[0].name, "Gridfinity");
         assert_eq!(tree[0].project_count, 2);
         assert_eq!(tree[0].children.len(), 2);
+        // containers are folders, the leaves are the projects themselves
+        assert!(!tree[0].is_project);
+        assert!(tree[0].children.iter().all(|c| c.is_project));
         let tags = ix.tag_counts(None).unwrap();
         assert_eq!(tags[0].tag, "gridfinity");
         assert_eq!(tags[0].count, 2);
