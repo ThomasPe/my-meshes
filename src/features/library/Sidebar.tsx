@@ -107,7 +107,8 @@ export function Sidebar({ onRescan }: { onRescan?: (rootId: string) => void } = 
   );
 }
 
-const INDENT = 14; // px per tree level; the chevron column is only kept where a level has children
+const INDENT = 8; // px per tree level: a child's chevron sits half an icon to the right of its parent's
+const MODE_DOT: Record<string, string> = { watch: 'bg-success', poll: 'bg-primary', manual: 'bg-muted-foreground', offline: 'bg-destructive' };
 
 function reveal(rootId: string, rel: string) {
   getBackend().then((b) => b.revealFolder(rootId, rel)).catch(reportError);
@@ -122,19 +123,18 @@ function RootTree({ root, filter, setFilter, onRescan }: { root: LibraryRoot; fi
   const inboxFilter: LibraryFilter = { kind: 'inbox', rootId: root.id };
   const name = root.path.split(/[\\/]/).filter(Boolean).pop() || root.path;
   const online = root.status !== 'offline';
-  const chevrons = (tree.data ?? []).some((n) => n.children.length > 0);
+  const modeKey = online ? root.mode : 'offline';
+  const modeLabel = online ? t(`settings.mode.${root.mode}`) : t('settings.status.offline');
   return (
     <div>
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <div className={cn(itemClass, 'pr-2', same(filter, rootFilter) && activeClass)} data-testid="root-row">
+          <div className={cn(itemClass, 'pr-2 font-extrabold text-foreground', same(filter, rootFilter) ? activeClass : 'bg-secondary/50')} data-testid="root-row">
             <button type="button" aria-label={open ? 'collapse' : 'expand'} className="-ml-1 rounded p-0.5 text-muted-foreground hover:text-foreground" onClick={() => setOpen((o) => !o)}>{open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}</button>
-            <button type="button" data-testid="filter-root" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setFilter(rootFilter)} title={root.path}>
-              <span className={cn('size-2 shrink-0 rounded-full', online ? 'bg-success' : 'bg-muted-foreground/50')} />
-              <HardDrive className="text-muted-foreground" />
+            <button type="button" data-testid="filter-root" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setFilter(rootFilter)} title={`${root.path} · ${modeLabel}`}>
+              <span className="relative shrink-0"><HardDrive className="text-muted-foreground" /><span className={cn('absolute -bottom-0.5 -right-0.5 size-2 rounded-full ring-2 ring-panel', MODE_DOT[modeKey])} data-testid="root-mode-dot" data-mode={modeKey} aria-label={modeLabel} /></span>
               <Truncated text={name} />
             </button>
-            <span className="shrink-0 text-[11px] text-muted-foreground">{online ? root.mode : 'offline'}</span>
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent data-testid="root-menu">
@@ -148,7 +148,7 @@ function RootTree({ root, filter, setFilter, onRescan }: { root: LibraryRoot; fi
         <ContextMenu>
           <ContextMenuTrigger asChild>
             <div className={cn(itemClass, 'h-8 font-medium', same(filter, inboxFilter) && activeClass)} style={{ paddingLeft: 12 + INDENT }}>
-              {chevrons && <span className="w-3.5 shrink-0" />}
+              <span className="w-3.5 shrink-0" />
               <button type="button" data-testid="filter-inbox" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setFilter(inboxFilter)}><Inbox className="text-muted-foreground" /><Truncated text={t('inbox.title')} /></button>
               <span className="shrink-0 text-[11px] tabular text-muted-foreground" data-testid="inbox-count">{inbox.data?.length ?? 0}</span>
             </div>
@@ -158,23 +158,22 @@ function RootTree({ root, filter, setFilter, onRescan }: { root: LibraryRoot; fi
           </ContextMenuContent>
         </ContextMenu>
       )}
-      {open && (tree.data ?? []).map((n) => <FolderItem key={n.rel_path} node={n} depth={1} rootId={root.id} filter={filter} setFilter={setFilter} chevrons={chevrons} online={online} />)}
+      {open && (tree.data ?? []).map((n) => <FolderItem key={n.rel_path} node={n} depth={1} rootId={root.id} filter={filter} setFilter={setFilter} online={online} />)}
     </div>
   );
 }
 
-function FolderItem({ node, depth, rootId, filter, setFilter, chevrons, online }: { node: FolderNode; depth: number; rootId: string; filter: LibraryFilter; setFilter: (f: LibraryFilter) => void; chevrons: boolean; online: boolean }) {
+function FolderItem({ node, depth, rootId, filter, setFilter, online }: { node: FolderNode; depth: number; rootId: string; filter: LibraryFilter; setFilter: (f: LibraryFilter) => void; online: boolean }) {
   const { t } = useTranslation();
   const [open, setOpen] = useState(depth < 2);
   const f: LibraryFilter = { kind: 'folder', rootId, path: node.rel_path };
   const has = node.children.length > 0;
-  const childChevrons = node.children.some((c) => c.children.length > 0);
   return (
     <div>
       <ContextMenu>
         <ContextMenuTrigger asChild>
           <div className={cn(itemClass, 'h-8 font-medium', same(filter, f) && activeClass)} style={{ paddingLeft: 12 + depth * INDENT }}>
-            {has ? <button type="button" aria-label={open ? 'collapse' : 'expand'} className="-ml-1 rounded p-0.5 text-muted-foreground hover:text-foreground" onClick={() => setOpen((o) => !o)}>{open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}</button> : chevrons ? <span className="w-3.5 shrink-0" /> : null}
+            {has ? <button type="button" aria-label={open ? 'collapse' : 'expand'} className="-ml-1 rounded p-0.5 text-muted-foreground hover:text-foreground" onClick={() => setOpen((o) => !o)}>{open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}</button> : <span className="w-3.5 shrink-0" />}
             <button type="button" data-testid="filter-folder" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setFilter(f)}><Folder className="text-muted-foreground" /><Truncated text={node.name} data-testid="folder-name" /></button>
             <span className="shrink-0 text-[11px] tabular text-muted-foreground">{node.project_count}</span>
           </div>
@@ -184,7 +183,7 @@ function FolderItem({ node, depth, rootId, filter, setFilter, chevrons, online }
           <ContextMenuItem disabled={!online} onSelect={() => reveal(rootId, node.rel_path)} data-testid="menu-reveal-folder"><FolderOpen />{t('inspector.reveal')}</ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
-      {open && has && node.children.map((c) => <FolderItem key={c.rel_path} node={c} depth={depth + 1} rootId={rootId} filter={filter} setFilter={setFilter} chevrons={childChevrons} online={online} />)}
+      {open && has && node.children.map((c) => <FolderItem key={c.rel_path} node={c} depth={depth + 1} rootId={rootId} filter={filter} setFilter={setFilter} online={online} />)}
     </div>
   );
 }
