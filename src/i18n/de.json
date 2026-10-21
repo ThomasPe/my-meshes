@@ -324,7 +324,9 @@
     "deleteManyTitle_one": "{{count}} Projekt in den Papierkorb verschieben?",
     "deleteManyTitle_other": "{{count}} Projekte in den Papierkorb verschieben?",
     "deletedMany_one": "{{count}} Projekt in den Papierkorb verschoben",
-    "deletedMany_other": "{{count}} Projekte in den Papierkorb verschoben"
+    "deletedMany_other": "{{count}} Projekte in den Papierkorb verschoben",
+    "rerenderThumb": "Vorschau neu erzeugen",
+    "rerenderQueued": "Neue Vorschau für „{{name}}“ wird gerendert…"
   },
   "import": {
     "title": "Importieren",

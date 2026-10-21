@@ -101,6 +101,7 @@ pub fn run() {
             commands::thumbnail_failed,
             commands::read_thumbnail,
             commands::clear_thumbnails,
+            commands::reset_thumbnail,
             commands::pick_import_files,
             commands::analyze_import,
             commands::execute_import,

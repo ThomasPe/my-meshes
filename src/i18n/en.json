@@ -324,7 +324,9 @@
     "deleteManyTitle_one": "Move {{count}} project to the trash?",
     "deleteManyTitle_other": "Move {{count}} projects to the trash?",
     "deletedMany_one": "{{count}} project moved to trash",
-    "deletedMany_other": "{{count}} projects moved to trash"
+    "deletedMany_other": "{{count}} projects moved to trash",
+    "rerenderThumb": "Re-render preview",
+    "rerenderQueued": "Rendering a new preview for “{{name}}”…"
   },
   "import": {
     "title": "Import",

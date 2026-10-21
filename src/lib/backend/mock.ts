@@ -411,6 +411,13 @@ export function createMockBackend(): Backend {
     async checkUpdate() { await delay(300); return { available: true, version: '0.2.0', notes: 'Mock release notes', date: null }; },
     async installUpdate() { await delay(300); },
     async onFileDrop() { return () => {}; },
+    async resetThumbnail(projectId) {
+      const p = find(projectId);
+      if (p.thumb) thumbs.delete(p.thumb);
+      p.thumb = null; failed.delete(projectId);
+      const w = window as unknown as { __mockThumbResets?: string[] }; (w.__mockThumbResets ??= []).push(projectId);
+      listeners.proj.forEach((cb) => cb({ projectId }));
+    },
     async clearThumbnails() { thumbs.clear(); failed.clear(); for (const p of projects) p.thumb = null; listeners.lib.forEach((cb) => cb({ rootId: null, report: null, reason: 'thumbs_cleared' })); },
     async pickFolder() { return 'E:\\More Models'; },
     async getIgnorePatterns() { return ignore.slice(); },

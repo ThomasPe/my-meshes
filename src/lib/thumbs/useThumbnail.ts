@@ -45,6 +45,12 @@ export function useThumbnail(key: string | null | undefined): string | null {
   return url;
 }
 
+/** Forgets one key, so a re-rendered PNG under the same key is fetched again. */
+export function forgetThumbnail(key: string) {
+  const url = cache.get(key);
+  if (url) { cache.delete(key); URL.revokeObjectURL(url); }
+}
+
 /** Test seam / cache clearing. */
 export function dropThumbnailCache() {
   for (const url of cache.values()) URL.revokeObjectURL(url);

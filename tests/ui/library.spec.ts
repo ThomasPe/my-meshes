@@ -171,6 +171,19 @@ test('thumbnails are rendered in the background and shown on cards', async ({ pa
   await expect(page.getByTestId('thumb-summary')).toContainText(/\d+ rendered/);
 });
 
+test('a project preview can be re-rendered from the card menu', async ({ page }) => {
+  const card = page.getByTestId('project-card').filter({ hasText: 'Robotic Arm v4' });
+  await expect(card.getByTestId('thumb-img')).toBeVisible({ timeout: 60_000 });
+  await card.click({ button: 'right' });
+  await page.getByTestId('menu-rethumb').click();
+  await expect(page.getByText('Rendering a new preview for “Robotic Arm v4”')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => (window as unknown as { __mockThumbResets?: string[] }).__mockThumbResets ?? [])).toEqual(['r1:Projects/Robotics/Arm v4']);
+  // the queue picks it up again and the card gets a fresh image
+  await expect(card.getByTestId('thumb-img')).toBeVisible({ timeout: 60_000 });
+  await page.getByTestId('nav-settings').click();
+  await expect(page.getByTestId('thumb-summary')).toContainText(/\d+ rendered/);
+});
+
 test('favorites: toggle on a card, filter view and count in the sidebar', async ({ page }) => {
   await expect(page.getByTestId('favorites-count')).toHaveText('2');
   const card = page.getByTestId('project-card').filter({ hasText: 'Decorative Vase' });

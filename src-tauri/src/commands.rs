@@ -544,6 +544,13 @@ pub async fn read_thumbnail(app: AppHandle, key: String) -> CmdResult<Response> 
 }
 
 #[tauri::command]
+pub fn reset_thumbnail(app: AppHandle, state: State<AppState>, project_id: String) -> CmdResult<()> {
+    state.engine.lock().unwrap().reset_thumbnail(&project_id)?;
+    let _ = app.emit("project://changed", serde_json::json!({ "projectId": project_id }));
+    Ok(())
+}
+
+#[tauri::command]
 pub fn clear_thumbnails(app: AppHandle, state: State<AppState>) -> CmdResult<()> {
     state.engine.lock().unwrap().clear_thumbnails()?;
     let _ = app.emit(

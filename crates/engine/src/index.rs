@@ -664,6 +664,24 @@ impl Index {
         Ok(rows)
     }
 
+    /// The stored key of one project's thumbnail, if any.
+    pub fn thumb_key(&self, project_id: &str) -> Result<Option<String>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT key FROM thumbs WHERE project_id = ?1 AND key IS NOT NULL",
+                params![project_id],
+                |r| r.get(0),
+            )
+            .optional()?)
+    }
+
+    /// Forgets one project's thumbnail record (PNG or failure); it re-enters the queue.
+    pub fn clear_thumb(&mut self, project_id: &str) -> Result<()> {
+        self.conn.execute("DELETE FROM thumbs WHERE project_id = ?1", params![project_id])?;
+        Ok(())
+    }
+
     pub fn rename_thumb(&mut self, old_id: &str, new_id: &str) -> Result<()> {
         self.conn.execute("DELETE FROM thumbs WHERE project_id = ?1", params![new_id])?;
         self.conn

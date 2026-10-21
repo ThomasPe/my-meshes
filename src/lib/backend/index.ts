@@ -48,6 +48,8 @@ export interface Backend {
   thumbnailFailed(projectId: string, reason: string): Promise<void>;
   readThumbnail(key: string): Promise<ArrayBuffer>;
   clearThumbnails(): Promise<void>;
+  /** Drops one project's thumbnail (or recorded failure) so the queue renders it again. */
+  resetThumbnail(projectId: string): Promise<void>;
   pickImportFiles(): Promise<string[]>;
   analyzeImport(paths: string[]): Promise<ImportItem[]>;
   executeImport(request: ImportRequest): Promise<ImportReport>;

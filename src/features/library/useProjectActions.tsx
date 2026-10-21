@@ -11,6 +11,8 @@ import { reportError } from '@/lib/errors';
 import { useCollectionDialog } from '@/features/library/CollectionDialogs';
 import { useAddToCollection, useCollections, useDeleteProject, useRemoveFromCollection, useRenameProject, useSetFavorite } from '@/lib/queries';
 import { navigate } from '@/lib/router';
+import { kickThumbQueue, useThumbs } from '@/lib/thumbs/queue';
+import { forgetThumbnail } from '@/lib/thumbs/useThumbnail';
 import { useUi } from '@/lib/store';
 import { isAppError, type ProjectSummary } from '@/lib/types';
 
@@ -44,6 +46,16 @@ export function useProjectActions(opts: { onRenamed?: (oldId: string, newId: str
     rename: (p) => { setRenameError(null); setName(p.rel_path.split('/').pop() ?? ''); setRenaming(p); },
     remove: (p) => setDeleting(p),
     reveal: (p) => { getBackend().then((b) => b.revealProject(p.id)).catch(reportError); },
+    rerenderThumbnail: (p) => {
+      getBackend().then(async (b) => {
+        await b.resetThumbnail(p.id);
+        const key = p.thumb ?? useThumbs.getState().fresh[p.id];
+        if (key) forgetThumbnail(key);
+        useThumbs.setState((s) => { const fresh = { ...s.fresh }; delete fresh[p.id]; return { fresh }; });
+        toast.success(t('actions.rerenderQueued', { name: p.title }));
+        void kickThumbQueue();
+      }).catch(reportError);
+    },
     addToCollection: (p, cid) => {
       if (cid === null) { openCollectionDialog({ kind: 'create', addProjectIds: [p.id] }); return; }
       addTo.mutate({ id: cid, projectIds: [p.id] }, { onSuccess: (c) => toast.success(t('collections.added', { name: c.name })), onError: reportError });

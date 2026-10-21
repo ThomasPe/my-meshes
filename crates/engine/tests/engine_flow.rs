@@ -204,6 +204,15 @@ fn favorites_rename_delete_and_thumbnails() {
     assert!(engine.thumb_queue(10).unwrap().iter().any(|j| j.project_id == bins_id));
     let key2 = engine.store_thumbnail(&bins_id, TINY_PNG).unwrap();
     assert_eq!(key, key2, "key is deterministic per project + source");
+    // "re-render preview": the PNG goes, the project is queued again, a failure is forgotten too
+    engine.reset_thumbnail(&bins_id).unwrap();
+    assert!(engine.thumbnail_path(&key).is_err());
+    assert!(engine.get_project(&bins_id).unwrap().thumb.is_none());
+    assert!(engine.thumb_queue(10).unwrap().iter().any(|j| j.project_id == bins_id));
+    engine.reset_thumbnail(&vase_id).unwrap();
+    assert!(engine.thumb_queue(10).unwrap().iter().any(|j| j.project_id == vase_id));
+    assert!(engine.reset_thumbnail("nope").is_err());
+    engine.store_thumbnail(&bins_id, TINY_PNG).unwrap();
 
     // rename: collision check, favorites and thumbnail follow, old id is gone
     assert!(matches!(engine.rename_project(&bins_id, "Bins").unwrap().id.as_str(), id if id == bins_id));

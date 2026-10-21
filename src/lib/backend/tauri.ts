@@ -54,6 +54,7 @@ export function createTauriBackend(): Backend {
     thumbnailFailed: (projectId, reason) => invoke('thumbnail_failed', { projectId, reason }),
     readThumbnail: (key) => invoke<ArrayBuffer>('read_thumbnail', { key }),
     clearThumbnails: () => invoke('clear_thumbnails'),
+    resetThumbnail: (projectId) => invoke('reset_thumbnail', { projectId }),
     pickImportFiles: () => invoke('pick_import_files'),
     analyzeImport: (paths) => invoke('analyze_import', { paths }),
     executeImport: (request) => invoke('execute_import', { request }),

@@ -1,4 +1,4 @@
-import { Check, CloudOff, ExternalLink, Eye, FileBox, FolderHeart, FolderOpen, Layers, Pencil, Plus, Scale, Star, StarOff, Trash2, X } from 'lucide-react';
+import { Check, CloudOff, ExternalLink, Eye, FileBox, FolderHeart, FolderOpen, ImageUp, Layers, Pencil, Plus, Scale, Star, StarOff, Trash2, X } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -123,6 +123,7 @@ export function Inspector({ selectedIds, visible, tagCounts, facets, filterTitle
           <Button size="sm" onClick={() => navigate({ page: 'project', id: p.id })} data-testid="inspector-open"><Eye />{t('inspector.open')}</Button>
           <Button size="sm" variant="outline" disabled={p.offline} onClick={() => actions.reveal(summary)} title={t('inspector.reveal')}><FolderOpen />{t('inspector.reveal')}</Button>
           <Button size="icon-sm" variant="outline" disabled={p.offline || p.rel_path === ''} onClick={() => actions.rename(summary)} title={t('actions.rename')} aria-label={t('actions.rename')} data-testid="inspector-rename"><Pencil /></Button>
+          <Button size="icon-sm" variant="outline" disabled={p.offline} onClick={() => actions.rerenderThumbnail(summary)} title={t('actions.rerenderThumb')} aria-label={t('actions.rerenderThumb')} data-testid="inspector-rethumb"><ImageUp /></Button>
           <Button size="icon-sm" variant="outline" disabled={p.offline || p.rel_path === ''} onClick={() => actions.remove(summary)} title={t('actions.delete')} aria-label={t('actions.delete')} data-testid="inspector-delete" className="text-destructive hover:text-destructive"><Trash2 /></Button>
         </div>
         {p.offline && root && <p className="mb-3 rounded-[10px] bg-warning-soft p-3 text-xs font-semibold text-warning">{t('inspector.offlineHint', { path: root.path })}</p>}

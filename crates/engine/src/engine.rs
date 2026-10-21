@@ -588,6 +588,25 @@ impl Engine {
         self.index.set_thumb(project_id, &src, None, Some(reason))
     }
 
+    /// Drops one project's thumbnail (PNG in either location, or the recorded failure) so
+    /// the queue renders it again, e.g. after a framing fix or for a source that failed once.
+    pub fn reset_thumbnail(&mut self, project_id: &str) -> Result<()> {
+        let p = self
+            .index
+            .project(project_id)?
+            .ok_or_else(|| EngineError::ProjectNotFound(project_id.to_string()))?;
+        if let Some(key) = self.index.thumb_key(project_id)? {
+            let _ = std::fs::remove_file(thumbs::cache_dir(&self.data_dir).join(&key));
+            if let Ok(dir) = self.project_dir(&p) {
+                let cache = thumbs::project_cache_dir(&dir);
+                let _ = std::fs::remove_file(cache.join(&key));
+                let _ = std::fs::remove_dir(&cache); // only when empty
+                let _ = std::fs::remove_dir(dir.join(".cache"));
+            }
+        }
+        self.index.clear_thumb(project_id)
+    }
+
     /// Drops the whole cache (app data and project-side files of reachable projects);
     /// everything re-enters the queue.
     pub fn clear_thumbnails(&mut self) -> Result<()> {

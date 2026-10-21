@@ -166,7 +166,9 @@ submission is outside the code: Partner Center identity values, screenshots
 - [x] **In-app feedback** (APP-12): Settings card and "Report" action on error toasts open a
       prefilled GitHub issue form (`.github/ISSUE_TEMPLATE/`) with version, OS, WebView and
       library size; the log tail goes to the clipboard with user folders shortened.
-- [ ] **Custom thumbnails** (VIEW-4).
+- [ ] **Custom thumbnails** (VIEW-4). Done so far: "Re-render preview" per project (card menu,
+      inspector) drops the cached PNG and queues the project again; previews frame the
+      bounding box so wide or flat parts are no longer cut off.
 - [ ] **Frameless title bar** (APP-10), if confirmed.
 
 ## Phase 3: Model tools
