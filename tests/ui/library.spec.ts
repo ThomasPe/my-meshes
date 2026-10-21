@@ -122,6 +122,20 @@ test('feedback: the dialog opens a prefilled GitHub issue with version and syste
   expect(second.searchParams.get('labels')).toBe('enhancement,from-app');
 });
 
+test('the sidebar stays on the project page; picking a folder there returns to the library', async ({ page }) => {
+  await page.getByTestId('project-card').filter({ hasText: 'Robotic Arm v4' }).dblclick();
+  await expect(page.getByTestId('project-page')).toBeVisible();
+  await expect(page.getByTestId('panel-sidebar')).toBeVisible();
+  await expect(page.getByTestId('library')).toHaveCount(0);
+  await page.getByTestId('filter-folder').filter({ hasText: 'Desk' }).first().click();
+  await expect(page.getByTestId('library')).toBeVisible();
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Desk');
+  await expect(page.getByTestId('project-card')).toHaveCount(2);
+  // settings and welcome are full-width screens
+  await page.getByTestId('nav-settings').click();
+  await expect(page.getByTestId('panel-sidebar')).toHaveCount(0);
+});
+
 test('settings lists roots and switches language', async ({ page }) => {
   await page.getByTestId('nav-settings').click();
   await expect(page.getByTestId('root-row')).toHaveCount(2);

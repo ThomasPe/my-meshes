@@ -1,14 +1,13 @@
 import { Box, ChevronDown, ChevronRight, Clock, Folder, FolderHeart, FolderOpen, HardDrive, Inbox, LayoutGrid, Pencil, Plus, RefreshCw, Settings, Sparkles, Star, Tag, Trash2 } from 'lucide-react';
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { getBackend } from '@/lib/backend';
 import { reportError } from '@/lib/errors';
-import { navigate } from '@/lib/router';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useCollectionDialog } from '@/features/library/CollectionDialogs';
 import { useCollections, useFolderTree, useInbox, useLibraryStats, useRoots, useSmartCollections, useTagCounts } from '@/lib/queries';
-import { routeHref } from '@/lib/router';
+import { navigate, routeHref, useRoute } from '@/lib/router';
 import { useUi, type LibraryFilter } from '@/lib/store';
 import type { FolderNode, LibraryRoot } from '@/lib/types';
 import { Truncated } from '@/components/ui/truncated';
@@ -30,9 +29,15 @@ export function Sidebar({ onRescan }: { onRescan?: (rootId: string) => void } = 
   const collections = useCollections();
   const smart = useSmartCollections();
   const filter = useUi((s) => s.filter);
-  const setFilter = useUi((s) => s.setFilter);
+  const storeFilter = useUi((s) => s.setFilter);
   const activeTags = useUi((s) => s.tags);
-  const toggleTag = useUi((s) => s.toggleTag);
+  const storeToggleTag = useUi((s) => s.toggleTag);
+  // the sidebar lives in the shell and stays visible on a project page: picking a view,
+  // folder or tag there returns to the library with that selection (NAV-1)
+  const route = useRoute();
+  const inLibrary = route.page === 'library';
+  const setFilter = useCallback((f: LibraryFilter) => { storeFilter(f); if (!inLibrary) navigate({ page: 'library' }); }, [storeFilter, inLibrary]);
+  const toggleTag = useCallback((tag: string) => { storeToggleTag(tag); if (!inLibrary) navigate({ page: 'library' }); }, [storeToggleTag, inLibrary]);
   const openDialog = useCollectionDialog((s) => s.open);
 
   // Explorer-style keyboard navigation over the folder tree. Rows are plain DOM nodes with
