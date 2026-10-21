@@ -169,5 +169,36 @@ submission is outside the code: Partner Center identity values, screenshots
 - [ ] **Custom thumbnails** (VIEW-4).
 - [ ] **Frameless title bar** (APP-10), if confirmed.
 
+### Epic 9: AI assistance (ADR-0003, first slice)
+All items follow the principles in ADR-0003: opt-in, user-triggered, suggestions only,
+no model geometry leaves the machine, deterministic mock provider in test mode.
+
+- [ ] **AI settings & provider layer.** Settings card "AI assistance" with provider,
+      base URL, model, key (OS credential store via `keyring`, never `settings.json`),
+      a test button and a plain statement of what is sent. Engine: `AiProvider` trait,
+      Anthropic client first (OpenAI-compatible base URL second, local server as a
+      configuration), response cache keyed by input hash in app data, typed errors
+      (`ai_disabled`, `ai_unauthorized`, `ai_rate_limited`, `ai_invalid_response`).
+      Test mode: `MESHKEEP_AI_MOCK` seam with canned answers. Acceptance: no request
+      is made without a key; the key is absent from `settings.json`, logs and the
+      feedback log tail.
+- [ ] **Metadata suggestions** in the inspector ("Suggest metadata"). Inputs: thumbnail
+      (at most 512 px), folder and file names, README and license text, project images,
+      current sidecar. Output as JSON against a fixed schema (title, tags from the
+      existing vocabulary plus new ones, description, creator, SPDX license), validated
+      in the engine. Diff dialog with per-field checkboxes; accepted fields go through
+      the normal sidecar save with `sidecar_stamp` conflict handling.
+- [ ] **Natural-language search** ("Ask" mode in the search box). The query text is the
+      only input; the result is a smart-collection query in the existing `{ all: [...] }`
+      schema, executed locally. The understood filter is shown as chips and can be saved
+      as a smart collection.
+- [ ] **Tests for the slice.** Engine unit tests against the mock provider (schema
+      validation, cache hits, error mapping); UI tests in browser mode for both dialogs;
+      one E2E test proving no call happens without a key and the key never lands in
+      `settings.json`.
+
+Follow-ups on the same base (not scheduled): batch enrichment with a review list and
+cost estimate, import proposals in the staging dialog (see ADR-0003, features 2 and 3).
+
 ## Phase 3: Model tools
 - [ ] **Transforms & mesh analysis** (VIEW-7).
