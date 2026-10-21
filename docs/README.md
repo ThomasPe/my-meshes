@@ -19,3 +19,4 @@
 
 - [ADR-0001 Application shell / tech stack](decisions/0001-tech-stack.md)
 - [ADR-0002 UI framework and visual direction](decisions/0002-ui-framework.md)
+- [ADR-0003 AI assistance with a user-supplied API key](decisions/0003-ai-integration.md)
