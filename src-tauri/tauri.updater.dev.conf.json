@@ -6,7 +6,7 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://github.com/ThomasPe/my-meshes/releases/download/dev/latest.json"
+        "https://github.com/ThomasPe/my-meshes/releases/download/dev/latest-{{target}}.json"
       ],
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDBDN0REMkU3ODlCQkQxQzgKUldUSTBidUo1OUo5REpSK3NRb09zOHVzaFZjbzNkRjd2OGgxUFdzYUdTZnVNYjJTSzVueHBBZlEK",
       "windows": {
