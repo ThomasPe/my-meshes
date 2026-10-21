@@ -374,7 +374,7 @@
     "makeProject_other": "Projekt erstellen ({{count}})",
     "makeProjectShort": "Projekt erstellen",
     "empty": "Der Posteingang ist leer",
-    "emptyHint": "Zieh einzelne Modelldateien auf die App oder wähle im Import-Dialog „Posteingang“; sie landen hier, bis du Projekte daraus machst.",
+    "emptyHint": "Zieh einzelne Modelldateien auf die App oder nutze „Importieren…“ in der Werkzeugleiste; lose Dateien landen hier, bis du Projekte daraus machst.",
     "promoteTitle_one": "{{count}} Datei zu einem Projekt machen",
     "promoteTitle_other": "{{count}} Dateien zu einem Projekt machen",
     "promoteBody": "Ein neuer Projektordner entsteht direkt unter dem Bibliotheksordner, die Dateien ziehen dorthin um.",

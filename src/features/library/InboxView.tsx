@@ -11,7 +11,6 @@ import { reportError } from '@/lib/errors';
 import { formatBytes, formatDate } from '@/lib/format';
 import { useDeleteInboxFile, useInbox, usePromoteInbox, useRoots } from '@/lib/queries';
 import { navigate } from '@/lib/router';
-import { useImport } from '@/features/import/useImport';
 import { isAppError } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -29,7 +28,6 @@ export function InboxView({ rootId }: { rootId: string }) {
   const del = useDeleteInboxFile();
   const files = inbox.data ?? [];
   const selected = files.filter((f) => checked.includes(f.name));
-  const pick = useImport((s) => s.pick);
 
   const openNaming = () => {
     const first = selected[0]?.name ?? '';
@@ -48,7 +46,6 @@ export function InboxView({ rootId }: { rootId: string }) {
     <div className="h-full overflow-auto px-5 pb-6 pt-3" data-testid="inbox">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <p className="mr-auto text-sm text-muted-foreground">{t('inbox.hint', { path: root ? `${root.path}${root.path.includes('\\') ? '\\' : '/'}_Inbox` : '_Inbox' })}</p>
-        <Button size="sm" variant="outline" onClick={() => void pick()}><Inbox />{t('import.open')}</Button>
         <Button size="sm" disabled={selected.length === 0} onClick={openNaming} data-testid="inbox-promote"><FolderPlus />{t('inbox.makeProject', { count: selected.length })}</Button>
       </div>
       {files.length === 0 && !inbox.isPending ? (

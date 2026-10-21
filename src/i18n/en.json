@@ -374,7 +374,7 @@
     "makeProject_other": "Make project ({{count}})",
     "makeProjectShort": "Make project",
     "empty": "The inbox is empty",
-    "emptyHint": "Drop single model files onto the app or choose “Inbox” in the import dialog; they land here until you turn them into projects.",
+    "emptyHint": "Drop single model files onto the app or use \"Import…\" in the toolbar; loose files land here until you turn them into projects.",
     "promoteTitle_one": "Turn {{count}} file into a project",
     "promoteTitle_other": "Turn {{count}} files into a project",
     "promoteBody": "A new project folder is created directly below the library root and the files move there.",
