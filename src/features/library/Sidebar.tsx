@@ -1,5 +1,5 @@
-import { Box, ChevronDown, ChevronRight, Clock, Folder, FolderHeart, FolderOpen, HardDrive, Inbox, LayoutGrid, Pencil, Plus, RefreshCw, Settings, Sparkles, Star, Tag, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Box, ChevronDown, ChevronRight, Clock, Eye, Folder, FolderHeart, FolderOpen, HardDrive, Inbox, LayoutGrid, Pencil, Plus, RefreshCw, Settings, Sparkles, Star, Tag, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { getBackend } from '@/lib/backend';
@@ -8,7 +8,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useCollectionDialog } from '@/features/library/CollectionDialogs';
 import { useCollections, useFolderTree, useInbox, useLibraryStats, useRoots, useSmartCollections, useTagCounts } from '@/lib/queries';
 import { navigate, routeHref, useRoute } from '@/lib/router';
-import { useUi, type LibraryFilter } from '@/lib/store';
+import { useTree, useUi, type LibraryFilter } from '@/lib/store';
 import type { FolderNode, LibraryRoot } from '@/lib/types';
 import { Truncated } from '@/components/ui/truncated';
 import { cn } from '@/lib/utils';
@@ -36,6 +36,7 @@ export function Sidebar({ onRescan }: { onRescan?: (rootId: string) => void } = 
   // folder or tag there returns to the library with that selection (NAV-1)
   const route = useRoute();
   const inLibrary = route.page === 'library';
+  const currentProject = route.page === 'project' ? route.id : null;
   const setFilter = useCallback((f: LibraryFilter) => { storeFilter(f); if (!inLibrary) navigate({ page: 'library' }); }, [storeFilter, inLibrary]);
   const toggleTag = useCallback((tag: string) => { storeToggleTag(tag); if (!inLibrary) navigate({ page: 'library' }); }, [storeToggleTag, inLibrary]);
   const openDialog = useCollectionDialog((s) => s.open);
@@ -152,7 +153,7 @@ export function Sidebar({ onRescan }: { onRescan?: (rootId: string) => void } = 
         <section>
           <h3 className={headClass}>{t('library.roots')}<a href={routeHref({ page: 'settings' })} className="ml-auto rounded-full p-1 hover:bg-secondary" title={t('settings.addFolder')}><Plus className="size-3.5" /></a></h3>
           <div ref={treeRef} role="tree" aria-label={t('library.roots')} onKeyDown={onTreeKey} onFocusCapture={onTreeFocus} data-testid="folder-tree">
-            {(roots.data ?? []).map((r) => <RootTree key={r.id} root={r} filter={filter} setFilter={setFilter} onRescan={onRescan} />)}
+            {(roots.data ?? []).map((r) => <RootTree key={r.id} root={r} filter={filter} setFilter={setFilter} onRescan={onRescan} current={currentProject} />)}
           </div>
         </section>
         {tags.data && tags.data.length > 0 && (
@@ -179,9 +180,11 @@ function reveal(rootId: string, rel: string) {
   getBackend().then((b) => b.revealFolder(rootId, rel)).catch(reportError);
 }
 
-function RootTree({ root, filter, setFilter, onRescan }: { root: LibraryRoot; filter: LibraryFilter; setFilter: (f: LibraryFilter) => void; onRescan?: (rootId: string) => void }) {
+function RootTree({ root, filter, setFilter, onRescan, current }: { root: LibraryRoot; filter: LibraryFilter; setFilter: (f: LibraryFilter) => void; onRescan?: (rootId: string) => void; current: string | null }) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(true);
+  const open = useTree((s) => s.open[root.id] ?? true);
+  const setTreeOpen = useTree((s) => s.setOpen);
+  const setOpen = (f: (o: boolean) => boolean) => setTreeOpen(root.id, f(open));
   const tree = useFolderTree(root.id);
   const inbox = useInbox(root.status === 'offline' ? null : root.id);
   const rootFilter: LibraryFilter = { kind: 'root', rootId: root.id };
@@ -223,34 +226,42 @@ function RootTree({ root, filter, setFilter, onRescan }: { root: LibraryRoot; fi
           </ContextMenuContent>
         </ContextMenu>
       )}
-      {open && (tree.data ?? []).map((n) => <FolderItem key={n.rel_path} node={n} depth={1} rootId={root.id} filter={filter} setFilter={setFilter} online={online} />)}
+      {open && (tree.data ?? []).map((n) => <FolderItem key={n.rel_path} node={n} depth={1} rootId={root.id} filter={filter} setFilter={setFilter} online={online} current={current} />)}
     </div>
   );
 }
 
-function FolderItem({ node, depth, rootId, filter, setFilter, online }: { node: FolderNode; depth: number; rootId: string; filter: LibraryFilter; setFilter: (f: LibraryFilter) => void; online: boolean }) {
+function FolderItem({ node, depth, rootId, filter, setFilter, online, current }: { node: FolderNode; depth: number; rootId: string; filter: LibraryFilter; setFilter: (f: LibraryFilter) => void; online: boolean; current: string | null }) {
   const { t } = useTranslation();
-  const [open, setOpen] = useState(depth < 2);
+  const key = `${rootId}:${node.rel_path}`;
+  const open = useTree((s) => s.open[key] ?? depth < 2);
+  const setTreeOpen = useTree((s) => s.setOpen);
+  const setOpen = (f: (o: boolean) => boolean) => setTreeOpen(key, f(open));
   const f: LibraryFilter = { kind: 'folder', rootId, path: node.rel_path };
   const has = node.children.length > 0;
-  // a project folder gets the model icon; its own count is implied, so only containers show one
+  // a project folder gets the model icon and opens the project itself (its id is root:path);
+  // its own count is implied, so only containers show one
   const Icon = node.is_project ? Box : Folder;
+  const projectId = node.is_project ? key : null;
+  const active = projectId ? current === projectId : same(filter, f);
+  const choose = () => (projectId ? navigate({ page: 'project', id: projectId }) : setFilter(f));
   return (
     <div>
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <div className={cn(itemClass, 'h-8 font-medium focus-visible:outline-2 focus-visible:outline-primary', same(filter, f) && activeClass)} style={{ paddingLeft: 12 + depth * INDENT }} data-tree-row data-key={`${rootId}:${node.rel_path}`} data-parent={node.rel_path.includes('/') ? `${rootId}:${node.rel_path.slice(0, node.rel_path.lastIndexOf('/'))}` : rootId} data-label={node.name} data-kind={node.is_project ? 'project' : 'folder'} role="treeitem" aria-expanded={has ? open : undefined} aria-selected={same(filter, f)} tabIndex={-1}>
+          <div className={cn(itemClass, 'h-8 font-medium focus-visible:outline-2 focus-visible:outline-primary', active && activeClass)} style={{ paddingLeft: 12 + depth * INDENT }} data-tree-row data-key={key} data-parent={node.rel_path.includes('/') ? `${rootId}:${node.rel_path.slice(0, node.rel_path.lastIndexOf('/'))}` : rootId} data-label={node.name} data-kind={node.is_project ? 'project' : 'folder'} role="treeitem" aria-expanded={has ? open : undefined} aria-selected={active} tabIndex={-1}>
             {has ? <button type="button" tabIndex={-1} data-chevron aria-label={open ? 'collapse' : 'expand'} className="-ml-1 rounded p-0.5 text-muted-foreground hover:text-foreground" onClick={() => setOpen((o) => !o)}>{open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}</button> : <span className="w-3.5 shrink-0" />}
-            <button type="button" tabIndex={-1} data-select data-testid="filter-folder" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setFilter(f)}><Icon className={node.is_project ? 'text-primary/80' : 'text-muted-foreground'} /><Truncated text={node.name} data-testid="folder-name" /></button>
+            <button type="button" tabIndex={-1} data-select data-testid={projectId ? 'tree-project' : 'filter-folder'} className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={choose}><Icon className={node.is_project ? 'text-primary/80' : 'text-muted-foreground'} /><Truncated text={node.name} data-testid="folder-name" /></button>
             {(!node.is_project || has) && <span className="shrink-0 text-[11px] tabular text-muted-foreground">{node.project_count}</span>}
           </div>
         </ContextMenuTrigger>
         <ContextMenuContent data-testid="folder-menu">
-          <ContextMenuItem onSelect={() => setFilter(f)}><Folder />{t('library.showProjects')}</ContextMenuItem>
+          {projectId && <ContextMenuItem onSelect={() => navigate({ page: 'project', id: projectId })}><Eye />{t('inspector.open')}</ContextMenuItem>}
+          {(!projectId || has) && <ContextMenuItem onSelect={() => setFilter(f)}><Folder />{t('library.showProjects')}</ContextMenuItem>}
           <ContextMenuItem disabled={!online} onSelect={() => reveal(rootId, node.rel_path)} data-testid="menu-reveal-folder"><FolderOpen />{t('inspector.reveal')}</ContextMenuItem>
         </ContextMenuContent>
       </ContextMenu>
-      {open && has && node.children.map((c) => <FolderItem key={c.rel_path} node={c} depth={depth + 1} rootId={rootId} filter={filter} setFilter={setFilter} online={online} />)}
+      {open && has && node.children.map((c) => <FolderItem key={c.rel_path} node={c} depth={depth + 1} rootId={rootId} filter={filter} setFilter={setFilter} online={online} current={current} />)}
     </div>
   );
 }

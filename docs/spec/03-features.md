@@ -32,7 +32,7 @@
 
 | ID | Requirement | Priority |
 |---|---|---|
-| NAV-1 | Sidebar with: library views (All, Recent imports, Favorites, Inbox), smart collections, manual collections, and the physical folder tree scoped to library roots. It belongs to the application shell and stays visible on the project page (picking anything in it returns to the library with that selection); only Welcome and Settings are full-width. | MVP |
+| NAV-1 | Sidebar with: library views (All, Recent imports, Favorites, Inbox), smart collections, manual collections, and the physical folder tree scoped to library roots. It belongs to the application shell and stays visible on the project page (picking anything in it returns to the library with that selection); only Welcome and Settings are full-width. A folder that is itself a project opens that project on click; containers filter the library. Expansion state is remembered across root collapses and restarts. | MVP |
 | NAV-2 | Grid view with adjustable thumbnail size; stays smooth with 10,000+ items (virtualized). | MVP |
 | NAV-3 | Detailed list view with sortable metadata columns (title, creator, tags, file count, size, date). | MVP |
 | NAV-4 | Instant full-text search over title, description, tags and file names. | MVP |

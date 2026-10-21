@@ -665,8 +665,33 @@ test('folder tree: containers get a folder icon and a count, projects a model ic
   await expect(stand).toHaveAttribute('data-kind', 'project');
   await expect(stand.locator('span.tabular')).toHaveCount(0);
   // the two rows draw different icons
-  const icon = (row: ReturnType<typeof page.locator>) => row.locator('[data-testid="filter-folder"] svg').first().evaluate((el) => el.getAttribute('class'));
+  const icon = (row: ReturnType<typeof page.locator>) => row.locator('[data-select] svg').first().evaluate((el) => el.getAttribute('class'));
   expect(await icon(desk)).not.toBe(await icon(stand));
+});
+
+test('folder tree: a project row opens the project, expansion is remembered', async ({ page }) => {
+  const desk = page.locator('[data-tree-row][data-label="Desk"]');
+  await desk.getByRole('button', { name: 'expand' }).click();
+  const stand = page.locator('[data-tree-row][data-label="Phone Stand"]');
+  await stand.getByTestId('tree-project').click();
+  await expect(page.getByTestId('project-page')).toBeVisible();
+  await expect(page.getByTestId('project-title')).toHaveText('Phone Stand');
+  await expect(stand).toHaveAttribute('aria-selected', 'true');
+  // a container still filters; the tree keeps Desk open while the root is collapsed and reopened
+  await page.getByTestId('filter-folder').filter({ hasText: 'Calibration' }).first().click();
+  await expect(page.getByTestId('library')).toBeVisible();
+  await expect(stand).toHaveAttribute('aria-selected', 'false');
+  const projects = page.locator('[data-tree-row][data-label="Projects"]');
+  await projects.getByRole('button', { name: 'collapse' }).click();
+  await expect(desk).toHaveCount(0);
+  const root = page.getByTestId('root-row').first();
+  await root.getByRole('button', { name: 'collapse' }).click();
+  await root.getByRole('button', { name: 'expand' }).click();
+  await expect(projects).toHaveAttribute('aria-expanded', 'false');
+  await projects.getByRole('button', { name: 'expand' }).click();
+  await expect(desk).toHaveAttribute('aria-expanded', 'true');
+  await page.reload();
+  await expect(page.locator('[data-tree-row][data-label="Desk"]')).toHaveAttribute('aria-expanded', 'true');
 });
 
 test('folder tree: arrow keys navigate and select like Explorer', async ({ page }) => {
