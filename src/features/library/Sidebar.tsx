@@ -1,5 +1,5 @@
 import { Box, ChevronDown, ChevronRight, Clock, Eye, Folder, FolderHeart, FolderOpen, HardDrive, Inbox, LayoutGrid, Pencil, Plus, RefreshCw, Settings, Sparkles, Star, Tag, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
 import { getBackend } from '@/lib/backend';
@@ -8,7 +8,29 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useCollectionDialog } from '@/features/library/CollectionDialogs';
 import { useCollections, useFolderTree, useInbox, useLibraryStats, useRoots, useSmartCollections, useTagCounts } from '@/lib/queries';
 import { navigate, routeHref, useRoute } from '@/lib/router';
+import { useMove } from '@/features/library/useMove';
+import { PROJECTS_MIME } from '@/features/library/ProjectGrid';
 import { useTree, useUi, type LibraryFilter } from '@/lib/store';
+
+/** Drop-target props for a tree row that accepts dragged project cards (IMP-7). */
+function useDropTarget(enabled: boolean, rootId: string, rel: string, label: string) {
+  const [over, setOver] = useState(false);
+  const { run } = useMove();
+  if (!enabled) return { over: false, props: {} };
+  const accepts = (e: React.DragEvent) => e.dataTransfer.types.includes(PROJECTS_MIME);
+  return {
+    over,
+    props: {
+      onDragOver: (e: React.DragEvent) => { if (!accepts(e)) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (!over) setOver(true); },
+      onDragLeave: () => setOver(false),
+      onDrop: (e: React.DragEvent) => {
+        if (!accepts(e)) return;
+        e.preventDefault(); setOver(false);
+        try { const ids = JSON.parse(e.dataTransfer.getData(PROJECTS_MIME)) as string[]; if (ids.length) run(ids, rootId, rel, label); } catch { /* not ours */ }
+      },
+    },
+  };
+}
 import type { FolderNode, LibraryRoot } from '@/lib/types';
 import { Truncated } from '@/components/ui/truncated';
 import { cn } from '@/lib/utils';
@@ -193,11 +215,12 @@ function RootTree({ root, filter, setFilter, onRescan, current }: { root: Librar
   const online = root.status !== 'offline';
   const modeKey = online ? root.mode : 'offline';
   const modeLabel = online ? t(`settings.mode.${root.mode}`) : t('settings.status.offline');
+  const drop = useDropTarget(online, root.id, '', name);
   return (
     <div>
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <div className={cn(itemClass, 'pr-2 font-extrabold text-foreground focus-visible:outline-2 focus-visible:outline-primary', same(filter, rootFilter) ? activeClass : 'bg-secondary/50')} data-testid="root-row" data-tree-row data-key={root.id} data-label={name} role="treeitem" aria-expanded={open} aria-selected={same(filter, rootFilter)} tabIndex={-1}>
+          <div className={cn(itemClass, 'pr-2 font-extrabold text-foreground focus-visible:outline-2 focus-visible:outline-primary', same(filter, rootFilter) ? activeClass : 'bg-secondary/50', drop.over && 'outline outline-2 outline-primary')} {...drop.props} data-drop-over={drop.over || undefined} data-testid="root-row" data-tree-row data-key={root.id} data-label={name} role="treeitem" aria-expanded={open} aria-selected={same(filter, rootFilter)} tabIndex={-1}>
             <button type="button" tabIndex={-1} data-chevron aria-label={open ? 'collapse' : 'expand'} className="-ml-1 rounded p-0.5 text-muted-foreground hover:text-foreground" onClick={() => setOpen((o) => !o)}>{open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}</button>
             <button type="button" tabIndex={-1} data-select data-testid="filter-root" className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={() => setFilter(rootFilter)} title={`${root.path} · ${modeLabel}`}>
               <span className="relative shrink-0"><HardDrive className="text-muted-foreground" /><span className={cn('absolute -bottom-0.5 -right-0.5 size-2 rounded-full ring-2 ring-panel', MODE_DOT[modeKey])} data-testid="root-mode-dot" data-mode={modeKey} aria-label={modeLabel} /></span>
@@ -245,11 +268,12 @@ function FolderItem({ node, depth, rootId, filter, setFilter, online, current }:
   const projectId = node.is_project ? key : null;
   const active = projectId ? current === projectId : same(filter, f);
   const choose = () => (projectId ? navigate({ page: 'project', id: projectId }) : setFilter(f));
+  const drop = useDropTarget(online && !projectId, rootId, node.rel_path, node.name);
   return (
     <div>
       <ContextMenu>
         <ContextMenuTrigger asChild>
-          <div className={cn(itemClass, 'h-8 font-medium focus-visible:outline-2 focus-visible:outline-primary', active && activeClass)} style={{ paddingLeft: 12 + depth * INDENT }} data-tree-row data-key={key} data-parent={node.rel_path.includes('/') ? `${rootId}:${node.rel_path.slice(0, node.rel_path.lastIndexOf('/'))}` : rootId} data-label={node.name} data-kind={node.is_project ? 'project' : 'folder'} role="treeitem" aria-expanded={has ? open : undefined} aria-selected={active} tabIndex={-1}>
+          <div className={cn(itemClass, 'h-8 font-medium focus-visible:outline-2 focus-visible:outline-primary', active && activeClass, drop.over && 'outline outline-2 outline-primary')} {...drop.props} data-drop-over={drop.over || undefined} style={{ paddingLeft: 12 + depth * INDENT }} data-tree-row data-key={key} data-parent={node.rel_path.includes('/') ? `${rootId}:${node.rel_path.slice(0, node.rel_path.lastIndexOf('/'))}` : rootId} data-label={node.name} data-kind={node.is_project ? 'project' : 'folder'} role="treeitem" aria-expanded={has ? open : undefined} aria-selected={active} tabIndex={-1}>
             {has ? <button type="button" tabIndex={-1} data-chevron aria-label={open ? 'collapse' : 'expand'} className="-ml-1 rounded p-0.5 text-muted-foreground hover:text-foreground" onClick={() => setOpen((o) => !o)}>{open ? <ChevronDown className="size-3.5" /> : <ChevronRight className="size-3.5" />}</button> : <span className="w-3.5 shrink-0" />}
             <button type="button" tabIndex={-1} data-select data-testid={projectId ? 'tree-project' : 'filter-folder'} className="flex min-w-0 flex-1 items-center gap-2 text-left" onClick={choose}><Icon className={node.is_project ? 'text-primary/80' : 'text-muted-foreground'} /><Truncated text={node.name} data-testid="folder-name" /></button>
             {(!node.is_project || has) && <span className="shrink-0 text-[11px] tabular text-muted-foreground">{node.project_count}</span>}

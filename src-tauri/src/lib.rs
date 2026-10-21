@@ -92,6 +92,7 @@ pub fn run() {
             commands::batch_update_metadata,
             commands::set_favorite,
             commands::rename_project,
+            commands::move_projects,
             commands::delete_project,
             commands::delete_file,
             commands::thumb_queue,

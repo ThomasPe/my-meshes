@@ -137,6 +137,7 @@ export interface BatchUpdate {
   license?: string;
 }
 
+export interface MoveReport { moved: Project[]; failed: Array<{ project_id: string; message: string }> }
 export interface PromoteItem { file: string; name: string }
 export interface PromoteReport { created: Project[]; failed: Array<{ file: string; message: string }> }
 
@@ -285,4 +286,4 @@ export function isAppError(e: unknown): e is AppError {
   return typeof e === 'object' && e !== null && 'code' in e && 'message' in e;
 }
 
-export type LibraryChanged = { rootId: string | null; report: ScanReport | null; reason: 'scan' | 'watch' | 'poll' | 'root_removed' | 'rename' | 'delete' | 'thumbs_cleared' | 'import'; error?: string; oldId?: string; newId?: string };
+export type LibraryChanged = { rootId: string | null; report: ScanReport | null; reason: 'scan' | 'watch' | 'poll' | 'root_removed' | 'rename' | 'delete' | 'thumbs_cleared' | 'import' | 'move'; error?: string; oldId?: string; newId?: string; oldIds?: string[] };

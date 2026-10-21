@@ -5,7 +5,7 @@ use meshkeep_engine::model::{
     Facets, FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, ScanReport, SyncMode, TagCount, ThumbJob, ThumbLocation,
     ThumbStats,
 };
-use meshkeep_engine::{BatchReport, BatchUpdate, EngineError, PromoteItem, PromoteReport, UpdateMetadata};
+use meshkeep_engine::{BatchReport, BatchUpdate, EngineError, MoveReport, PromoteItem, PromoteReport, UpdateMetadata};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -437,6 +437,28 @@ pub fn set_favorite(app: AppHandle, state: State<AppState>, project_id: String, 
     let project = { state.engine.lock().unwrap().set_favorite(&project_id, favorite)? };
     let _ = app.emit("project://changed", serde_json::json!({ "projectId": project.id }));
     Ok(project)
+}
+
+#[tauri::command]
+pub fn move_projects(
+    app: AppHandle,
+    state: State<AppState>,
+    project_ids: Vec<String>,
+    root_id: String,
+    dest_rel: String,
+) -> CmdResult<MoveReport> {
+    let report = { state.engine.lock().unwrap().move_projects(&project_ids, &root_id, &dest_rel)? };
+    if !report.moved.is_empty() {
+        let old_ids: Vec<&String> = project_ids
+            .iter()
+            .filter(|id| report.failed.iter().all(|f| &f.project_id != *id))
+            .collect();
+        let _ = app.emit(
+            "library://changed",
+            serde_json::json!({ "rootId": root_id, "report": serde_json::Value::Null, "reason": "move", "oldIds": old_ids }),
+        );
+    }
+    Ok(report)
 }
 
 #[tauri::command]

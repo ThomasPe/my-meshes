@@ -1,4 +1,4 @@
-import { Eye, FolderHeart, FolderMinus, FolderOpen, ImageUp, Pencil, Plus, Star, StarOff, Trash2 } from 'lucide-react';
+import { Eye, FolderHeart, FolderInput, FolderMinus, FolderOpen, ImageUp, Pencil, Plus, Star, StarOff, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from '@/components/ui/context-menu';
 import type { Collection, ProjectSummary } from '@/lib/types';
@@ -10,6 +10,8 @@ export interface ProjectActions {
   rename: (p: ProjectSummary) => void;
   remove: (p: ProjectSummary) => void;
   reveal: (p: ProjectSummary) => void;
+  /** Opens the "Move to…" folder picker for one or several projects. */
+  move: (ps: ProjectSummary[]) => void;
   /** Throws the cached preview away and lets the queue render it again. */
   rerenderThumbnail: (p: ProjectSummary) => void;
   /** Add to an existing collection (or `null` to create a new one first). */
@@ -42,6 +44,7 @@ export function ProjectMenu({ project: p, actions, children }: { project: Projec
         </ContextMenuSub>
         {actions.removeFromCollection && <ContextMenuItem onSelect={() => actions.removeFromCollection!(p)} data-testid="menu-remove-from-collection"><FolderMinus />{t('collections.removeFrom')}</ContextMenuItem>}
         <ContextMenuItem disabled={p.offline || p.rel_path === ''} onSelect={() => actions.rename(p)} data-testid="menu-rename"><Pencil />{t('actions.rename')}</ContextMenuItem>
+        <ContextMenuItem disabled={p.offline || p.rel_path === ''} onSelect={() => actions.move([p])} data-testid="menu-move"><FolderInput />{t('actions.move')}</ContextMenuItem>
         <ContextMenuItem disabled={p.offline} onSelect={() => actions.reveal(p)}><FolderOpen />{t('inspector.reveal')}</ContextMenuItem>
         <ContextMenuItem disabled={p.offline} onSelect={() => actions.rerenderThumbnail(p)} data-testid="menu-rethumb"><ImageUp />{t('actions.rerenderThumb')}</ContextMenuItem>
         <ContextMenuSeparator />

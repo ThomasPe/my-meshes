@@ -694,6 +694,50 @@ test('folder tree: a project row opens the project, expansion is remembered', as
   await expect(page.locator('[data-tree-row][data-label="Desk"]')).toHaveAttribute('aria-expanded', 'true');
 });
 
+test('move: the dialog moves a project into a folder or a new sub-folder, undo brings it back', async ({ page }) => {
+  await page.getByTestId('project-card').filter({ hasText: 'Decorative Vase' }).click({ button: 'right' });
+  await page.getByTestId('menu-move').click();
+  const dialog = page.getByTestId('move-dialog');
+  await expect(dialog).toBeVisible();
+  await expect(page.getByTestId('move-confirm')).toBeDisabled();
+  // only containers are offered: no project rows, the dragged project's own folder is not a target
+  await expect(dialog.getByTestId('move-folder').filter({ hasText: 'Phone Stand' })).toHaveCount(0);
+  await dialog.getByTestId('move-folder').filter({ hasText: 'Desk' }).click();
+  await expect(page.getByTestId('move-confirm')).toContainText('3D Models / Projects / Desk');
+  await page.getByTestId('move-confirm').click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText('1 project moved to 3D Models / Projects / Desk')).toBeVisible();
+  await page.getByTestId('filter-folder').filter({ hasText: 'Desk' }).first().click();
+  await expect(page.getByTestId('project-card')).toHaveCount(3);
+  await page.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.getByText('1 project moved back')).toBeVisible();
+  await expect(page.getByTestId('project-card')).toHaveCount(2);
+  // a new sub-folder under the root, for a multi-selection
+  await page.getByTestId('filter-all').click();
+  await page.getByTestId('project-card').filter({ hasText: 'Decorative Vase' }).click();
+  await page.getByTestId('project-card').filter({ hasText: 'Dice Tower' }).click({ modifiers: ['Control'] });
+  await page.getByTestId('multi-move').click();
+  await page.getByTestId('move-root').first().click();
+  await page.getByTestId('move-subfolder').fill('Archive');
+  await page.getByTestId('move-confirm').click();
+  await expect(page.getByText('2 projects moved to 3D Models / Archive')).toBeVisible();
+  await expect(page.locator('[data-tree-row][data-label="Archive"]')).toHaveAttribute('data-kind', 'folder');
+  await expect(page.locator('[data-tree-row][data-label="Archive"]')).toContainText('2');
+});
+
+test('move: dragging a card onto a tree folder moves it there', async ({ page }) => {
+  const card = page.getByTestId('project-card').filter({ hasText: 'Low-Poly Benchy' });
+  const target = page.locator('[data-tree-row][data-label="Tabletop"]');
+  await card.dragTo(target);
+  await expect(page.getByText('1 project moved to Tabletop')).toBeVisible();
+  await expect(target).toContainText('2');
+  // a project row is not a drop target
+  const stand = page.locator('[data-tree-row][data-label="Desk"]');
+  await stand.getByRole('button', { name: 'expand' }).click();
+  await card.dragTo(page.locator('[data-tree-row][data-label="Phone Stand"]'));
+  await expect(page.getByText('moved to Phone Stand')).toHaveCount(0);
+});
+
 test('folder tree: arrow keys navigate and select like Explorer', async ({ page }) => {
   const title = page.getByTestId('toolbar').locator('h1');
   await page.getByTestId('filter-root').first().click();

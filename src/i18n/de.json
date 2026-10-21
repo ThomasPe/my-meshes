@@ -326,7 +326,22 @@
     "deletedMany_one": "{{count}} Projekt in den Papierkorb verschoben",
     "deletedMany_other": "{{count}} Projekte in den Papierkorb verschoben",
     "rerenderThumb": "Vorschau neu erzeugen",
-    "rerenderQueued": "Neue Vorschau für „{{name}}“ wird gerendert…"
+    "rerenderQueued": "Neue Vorschau für „{{name}}“ wird gerendert…",
+    "move": "Verschieben nach…",
+    "moveTitle_one": "„{{name}}“ verschieben",
+    "moveTitle_other": "{{count}} Projekte verschieben",
+    "moveBody": "Der Projektordner wandert in den gewählten Ordner. Tags, Favoriten und Sammlungen bleiben erhalten.",
+    "moveNewFolder": "Neuer Unterordner (optional)",
+    "moveNewFolderHint": "wird im gewählten Ordner angelegt",
+    "moveConfirm": "Verschieben",
+    "moved_one": "{{count}} Projekt nach {{dest}} verschoben",
+    "moved_other": "{{count}} Projekte nach {{dest}} verschoben",
+    "movedBack_one": "{{count}} Projekt zurückverschoben",
+    "movedBack_other": "{{count}} Projekte zurückverschoben",
+    "moveNoop": "Liegt bereits in diesem Ordner.",
+    "moveFailedSome_one": "{{count}} Projekt konnte nicht verschoben werden",
+    "moveFailedSome_other": "{{count}} Projekte konnten nicht verschoben werden",
+    "undo": "Rückgängig"
   },
   "import": {
     "title": "Importieren",

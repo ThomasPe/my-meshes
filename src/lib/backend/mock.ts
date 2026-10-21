@@ -291,6 +291,31 @@ export function createMockBackend(): Backend {
       listeners.lib.forEach((cb) => cb({ rootId: p.root_id, report: null, reason: 'rename', oldId, newId: p.id }));
       return { ...p };
     },
+    async moveProjects(projectIds, rootId, destRel) {
+      await delay(80);
+      const dest = destRel.replace(/^\/+|\/+$/g, '');
+      if (!roots.some((r) => r.id === rootId)) throw err('not_found', rootId);
+      if (/^_inbox(\/|$)/i.test(dest) || dest.split('/').some((s) => s === '.cache' || s === '.meshkeep')) throw err('not_allowed', `${dest} is reserved`);
+      if (dest.split('/').some((s) => s && (BAD_NAME.test(s) || s === '..'))) throw err('invalid_name', `invalid name: ${dest}`);
+      if (projects.some((p) => p.root_id === rootId && (p.rel_path === dest || dest.startsWith(p.rel_path + '/')))) throw err('not_allowed', `${dest}: a project folder cannot contain other projects`);
+      const moved = [], failed = [], oldIds: string[] = [];
+      for (const id of projectIds) {
+        const p = projects.find((x) => x.id === id);
+        if (!p) { failed.push({ project_id: id, message: `project not found: ${id}` }); continue; }
+        if (p.offline) { failed.push({ project_id: id, message: 'root is offline' }); continue; }
+        const name = p.rel_path.split('/').pop()!;
+        const parent = p.rel_path.includes('/') ? p.rel_path.slice(0, p.rel_path.lastIndexOf('/')) : '';
+        if (p.root_id === rootId && parent === dest) { moved.push({ ...p }); continue; }
+        const newRel = dest ? `${dest}/${name}` : name;
+        if (projects.some((x) => x.root_id === rootId && x.rel_path.toLowerCase() === newRel.toLowerCase())) { failed.push({ project_id: id, message: `a file or folder named ${name} already exists` }); continue; }
+        const oldId = p.id;
+        p.root_id = rootId; p.rel_path = newRel; p.id = `${rootId}:${newRel}`;
+        for (const c of collections) c.projects = c.projects.map((x) => (x === oldId ? p.id : x));
+        oldIds.push(oldId); moved.push({ ...p });
+      }
+      if (oldIds.length) listeners.lib.forEach((cb) => cb({ rootId, report: null, reason: 'move', oldIds }));
+      return { moved, failed };
+    },
     async deleteProject(projectId) {
       await delay(80);
       const i = projects.findIndex((x) => x.id === projectId);

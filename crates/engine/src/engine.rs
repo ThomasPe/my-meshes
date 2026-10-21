@@ -71,6 +71,15 @@ pub struct BatchReport {
     pub failed: Vec<BatchFailure>,
 }
 
+/// Outcome of moving projects into another folder (IMP-7): the projects under their new
+/// ids plus the ones that stayed put and why (name taken, offline), one bad row never
+/// stops the rest.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct MoveReport {
+    pub moved: Vec<Project>,
+    pub failed: Vec<BatchFailure>,
+}
+
 /// One inbox file that becomes a project of its own (IMP-3, "make separate projects").
 #[derive(Debug, Clone, Deserialize)]
 pub struct PromoteItem {
@@ -838,6 +847,135 @@ impl Engine {
         self.reindex_dir(&current.root_id, &new_dir)
     }
 
+    /// Moves project folders into another folder of any root (IMP-7). The destination is
+    /// created when missing and must not lie inside a project (nested projects are ignored
+    /// by the scanner). Collections, favorites and cached thumbnails follow each project,
+    /// nested projects inside a moved folder included; a different volume is handled by
+    /// copying and removing.
+    pub fn move_projects(&mut self, project_ids: &[String], dest_root: &str, dest_rel: &str) -> Result<MoveReport> {
+        let root = self.root(dest_root)?;
+        let dest_rel = dest_rel.trim_matches('/').to_string();
+        let rel_path = Path::new(&dest_rel);
+        if rel_path.components().any(|c| !matches!(c, Component::Normal(_))) {
+            return Err(EngineError::NotAllowed(format!("path escapes the root: {dest_rel}")));
+        }
+        for seg in dest_rel.split('/').filter(|s| !s.is_empty()) {
+            validate_dir_name(seg)?;
+        }
+        if dest_rel
+            .split('/')
+            .next()
+            .is_some_and(|s| s.eq_ignore_ascii_case(import::INBOX_DIR))
+            || dest_rel.split('/').any(|s| scan::APP_DIRS.contains(&s))
+        {
+            return Err(EngineError::NotAllowed(format!("{dest_rel} is reserved")));
+        }
+        if root.status == RootStatus::Offline {
+            return Err(EngineError::RootOffline(root.path));
+        }
+        // the destination must not be a project or sit inside one
+        let in_dest_root = self.index.list(
+            &ListQuery {
+                root_id: Some(dest_root.to_string()),
+                ..Default::default()
+            },
+            None,
+        )?;
+        if in_dest_root.iter().any(|p| {
+            p.rel_path == dest_rel || (p.rel_path.is_empty() && !dest_rel.is_empty()) || dest_rel.starts_with(&format!("{}/", p.rel_path))
+        }) {
+            return Err(EngineError::NotAllowed(format!(
+                "{dest_rel}: a project folder cannot contain other projects"
+            )));
+        }
+        let dest_dir = if dest_rel.is_empty() {
+            root.path.clone()
+        } else {
+            root.path.join(rel_path)
+        };
+        std::fs::create_dir_all(&dest_dir).map_err(crate::error::io_err(&dest_dir))?;
+
+        let mut report = MoveReport::default();
+        for id in project_ids {
+            match self.move_one(id, dest_root, &dest_rel, &dest_dir) {
+                Ok(p) => report.moved.push(p),
+                Err(e) => report.failed.push(BatchFailure {
+                    project_id: id.clone(),
+                    message: e.to_string(),
+                }),
+            }
+        }
+        Ok(report)
+    }
+
+    fn move_one(&mut self, project_id: &str, dest_root: &str, dest_rel: &str, dest_dir: &Path) -> Result<Project> {
+        let current = self.online_project(project_id)?;
+        if current.rel_path.is_empty() {
+            return Err(EngineError::NotAllowed("the library root itself cannot be moved".into()));
+        }
+        let old_dir = self.project_dir(&current)?;
+        let name = old_dir
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .ok_or_else(|| EngineError::NotAllowed("project has no folder name".into()))?;
+        let parent_rel = current.rel_path.rsplit_once('/').map(|(p, _)| p).unwrap_or("");
+        if current.root_id == dest_root {
+            if parent_rel == dest_rel {
+                return Ok(current); // already there
+            }
+            if dest_rel == current.rel_path || dest_rel.starts_with(&format!("{}/", current.rel_path)) {
+                return Err(EngineError::NotAllowed("a project cannot be moved into itself".into()));
+            }
+        }
+        let new_dir = dest_dir.join(&name);
+        if new_dir.exists() {
+            return Err(EngineError::AlreadyExists(name));
+        }
+        // nested projects travel with the folder: remember them before the ids change
+        let nested: Vec<(String, String)> = self
+            .index
+            .list(
+                &ListQuery {
+                    root_id: Some(current.root_id.clone()),
+                    path_prefix: Some(current.rel_path.clone()),
+                    ..Default::default()
+                },
+                None,
+            )?
+            .into_iter()
+            .filter(|p| p.id != current.id)
+            .map(|p| (p.id, p.rel_path))
+            .collect();
+        move_dir(&old_dir, &new_dir).map_err(|e| EngineError::Io {
+            path: old_dir.clone(),
+            source: e,
+        })?;
+        let new_rel = if dest_rel.is_empty() {
+            name.clone()
+        } else {
+            format!("{dest_rel}/{name}")
+        };
+        let mut nested_dirs = Vec::new();
+        let mut all = nested.clone();
+        all.push((project_id.to_string(), current.rel_path.clone()));
+        for (old_id, old_rel) in &all {
+            let suffix = &old_rel[current.rel_path.len()..];
+            let rel = format!("{new_rel}{suffix}");
+            let new_id = Project::make_id(dest_root, &rel);
+            self.collections.rename(old_id, &new_id)?;
+            self.index.rename_thumb(old_id, &new_id)?;
+            self.index.remove_project(old_id)?;
+            if old_id != project_id {
+                nested_dirs.push(rel);
+            }
+        }
+        let root_path = self.root(dest_root)?.path;
+        for rel in nested_dirs {
+            let _ = self.reindex_dir(dest_root, &root_path.join(&rel));
+        }
+        self.reindex_dir(dest_root, &new_dir)
+    }
+
     /// Moves the whole project directory to the trash (IMP-5) and forgets it.
     pub fn delete_project(&mut self, project_id: &str) -> Result<()> {
         let current = self.online_project(project_id)?;
@@ -890,6 +1028,31 @@ impl Engine {
 }
 
 /// Windows-safe directory names (the stricter platform wins so libraries stay portable).
+/// `rename` when source and destination share a volume, copy + remove otherwise.
+fn move_dir(src: &Path, dst: &Path) -> std::io::Result<()> {
+    if std::fs::rename(src, dst).is_ok() {
+        return Ok(());
+    }
+    fn copy_all(src: &Path, dst: &Path) -> std::io::Result<()> {
+        std::fs::create_dir_all(dst)?;
+        for entry in std::fs::read_dir(src)? {
+            let entry = entry?;
+            let target = dst.join(entry.file_name());
+            if entry.file_type()?.is_dir() {
+                copy_all(&entry.path(), &target)?;
+            } else {
+                std::fs::copy(entry.path(), &target)?;
+            }
+        }
+        Ok(())
+    }
+    if let Err(e) = copy_all(src, dst) {
+        let _ = std::fs::remove_dir_all(dst);
+        return Err(e);
+    }
+    std::fs::remove_dir_all(src)
+}
+
 pub(crate) fn validate_dir_name(name: &str) -> Result<String> {
     let n = name.trim();
     if n.is_empty() {

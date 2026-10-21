@@ -231,6 +231,54 @@ fn favorites_rename_delete_and_thumbnails() {
     assert_eq!(engine.favorite_count().unwrap(), 1);
     assert_eq!(engine.list_projects(&ListQuery::default()).unwrap().len(), 3);
 
+    // move: into an existing container, into a new one, back to the root; collisions, the
+    // project itself and the inbox are refused; favorites and thumbnails follow
+    let bins_id = renamed.id.clone();
+    let moved = engine
+        .move_projects(std::slice::from_ref(&bins_id), &root.id, "Archive/2026")
+        .unwrap();
+    assert!(moved.failed.is_empty(), "{:?}", moved.failed);
+    assert_eq!(moved.moved[0].rel_path, "Archive/2026/Bins v2");
+    assert!(moved.moved[0].favorite);
+    assert_eq!(moved.moved[0].thumb.as_deref(), Some(key.as_str()));
+    assert!(lib.path().join("Archive/2026/Bins v2/big.stl").is_file());
+    assert!(matches!(engine.get_project(&bins_id), Err(EngineError::ProjectNotFound(_))));
+    let bins_id = moved.moved[0].id.clone();
+    assert!(matches!(
+        engine.move_projects(std::slice::from_ref(&bins_id), &root.id, "_Inbox"),
+        Err(EngineError::NotAllowed(_))
+    ));
+    assert!(matches!(
+        engine.move_projects(std::slice::from_ref(&bins_id), &root.id, "../x"),
+        Err(EngineError::NotAllowed(_))
+    ));
+    // the destination may not be a project folder
+    assert!(matches!(
+        engine.move_projects(std::slice::from_ref(&bins_id), &root.id, "Decor/Vase"),
+        Err(EngineError::NotAllowed(_))
+    ));
+    let same = engine
+        .move_projects(std::slice::from_ref(&bins_id), &root.id, "Archive/2026")
+        .unwrap();
+    assert_eq!(same.moved[0].id, bins_id, "already there is a no-op");
+    // into itself: the destination lies inside a project, refused before anything moves
+    assert!(matches!(
+        engine.move_projects(std::slice::from_ref(&bins_id), &root.id, "Archive/2026/Bins v2/sub"),
+        Err(EngineError::NotAllowed(_))
+    ));
+    fs::create_dir_all(lib.path().join("Bins v2")).unwrap();
+    let taken = engine.move_projects(&[bins_id.clone(), "nope".into()], &root.id, "").unwrap();
+    assert_eq!(taken.failed.len(), 2);
+    assert!(taken.failed[0].message.contains("exists"), "{}", taken.failed[0].message);
+    fs::remove_dir(lib.path().join("Bins v2")).unwrap();
+    let back = engine.move_projects(std::slice::from_ref(&bins_id), &root.id, "").unwrap();
+    assert_eq!(back.moved[0].rel_path, "Bins v2");
+    assert_eq!(engine.favorite_count().unwrap(), 1);
+    assert_eq!(engine.list_projects(&ListQuery::default()).unwrap().len(), 3);
+    let renamed = back.moved[0].clone();
+    let bins_id = renamed.id.clone();
+    let _ = &bins_id;
+
     // delete a file: project stays while it still has a model, disappears otherwise
     assert!(matches!(
         engine.delete_file(&vase_id, "project.yaml"),

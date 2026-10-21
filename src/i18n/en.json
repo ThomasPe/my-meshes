@@ -326,7 +326,22 @@
     "deletedMany_one": "{{count}} project moved to trash",
     "deletedMany_other": "{{count}} projects moved to trash",
     "rerenderThumb": "Re-render preview",
-    "rerenderQueued": "Rendering a new preview for “{{name}}”…"
+    "rerenderQueued": "Rendering a new preview for “{{name}}”…",
+    "move": "Move to…",
+    "moveTitle_one": "Move “{{name}}”",
+    "moveTitle_other": "Move {{count}} projects",
+    "moveBody": "The project folder moves to the chosen folder. Tags, favorites and collections follow it.",
+    "moveNewFolder": "New sub-folder (optional)",
+    "moveNewFolderHint": "created inside the chosen folder",
+    "moveConfirm": "Move",
+    "moved_one": "{{count}} project moved to {{dest}}",
+    "moved_other": "{{count}} projects moved to {{dest}}",
+    "movedBack_one": "{{count}} project moved back",
+    "movedBack_other": "{{count}} projects moved back",
+    "moveNoop": "Already in that folder.",
+    "moveFailedSome_one": "{{count}} project could not be moved",
+    "moveFailedSome_other": "{{count}} projects could not be moved",
+    "undo": "Undo"
   },
   "import": {
     "title": "Import",

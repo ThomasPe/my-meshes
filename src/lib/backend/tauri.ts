@@ -44,6 +44,7 @@ export function createTauriBackend(): Backend {
     setContainerDirs: (names) => invoke('set_container_dirs', { names }),
     setFavorite: (projectId, favorite) => invoke('set_favorite', { projectId, favorite }),
     renameProject: (projectId, newName) => invoke('rename_project', { projectId, newName }),
+    moveProjects: (projectIds, rootId, destRel) => invoke('move_projects', { projectIds, rootId, destRel }),
     deleteProject: (projectId) => invoke('delete_project', { projectId }),
     deleteFile: (projectId, relPath) => invoke('delete_file', { projectId, relPath }),
     thumbQueue: (limit) => invoke('thumb_queue', { limit: limit ?? null }),

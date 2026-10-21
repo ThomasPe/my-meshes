@@ -77,6 +77,7 @@ export function useBackendEvents(onScan?: (rootId: string, found: number) => voi
         invalidateLibrary(qc);
         if (e.reason === 'rename' && e.oldId) qc.removeQueries({ queryKey: keys.project(e.oldId) });
         if (e.reason === 'delete' && e.oldId) qc.removeQueries({ queryKey: keys.project(e.oldId) });
+        if (e.reason === 'move') for (const id of e.oldIds ?? []) qc.removeQueries({ queryKey: keys.project(id) });
         if (e.reason === 'thumbs_cleared') useThumbs.setState({ fresh: {} });
         void kickThumbQueue();
       });
@@ -193,6 +194,14 @@ export const useReorderCollection = () => useCollectionMutation((b, a: { id: str
 export const useCreateSmartCollection = () => useCollectionMutation((b, a: { name: string; query: ListQuery }) => b.createSmartCollection(a.name, a.query));
 export const useRenameSmartCollection = () => useCollectionMutation((b, a: { id: string; name: string }) => b.updateSmartCollection(a.id, a.name));
 export const useDeleteSmartCollection = () => useCollectionMutation((b, id: string) => b.deleteSmartCollection(id));
+
+export function useMoveProjects() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (a: { projectIds: string[]; rootId: string; destRel: string }) => (await getBackend()).moveProjects(a.projectIds, a.rootId, a.destRel),
+    onSuccess: (report, a) => { const kept = new Set(report.moved.map((p) => p.id)); for (const id of a.projectIds) if (!kept.has(id)) qc.removeQueries({ queryKey: keys.project(id) }); invalidateLibrary(qc); },
+  });
+}
 
 export function usePromoteInboxEach() {
   const qc = useQueryClient();

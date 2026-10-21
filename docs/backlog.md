@@ -156,7 +156,10 @@ submission is outside the code: Partner Center identity values, screenshots
       deleted, tagged/untagged and given a creator in one engine call with a per-project
       failure report.
 - [ ] **External enrichment** (META-7).
-- [ ] **Organizational rules & maintenance tools** (IMP-7, IMP-8).
+- [ ] **Organizational rules & maintenance tools** (IMP-7, IMP-8). Done so far: **move
+      projects between folders** (dialog with folder picker and new sub-folder, multi-select,
+      drag cards onto tree rows, Undo toast; collections, favorites, thumbnails and nested
+      projects follow; cross-volume moves copy and remove).
 
 ### Epic 8: Productivity
 - [ ] **Project tabs** (NAV-9).

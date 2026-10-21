@@ -1,4 +1,4 @@
-import type { AppInfo, BatchReport, BatchUpdate, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata } from '@/lib/types';
+import type { AppInfo, BatchReport, BatchUpdate, MoveReport, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata } from '@/lib/types';
 
 export type Unlisten = () => void;
 
@@ -39,6 +39,8 @@ export interface Backend {
   setContainerDirs(names: string[]): Promise<string[]>;
   setFavorite(projectId: string, favorite: boolean): Promise<Project>;
   renameProject(projectId: string, newName: string): Promise<Project>;
+  /** Moves project folders into a folder of a root (created when missing); per-project failures. */
+  moveProjects(projectIds: string[], rootId: string, destRel: string): Promise<MoveReport>;
   deleteProject(projectId: string): Promise<void>;
   deleteFile(projectId: string, relPath: string): Promise<Project | null>;
   thumbQueue(limit?: number): Promise<ThumbJob[]>;
