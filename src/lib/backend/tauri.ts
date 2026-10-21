@@ -60,6 +60,7 @@ export function createTauriBackend(): Backend {
     executeImport: (request) => invoke('execute_import', { request }),
     listInbox: (rootId) => invoke('list_inbox', { rootId }),
     promoteInbox: (rootId, files, name) => invoke('promote_inbox', { rootId, files, name }),
+    promoteInboxEach: (rootId, items) => invoke('promote_inbox_each', { rootId, items }),
     deleteInboxFile: (rootId, name) => invoke('delete_inbox_file', { rootId, name }),
     getCollections: () => invoke('get_collections'),
     createCollection: (name) => invoke('create_collection', { name }),

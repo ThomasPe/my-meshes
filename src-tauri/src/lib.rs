@@ -108,6 +108,7 @@ pub fn run() {
             commands::list_inbox,
             commands::promote_inbox,
             commands::delete_inbox_file,
+            commands::promote_inbox_each,
             commands::get_collections,
             commands::create_collection,
             commands::rename_collection,

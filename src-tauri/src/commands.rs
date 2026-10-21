@@ -5,7 +5,7 @@ use meshkeep_engine::model::{
     Facets, FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, ScanReport, SyncMode, TagCount, ThumbJob, ThumbLocation,
     ThumbStats,
 };
-use meshkeep_engine::{BatchReport, BatchUpdate, EngineError, UpdateMetadata};
+use meshkeep_engine::{BatchReport, BatchUpdate, EngineError, PromoteItem, PromoteReport, UpdateMetadata};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -622,6 +622,18 @@ pub fn promote_inbox(app: AppHandle, state: State<AppState>, root_id: String, fi
         serde_json::json!({ "rootId": root_id, "report": serde_json::Value::Null, "reason": "import", "newId": project.id }),
     );
     Ok(project)
+}
+
+#[tauri::command]
+pub fn promote_inbox_each(app: AppHandle, state: State<AppState>, root_id: String, items: Vec<PromoteItem>) -> CmdResult<PromoteReport> {
+    let report = { state.engine.lock().unwrap().promote_inbox_each(&root_id, &items)? };
+    if !report.created.is_empty() {
+        let _ = app.emit(
+            "library://changed",
+            serde_json::json!({ "rootId": root_id, "report": serde_json::Value::Null, "reason": "import" }),
+        );
+    }
+    Ok(report)
 }
 
 #[tauri::command]

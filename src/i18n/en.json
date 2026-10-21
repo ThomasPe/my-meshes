@@ -380,7 +380,21 @@
     "promoteTitle_one": "Turn {{count}} file into a project",
     "promoteTitle_other": "Turn {{count}} files into a project",
     "promoteBody": "A new project folder is created directly below the library root and the files move there.",
-    "promoted": "Project “{{name}}” created"
+    "promoted": "Project “{{name}}” created",
+    "makeEach": "Make {{count}} separate projects",
+    "moreOptions": "More ways to create projects",
+    "promoteEachTitle": "One project per file",
+    "promoteEachBody": "Each file gets its own project folder directly below the library root. Adjust the names before creating them.",
+    "stripPrefix": "Remove the shared prefix “{{prefix}}”",
+    "fileColumn": "File",
+    "nameColumn": "Project folder",
+    "createMany_one": "Create {{count}} project",
+    "createMany_other": "Create {{count}} projects",
+    "promotedMany_one": "{{count}} project created",
+    "promotedMany_other": "{{count}} projects created",
+    "promoteFailedSome_one": "{{count}} file could not be turned into a project",
+    "promoteFailedSome_other": "{{count}} files could not be turned into projects",
+    "duplicateName": "This name is used twice"
   },
   "collections": {
     "title": "Collections",

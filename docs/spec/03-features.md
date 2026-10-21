@@ -61,7 +61,7 @@
 |---|---|---|
 | IMP-1 | Drop one or more archives or folders onto the app to open the staging area. The app proposes projects; the user reviews, adjusts and confirms. | MVP |
 | IMP-2 | Confirmed imports extract archives into new project directories inside a chosen root. The original archive is kept as an attachment by default; the dialog can instead move it to `_Originals`, leave it where it is, or send it to the Recycle Bin (Q7). The last choice is remembered. | MVP |
-| IMP-3 | Loose files can be routed to the `_Inbox` folder of the chosen root; the inbox has its own view with a promote-to-project action (Q6). | MVP |
+| IMP-3 | Loose files can be routed to the `_Inbox` folder of the chosen root; the inbox has its own view with a promote-to-project action, either one project from the selection or one project per file with editable names and a shared-prefix strip (Q6). | MVP |
 | IMP-4 | Files that appear in a root via the OS (not through the app) are picked up by sync; archives found this way are attachments and are not extracted. | MVP |
 | IMP-5 | Safe delete: deletions go to the OS trash after confirmation. | MVP |
 | IMP-6 | Drag a model or project out of the app into another application (slicer, Blender, file manager) as native files. Low priority (Q20). | Later |

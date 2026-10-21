@@ -137,6 +137,9 @@ export interface BatchUpdate {
   license?: string;
 }
 
+export interface PromoteItem { file: string; name: string }
+export interface PromoteReport { created: Project[]; failed: Array<{ file: string; message: string }> }
+
 export interface BatchReport {
   updated: number;
   failed: Array<{ project_id: string; message: string }>;

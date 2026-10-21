@@ -380,7 +380,21 @@
     "promoteTitle_one": "{{count}} Datei zu einem Projekt machen",
     "promoteTitle_other": "{{count}} Dateien zu einem Projekt machen",
     "promoteBody": "Ein neuer Projektordner entsteht direkt unter dem Bibliotheksordner, die Dateien ziehen dorthin um.",
-    "promoted": "Projekt „{{name}}“ erstellt"
+    "promoted": "Projekt „{{name}}“ erstellt",
+    "makeEach": "{{count}} einzelne Projekte erstellen",
+    "moreOptions": "Weitere Möglichkeiten, Projekte zu erstellen",
+    "promoteEachTitle": "Ein Projekt pro Datei",
+    "promoteEachBody": "Jede Datei bekommt einen eigenen Projektordner direkt unter dem Bibliotheksordner. Passe die Namen vor dem Erstellen an.",
+    "stripPrefix": "Gemeinsames Präfix „{{prefix}}“ entfernen",
+    "fileColumn": "Datei",
+    "nameColumn": "Projektordner",
+    "createMany_one": "{{count}} Projekt erstellen",
+    "createMany_other": "{{count}} Projekte erstellen",
+    "promotedMany_one": "{{count}} Projekt erstellt",
+    "promotedMany_other": "{{count}} Projekte erstellt",
+    "promoteFailedSome_one": "{{count}} Datei konnte nicht zum Projekt werden",
+    "promoteFailedSome_other": "{{count}} Dateien konnten nicht zu Projekten werden",
+    "duplicateName": "Dieser Name wird doppelt verwendet"
   },
   "collections": {
     "title": "Sammlungen",

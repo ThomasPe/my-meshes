@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import i18n from '@/i18n';
 import { getBackend } from '@/lib/backend';
 import { kickThumbQueue, useThumbs } from '@/lib/thumbs/queue';
-import type { BatchUpdate, ImportRequest, ListQuery, Project, ProjectSummary, ThumbLocation, UpdateMetadata } from '@/lib/types';
+import type { BatchUpdate, ImportRequest, ListQuery, Project, ProjectSummary, ThumbLocation, UpdateMetadata, PromoteItem } from '@/lib/types';
 
 export const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 10_000, retry: false, refetchOnWindowFocus: false } } });
 
@@ -51,10 +51,18 @@ export function invalidateLibrary(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: keys.thumbStats });
 }
 
-/** Patches one project in every cached list and detail query (favorite toggles, thumbnails). */
+/**
+ * Patches one project in every cached list and detail query (favorite toggles, thumbnails).
+ * A manual write counts as fresh data for React Query and clears the "invalidated" flag; a
+ * list that is not on screen would then never refetch after an import or rename while the
+ * thumbnail queue keeps patching it. The flag is put back on those queries.
+ */
 export function patchProject(qc: QueryClient, id: string, patch: Partial<ProjectSummary> & Partial<Project>) {
+  const cache = qc.getQueryCache();
+  const stale = [...cache.findAll({ queryKey: ['projects'] }), ...cache.findAll({ queryKey: keys.project(id) })].filter((q) => q.state.isInvalidated);
   qc.setQueriesData<ProjectSummary[]>({ queryKey: ['projects'] }, (list) => list?.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   qc.setQueryData<Project>(keys.project(id), (p) => (p ? { ...p, ...patch } : p));
+  for (const q of stale) q.invalidate();
 }
 
 /** Subscribes once to backend events and keeps the query cache fresh. */
@@ -185,6 +193,14 @@ export const useReorderCollection = () => useCollectionMutation((b, a: { id: str
 export const useCreateSmartCollection = () => useCollectionMutation((b, a: { name: string; query: ListQuery }) => b.createSmartCollection(a.name, a.query));
 export const useRenameSmartCollection = () => useCollectionMutation((b, a: { id: string; name: string }) => b.updateSmartCollection(a.id, a.name));
 export const useDeleteSmartCollection = () => useCollectionMutation((b, id: string) => b.deleteSmartCollection(id));
+
+export function usePromoteInboxEach() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (a: { rootId: string; items: PromoteItem[] }) => (await getBackend()).promoteInboxEach(a.rootId, a.items),
+    onSuccess: (_r, a) => { invalidateLibrary(qc); qc.invalidateQueries({ queryKey: keys.inbox(a.rootId) }); },
+  });
+}
 
 export function usePromoteInbox() {
   const qc = useQueryClient();

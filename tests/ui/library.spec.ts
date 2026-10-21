@@ -289,6 +289,43 @@ test('import: picker opens the staging dialog, proposals are editable, confirm c
   await expect(page.getByTestId('project-card').first()).toContainText('Cable Clip');
 });
 
+test('inbox: one project per file, with inline renaming and a shared-prefix strip', async ({ page }) => {
+  await page.getByTestId('filter-inbox').first().click();
+  await expect(page.getByTestId('inbox-row')).toHaveCount(2);
+  // a single selection offers only the one-project path
+  await page.getByTestId('inbox-row').first().click();
+  await expect(page.getByTestId('inbox-promote-more')).toHaveCount(0);
+  await page.getByRole('checkbox', { name: 'select all' }).check();
+  await page.getByTestId('inbox-promote-more').click();
+  await page.getByTestId('inbox-promote-each').click();
+  const dialog = page.getByTestId('promote-each-dialog');
+  await expect(dialog).toBeVisible();
+  const names = page.getByTestId('promote-each-name');
+  await expect(names).toHaveCount(2);
+  await expect(names.nth(0)).toHaveValue('quick download');
+  await expect(names.nth(1)).toHaveValue('reference');
+  await expect(page.getByTestId('promote-strip-prefix')).toHaveCount(0); // nothing shared
+  // a duplicate name blocks the button, fixing it enables it again
+  await names.nth(1).fill('Quick Download');
+  await expect(page.getByTestId('promote-each-error')).toHaveCount(2);
+  await expect(page.getByTestId('promote-each-confirm')).toBeDisabled();
+  await names.nth(1).fill('Reference Photo');
+  await expect(page.getByTestId('promote-each-confirm')).toBeEnabled();
+  // a name the engine rejects fails alone and stays in the dialog, the other one is created
+  await names.nth(0).fill('Bad/Name');
+  await page.getByTestId('promote-each-confirm').click();
+  await expect(page.getByText('1 project created')).toBeVisible();
+  await expect(page.getByTestId('promote-each-row')).toHaveCount(1);
+  await expect(page.getByTestId('promote-each-error')).toContainText('invalid name');
+  await names.nth(0).fill('Quick Download');
+  await page.getByTestId('promote-each-confirm').click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByTestId('inbox-empty')).toBeVisible();
+  await page.getByTestId('filter-all').click();
+  await expect(page.getByTestId('project-card').filter({ hasText: 'Quick Download' })).toHaveCount(1);
+  await expect(page.getByTestId('project-card').filter({ hasText: 'Reference Photo' })).toHaveCount(1);
+});
+
 test('inbox: lists loose files per root, promotes a selection to a project', async ({ page }) => {
   await expect(page.getByTestId('inbox-count').first()).toHaveText('2');
   await page.getByTestId('filter-inbox').first().click();

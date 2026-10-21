@@ -2,7 +2,7 @@
 //! (lazy sidecar creation, conflict detection), offline handling.
 
 use meshkeep_engine::model::{ListQuery, SidecarState, SyncMode};
-use meshkeep_engine::{Engine, EngineError, UpdateMetadata};
+use meshkeep_engine::{Engine, EngineError, PromoteItem, UpdateMetadata};
 use std::fs;
 use std::path::Path;
 
@@ -308,11 +308,38 @@ fn import_inbox_and_collections_through_the_engine() {
     names.sort();
     assert_eq!(names, vec!["Dropped Folder", "Existing"]);
     assert_eq!(engine.list_inbox(&root.id).unwrap().len(), 1);
-    let promoted = engine.promote_inbox(&root.id, &["loose.stl".into()], "From Inbox").unwrap();
-    assert_eq!(promoted.rel_path, "From Inbox");
-    assert_eq!(promoted.model_count, 1);
+    // batch promote: each file its own project; a missing file or taken name fails alone
+    fs::write(lib.path().join("_Inbox/second.stl"), b"solid s\nendsolid s\n").unwrap();
+    let report = engine
+        .promote_inbox_each(
+            &root.id,
+            &[
+                PromoteItem {
+                    file: "loose.stl".into(),
+                    name: "From Inbox".into(),
+                },
+                PromoteItem {
+                    file: "second.stl".into(),
+                    name: "Existing".into(),
+                },
+                PromoteItem {
+                    file: "gone.stl".into(),
+                    name: "Gone".into(),
+                },
+            ],
+        )
+        .unwrap();
+    assert_eq!(report.created.len(), 1);
+    assert_eq!(report.created[0].rel_path, "From Inbox");
+    assert_eq!(report.created[0].model_count, 1);
+    let failed: Vec<_> = report.failed.iter().map(|f| f.file.as_str()).collect();
+    assert_eq!(failed, vec!["second.stl", "gone.stl"]);
+    assert_eq!(engine.list_inbox(&root.id).unwrap().len(), 1, "second.stl stays in the inbox");
+    let promoted = report.created[0].clone();
+    let second = engine.promote_inbox(&root.id, &["second.stl".into()], "Second").unwrap();
+    assert_eq!(second.rel_path, "Second");
     assert!(engine.list_inbox(&root.id).unwrap().is_empty());
-    assert_eq!(engine.list_projects(&ListQuery::default()).unwrap().len(), 3);
+    assert_eq!(engine.list_projects(&ListQuery::default()).unwrap().len(), 4);
 
     // collections: membership, manual order, rename and delete keep references straight
     let c = engine.create_collection("Desk").unwrap();

@@ -1,4 +1,4 @@
-import type { AppInfo, BatchReport, BatchUpdate, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata } from '@/lib/types';
+import type { AppInfo, BatchReport, BatchUpdate, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata } from '@/lib/types';
 
 export type Unlisten = () => void;
 
@@ -55,6 +55,8 @@ export interface Backend {
   executeImport(request: ImportRequest): Promise<ImportReport>;
   listInbox(rootId: string): Promise<InboxFile[]>;
   promoteInbox(rootId: string, files: string[], name: string): Promise<Project>;
+  /** One project per file; failures come back per file instead of aborting the batch. */
+  promoteInboxEach(rootId: string, items: PromoteItem[]): Promise<PromoteReport>;
   deleteInboxFile(rootId: string, name: string): Promise<void>;
   getCollections(): Promise<Collection[]>;
   createCollection(name: string): Promise<Collection>;

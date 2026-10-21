@@ -391,6 +391,13 @@ export function createMockBackend(): Backend {
       listeners.lib.forEach((cb) => cb({ rootId, report: null, reason: 'import', newId: p.id }));
       return { ...p };
     },
+    async promoteInboxEach(rootId, items) {
+      const created = [], failed = [];
+      for (const it of items) {
+        try { created.push(await this.promoteInbox(rootId, [it.file], it.name)); } catch (e) { failed.push({ file: it.file, message: (e as { message: string }).message }); }
+      }
+      return { created, failed };
+    },
     async deleteInboxFile(rootId, name) { inbox.set(rootId, (inbox.get(rootId) ?? []).filter((x) => x.name !== name)); listeners.inbox.forEach((cb) => cb({ rootId })); },
     async getCollections() { return collections.map((c) => ({ ...c, projects: c.projects.slice() })); },
     async createCollection(name) { if (!name.trim()) throw err('invalid_name', 'collection name is empty'); const c = { id: 'c_' + Math.random().toString(36).slice(2, 8), name: name.trim(), projects: [] }; collections.push(c); collChanged(); return { ...c }; },

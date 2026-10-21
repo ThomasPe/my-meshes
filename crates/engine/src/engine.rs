@@ -15,6 +15,7 @@ use crate::settings::{Settings, SettingsStore};
 use crate::sidecar;
 use crate::watch::{RootWatcher, WatchEvent};
 use crate::{threemf, thumbs};
+use serde::{Deserialize, Serialize};
 use std::path::{Component, Path, PathBuf};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
@@ -68,6 +69,27 @@ pub struct BatchFailure {
 pub struct BatchReport {
     pub updated: u32,
     pub failed: Vec<BatchFailure>,
+}
+
+/// One inbox file that becomes a project of its own (IMP-3, "make separate projects").
+#[derive(Debug, Clone, Deserialize)]
+pub struct PromoteItem {
+    pub file: String,
+    pub name: String,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct PromoteFailure {
+    pub file: String,
+    pub message: String,
+}
+
+/// Outcome of a batch promote: every created project plus the files that stayed in the
+/// inbox and why (name taken, file gone), so one bad row does not undo the others.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct PromoteReport {
+    pub created: Vec<Project>,
+    pub failed: Vec<PromoteFailure>,
 }
 
 /// How files leave a library. The default moves them to the OS trash / recycle bin
@@ -489,6 +511,22 @@ impl Engine {
         let root = self.root(root_id)?;
         let dir = import::promote_inbox(&root.path, files, name)?;
         self.reindex_dir(root_id, &dir)
+    }
+
+    /// Turns each listed inbox file into its own project; failures are reported per file.
+    pub fn promote_inbox_each(&mut self, root_id: &str, items: &[PromoteItem]) -> Result<PromoteReport> {
+        self.root(root_id)?;
+        let mut report = PromoteReport::default();
+        for it in items {
+            match self.promote_inbox(root_id, std::slice::from_ref(&it.file), &it.name) {
+                Ok(p) => report.created.push(p),
+                Err(e) => report.failed.push(PromoteFailure {
+                    file: it.file.clone(),
+                    message: e.to_string(),
+                }),
+            }
+        }
+        Ok(report)
     }
 
     pub fn delete_inbox_file(&mut self, root_id: &str, name: &str) -> Result<()> {

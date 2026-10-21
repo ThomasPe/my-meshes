@@ -135,7 +135,8 @@ submission is outside the code: Partner Center identity values, screenshots
       staging dialog; zips and folders become projects, loose files go to the inbox,
       archive policy keep/_Originals/trash with the space each costs. zip and 7z are
       extracted; rar is reported and routed to the inbox.
-- [x] **Inbox** (IMP-3): `_Inbox` per root with its own view, promote-to-project, delete.
+- [x] **Inbox** (IMP-3): `_Inbox` per root with its own view, promote-to-project (one project
+      from the selection, or one per file with inline renaming and prefix stripping), delete.
 - [x] **Passive sync of OS drops; archives as attachments** (IMP-4): the watcher picks up
       files that appear on disk; archives inside projects stay opaque attachments.
 - [x] **Safe delete to trash** (IMP-5): whole project or single file, confirmation dialog,
