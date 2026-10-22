@@ -725,6 +725,51 @@ test('move: the dialog moves a project into a folder or a new sub-folder, undo b
   await expect(page.locator('[data-tree-row][data-label="Archive"]')).toContainText('2');
 });
 
+test('context menu: acts on the selection when the clicked card is part of it, else selects that card', async ({ page }) => {
+  const cards = page.getByTestId('project-card');
+  await cards.filter({ hasText: 'Decorative Vase' }).click();
+  await cards.filter({ hasText: 'Dice Tower' }).click({ modifiers: ['Control'] });
+  await cards.filter({ hasText: 'Dice Tower' }).click({ button: 'right' });
+  const menu = page.getByTestId('project-menu');
+  await expect(menu).toHaveAttribute('data-count', '2');
+  await expect(menu.getByTestId('menu-move')).toHaveText('Move 2 projects to…');
+  await expect(menu.getByTestId('menu-delete')).toHaveText('Delete 2 projects');
+  await expect(menu.getByTestId('menu-rename')).toHaveCount(0);
+  await menu.getByTestId('menu-favorite').click();
+  await expect(page.getByTestId('favorites-count')).toHaveText('4');
+  // right-click on a card outside the selection: it becomes the only selected one
+  await cards.filter({ hasText: 'Cable Clips' }).click({ button: 'right' });
+  await expect(page.getByTestId('project-menu')).toHaveAttribute('data-count', '1');
+  await expect(page.getByTestId('project-menu').getByTestId('menu-rename')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.locator('[data-testid="project-card"][aria-selected="true"]')).toHaveCount(1);
+  await expect(page.locator('[data-testid="project-card"][aria-selected="true"]')).toContainText('Cable Clips');
+  // the same in the list view
+  await page.getByTestId('view-list').click();
+  const rows = page.getByTestId('project-row');
+  // rows carry tag chips in the middle: click the title cell, not the row centre
+  await rows.filter({ hasText: 'Decorative Vase' }).getByText('Decorative Vase', { exact: true }).click();
+  await rows.filter({ hasText: 'Dice Tower' }).getByText('Dice Tower', { exact: true }).click({ modifiers: ['Control'] });
+  await rows.filter({ hasText: 'Decorative Vase' }).getByText('Decorative Vase', { exact: true }).click({ button: 'right' });
+  await expect(page.getByTestId('project-menu')).toHaveAttribute('data-count', '2');
+  await page.getByTestId('project-menu').getByTestId('menu-move').click();
+  await page.getByTestId('move-folder').filter({ hasText: 'Desk' }).click();
+  await page.getByTestId('move-confirm').click();
+  await expect(page.getByText('2 projects moved to 3D Models / Projects / Desk')).toBeVisible();
+});
+
+test('tree: a project row offers "Move to…" in its context menu', async ({ page }) => {
+  const desk = page.locator('[data-tree-row][data-label="Desk"]');
+  await desk.getByRole('button', { name: 'expand' }).click();
+  await page.locator('[data-tree-row][data-label="Phone Stand"]').click({ button: 'right' });
+  await page.getByTestId('folder-menu').getByTestId('menu-move').click();
+  await expect(page.getByTestId('move-dialog')).toBeVisible();
+  await page.getByTestId('move-folder').filter({ hasText: 'Decor' }).click();
+  await page.getByTestId('move-confirm').click();
+  await expect(page.getByText('1 project moved to 3D Models / Projects / Decor')).toBeVisible();
+  await expect(page.locator('[data-tree-row][data-label="Decor"]')).toContainText('3');
+});
+
 test('move: dragging a card onto a tree folder moves it there', async ({ page }) => {
   const card = page.getByTestId('project-card').filter({ hasText: 'Low-Poly Benchy' });
   const target = page.locator('[data-tree-row][data-label="Tabletop"]');

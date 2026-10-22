@@ -1,4 +1,4 @@
-import { Box, ChevronDown, ChevronRight, Clock, Eye, Folder, FolderHeart, FolderOpen, HardDrive, Inbox, LayoutGrid, Pencil, Plus, RefreshCw, Settings, Sparkles, Star, Tag, Trash2 } from 'lucide-react';
+import { Box, ChevronDown, ChevronRight, Clock, Eye, Folder, FolderInput, FolderHeart, FolderOpen, HardDrive, Inbox, LayoutGrid, Pencil, Plus, RefreshCw, Settings, Sparkles, Star, Tag, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
@@ -8,7 +8,12 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { useCollectionDialog } from '@/features/library/CollectionDialogs';
 import { useCollections, useFolderTree, useInbox, useLibraryStats, useRoots, useSmartCollections, useTagCounts } from '@/lib/queries';
 import { navigate, routeHref, useRoute } from '@/lib/router';
+import { MoveDialog } from '@/features/library/MoveDialog';
 import { useMove } from '@/features/library/useMove';
+import { create } from 'zustand';
+
+/** The project row whose "Move to…" dialog is open (one dialog for the whole tree). */
+const useTreeMove = create<{ target: { id: string; title: string; rel_path: string } | null; set: (t: { id: string; title: string; rel_path: string } | null) => void }>((set) => ({ target: null, set: (target) => set({ target }) }));
 import { PROJECTS_MIME } from '@/features/library/ProjectGrid';
 import { useTree, useUi, type LibraryFilter } from '@/lib/store';
 
@@ -176,6 +181,7 @@ export function Sidebar({ onRescan }: { onRescan?: (rootId: string) => void } = 
           <h3 className={headClass}>{t('library.roots')}<a href={routeHref({ page: 'settings' })} className="ml-auto rounded-full p-1 hover:bg-secondary" title={t('settings.addFolder')}><Plus className="size-3.5" /></a></h3>
           <div ref={treeRef} role="tree" aria-label={t('library.roots')} onKeyDown={onTreeKey} onFocusCapture={onTreeFocus} data-testid="folder-tree">
             {(roots.data ?? []).map((r) => <RootTree key={r.id} root={r} filter={filter} setFilter={setFilter} onRescan={onRescan} current={currentProject} />)}
+            <TreeMoveDialog />
           </div>
         </section>
         {tags.data && tags.data.length > 0 && (
@@ -281,6 +287,7 @@ function FolderItem({ node, depth, rootId, filter, setFilter, online, current }:
         </ContextMenuTrigger>
         <ContextMenuContent data-testid="folder-menu">
           {projectId && <ContextMenuItem onSelect={() => navigate({ page: 'project', id: projectId })}><Eye />{t('inspector.open')}</ContextMenuItem>}
+          {projectId && <ContextMenuItem disabled={!online} onSelect={() => useTreeMove.getState().set({ id: projectId, title: node.name, rel_path: node.rel_path })} data-testid="menu-move"><FolderInput />{t('actions.move')}</ContextMenuItem>}
           {(!projectId || has) && <ContextMenuItem onSelect={() => setFilter(f)}><Folder />{t('library.showProjects')}</ContextMenuItem>}
           <ContextMenuItem disabled={!online} onSelect={() => reveal(rootId, node.rel_path)} data-testid="menu-reveal-folder"><FolderOpen />{t('inspector.reveal')}</ContextMenuItem>
         </ContextMenuContent>
@@ -288,4 +295,10 @@ function FolderItem({ node, depth, rootId, filter, setFilter, online, current }:
       {open && has && node.children.map((c) => <FolderItem key={c.rel_path} node={c} depth={depth + 1} rootId={rootId} filter={filter} setFilter={setFilter} online={online} current={current} />)}
     </div>
   );
+}
+
+function TreeMoveDialog() {
+  const target = useTreeMove((s) => s.target);
+  const set = useTreeMove((s) => s.set);
+  return <MoveDialog projects={target ? [target] : []} onClose={() => set(null)} onMoved={() => set(null)} />;
 }

@@ -304,7 +304,11 @@
   },
   "favorites": {
     "add": "Zu Favoriten hinzufügen",
-    "remove": "Aus Favoriten entfernen"
+    "remove": "Aus Favoriten entfernen",
+    "addN_one": "Zu Favoriten hinzufügen",
+    "addN_other": "{{count}} zu Favoriten hinzufügen",
+    "removeN_one": "Aus Favoriten entfernen",
+    "removeN_other": "{{count}} aus Favoriten entfernen"
   },
   "actions": {
     "rename": "Umbenennen",
@@ -341,7 +345,13 @@
     "moveNoop": "Liegt bereits in diesem Ordner.",
     "moveFailedSome_one": "{{count}} Projekt konnte nicht verschoben werden",
     "moveFailedSome_other": "{{count}} Projekte konnten nicht verschoben werden",
-    "undo": "Rückgängig"
+    "undo": "Rückgängig",
+    "moveN_one": "Verschieben nach…",
+    "moveN_other": "{{count}} Projekte verschieben nach…",
+    "rerenderN_one": "Vorschau neu erzeugen",
+    "rerenderN_other": "{{count}} Vorschauen neu erzeugen",
+    "deleteN_one": "Löschen",
+    "deleteN_other": "{{count}} Projekte löschen"
   },
   "import": {
     "title": "Importieren",
@@ -435,7 +445,11 @@
     "smartSaved": "Smarte Sammlung „{{name}}“ gespeichert",
     "smartHint": "Smarte Sammlung: eine gespeicherte Suche",
     "addedMany_one": "{{count}} Projekt zu „{{name}}“ hinzugefügt",
-    "addedMany_other": "{{count}} Projekte zu „{{name}}“ hinzugefügt"
+    "addedMany_other": "{{count}} Projekte zu „{{name}}“ hinzugefügt",
+    "addNTo_one": "Zu Sammlung hinzufügen",
+    "addNTo_other": "{{count}} zu Sammlung hinzufügen",
+    "removeNFrom_one": "Aus dieser Sammlung entfernen",
+    "removeNFrom_other": "{{count}} aus dieser Sammlung entfernen"
   },
   "notify": {
     "scanTitle": "Bibliothek aktualisiert",

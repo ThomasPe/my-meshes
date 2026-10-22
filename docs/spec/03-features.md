@@ -38,6 +38,7 @@
 | NAV-4 | Instant full-text search over title, description, tags and file names. | MVP |
 | NAV-5 | Attribute filters derived from the data: tags, creator, license, file type, date ranges, material. | MVP |
 | NAV-6 | Detail view for a project: metadata, file list with sizes and types, images, attachments, printing hints. | MVP |
+| NAV-6a | Context menus follow Explorer: right-clicking a selected card or row acts on the whole selection (labels carry the count; open, rename and reveal are single-only), right-clicking an unselected one selects it alone first. Project rows in the folder tree offer Open and Move to…. | MVP |
 | NAV-7 | Manual collections: create, rename, delete, add/remove projects, reorder. | MVP |
 | NAV-8 | Smart collections: build a query from the available filters and save it. | MVP |
 | NAV-9 | Project tabs: several projects open side by side; each tab keeps its own UI state. | Later |

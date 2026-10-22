@@ -1,5 +1,5 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { ProjectCard } from '@/features/library/ProjectCard';
 import type { ProjectActions } from '@/features/library/ProjectMenu';
 import type { ProjectSummary } from '@/lib/types';
@@ -36,6 +36,7 @@ export function ProjectGrid({ projects, tile, selected, onSelect, onOpen, onTag,
     onReorder(ids);
     setDragId(null); setOverId(null);
   };
+  const selection = useMemo(() => projects.filter((p) => selected.has(p.id)), [projects, selected]);
   const [width, setWidth] = useState(0);
   useEffect(() => {
     const el = parentRef.current;
@@ -74,7 +75,7 @@ export function ProjectGrid({ projects, tile, selected, onSelect, onOpen, onTag,
                 onDragLeave={() => { if (overId === p.id) setOverId(null); }}
                 onDrop={(e) => { if (!onReorder) return; e.preventDefault(); drop(p.id); }}
                 onDragEnd={() => { setDragId(null); setOverId(null); }}>
-                <ProjectCard project={p} selected={selected.has(p.id)} onSelect={(e) => onSelect(p.id, e)} onOpen={() => onOpen(p.id)} onTag={onTag} actions={actions} />
+                <ProjectCard project={p} selected={selected.has(p.id)} selection={selection} onSelect={(e) => onSelect(p.id, e)} onOpen={() => onOpen(p.id)} onTag={onTag} actions={actions} />
               </div>
             ))}
           </div>

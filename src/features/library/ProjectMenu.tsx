@@ -26,29 +26,40 @@ export interface ProjectActions {
   setFavoriteMany: (ps: ProjectSummary[], favorite: boolean) => void;
 }
 
-export function ProjectMenu({ project: p, actions, children }: { project: ProjectSummary; actions: ProjectActions; children: React.ReactNode }) {
+/**
+ * Context menu of a card or row. Like Explorer: when the clicked project is part of the
+ * selection the menu acts on the whole selection and says so in its labels; otherwise the
+ * caller selects the clicked project alone first (see `onContextMenu` on the card/row) and
+ * the menu acts on that one. Single-only entries (open, rename, reveal) disappear for many.
+ */
+export function ProjectMenu({ project: p, selection = [], actions, children }: { project: ProjectSummary; selection?: ProjectSummary[]; actions: ProjectActions; children: React.ReactNode }) {
   const { t } = useTranslation();
+  const targets = selection.some((s) => s.id === p.id) && selection.length > 1 ? selection : [p];
+  const many = targets.length > 1;
+  const n = targets.length;
+  const movable = targets.filter((x) => !x.offline && x.rel_path !== '');
+  const allFav = targets.every((x) => x.favorite);
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
-      <ContextMenuContent data-testid="project-menu">
-        <ContextMenuItem onSelect={() => actions.open(p)}><Eye />{t('inspector.open')}</ContextMenuItem>
-        <ContextMenuItem onSelect={() => actions.toggleFavorite(p)}>{p.favorite ? <><StarOff />{t('favorites.remove')}</> : <><Star />{t('favorites.add')}</>}</ContextMenuItem>
+      <ContextMenuContent data-testid="project-menu" data-count={n}>
+        {!many && <ContextMenuItem onSelect={() => actions.open(p)}><Eye />{t('inspector.open')}</ContextMenuItem>}
+        <ContextMenuItem onSelect={() => (many ? actions.setFavoriteMany(targets, !allFav) : actions.toggleFavorite(p))} data-testid="menu-favorite">{allFav ? <><StarOff />{t('favorites.removeN', { count: n })}</> : <><Star />{t('favorites.addN', { count: n })}</>}</ContextMenuItem>
         <ContextMenuSub>
-          <ContextMenuSubTrigger data-testid="menu-add-to-collection"><FolderHeart />{t('collections.addTo')}</ContextMenuSubTrigger>
+          <ContextMenuSubTrigger data-testid="menu-add-to-collection"><FolderHeart />{t('collections.addNTo', { count: n })}</ContextMenuSubTrigger>
           <ContextMenuSubContent>
-            {actions.collections.map((c) => <ContextMenuItem key={c.id} disabled={c.projects.includes(p.id)} onSelect={() => actions.addToCollection(p, c.id)} data-testid="menu-collection">{c.name}</ContextMenuItem>)}
+            {actions.collections.map((c) => <ContextMenuItem key={c.id} disabled={targets.every((x) => c.projects.includes(x.id))} onSelect={() => (many ? actions.addManyToCollection(targets, c.id) : actions.addToCollection(p, c.id))} data-testid="menu-collection">{c.name}</ContextMenuItem>)}
             {actions.collections.length > 0 && <ContextMenuSeparator />}
-            <ContextMenuItem onSelect={() => actions.addToCollection(p, null)}><Plus />{t('collections.new')}</ContextMenuItem>
+            <ContextMenuItem onSelect={() => (many ? actions.addManyToCollection(targets, null) : actions.addToCollection(p, null))}><Plus />{t('collections.new')}</ContextMenuItem>
           </ContextMenuSubContent>
         </ContextMenuSub>
-        {actions.removeFromCollection && <ContextMenuItem onSelect={() => actions.removeFromCollection!(p)} data-testid="menu-remove-from-collection"><FolderMinus />{t('collections.removeFrom')}</ContextMenuItem>}
-        <ContextMenuItem disabled={p.offline || p.rel_path === ''} onSelect={() => actions.rename(p)} data-testid="menu-rename"><Pencil />{t('actions.rename')}</ContextMenuItem>
-        <ContextMenuItem disabled={p.offline || p.rel_path === ''} onSelect={() => actions.move([p])} data-testid="menu-move"><FolderInput />{t('actions.move')}</ContextMenuItem>
-        <ContextMenuItem disabled={p.offline} onSelect={() => actions.reveal(p)}><FolderOpen />{t('inspector.reveal')}</ContextMenuItem>
-        <ContextMenuItem disabled={p.offline} onSelect={() => actions.rerenderThumbnail(p)} data-testid="menu-rethumb"><ImageUp />{t('actions.rerenderThumb')}</ContextMenuItem>
+        {actions.removeFromCollection && <ContextMenuItem onSelect={() => { for (const x of targets) actions.removeFromCollection!(x); }} data-testid="menu-remove-from-collection"><FolderMinus />{t('collections.removeNFrom', { count: n })}</ContextMenuItem>}
+        {!many && <ContextMenuItem disabled={p.offline || p.rel_path === ''} onSelect={() => actions.rename(p)} data-testid="menu-rename"><Pencil />{t('actions.rename')}</ContextMenuItem>}
+        <ContextMenuItem disabled={movable.length === 0} onSelect={() => actions.move(movable)} data-testid="menu-move"><FolderInput />{t('actions.moveN', { count: n })}</ContextMenuItem>
+        {!many && <ContextMenuItem disabled={p.offline} onSelect={() => actions.reveal(p)}><FolderOpen />{t('inspector.reveal')}</ContextMenuItem>}
+        <ContextMenuItem disabled={targets.every((x) => x.offline)} onSelect={() => { for (const x of targets) if (!x.offline) actions.rerenderThumbnail(x); }} data-testid="menu-rethumb"><ImageUp />{t('actions.rerenderN', { count: n })}</ContextMenuItem>
         <ContextMenuSeparator />
-        <ContextMenuItem variant="destructive" disabled={p.offline || p.rel_path === ''} onSelect={() => actions.remove(p)} data-testid="menu-delete"><Trash2 />{t('actions.delete')}</ContextMenuItem>
+        <ContextMenuItem variant="destructive" disabled={movable.length === 0} onSelect={() => (many ? actions.removeMany(movable) : actions.remove(p))} data-testid="menu-delete"><Trash2 />{t('actions.deleteN', { count: n })}</ContextMenuItem>
       </ContextMenuContent>
     </ContextMenu>
   );

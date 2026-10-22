@@ -304,7 +304,11 @@
   },
   "favorites": {
     "add": "Add to favorites",
-    "remove": "Remove from favorites"
+    "remove": "Remove from favorites",
+    "addN_one": "Add to favorites",
+    "addN_other": "Add {{count}} to favorites",
+    "removeN_one": "Remove from favorites",
+    "removeN_other": "Remove {{count}} from favorites"
   },
   "actions": {
     "rename": "Rename",
@@ -341,7 +345,13 @@
     "moveNoop": "Already in that folder.",
     "moveFailedSome_one": "{{count}} project could not be moved",
     "moveFailedSome_other": "{{count}} projects could not be moved",
-    "undo": "Undo"
+    "undo": "Undo",
+    "moveN_one": "Move to…",
+    "moveN_other": "Move {{count}} projects to…",
+    "rerenderN_one": "Re-render preview",
+    "rerenderN_other": "Re-render {{count}} previews",
+    "deleteN_one": "Delete",
+    "deleteN_other": "Delete {{count}} projects"
   },
   "import": {
     "title": "Import",
@@ -435,7 +445,11 @@
     "smartSaved": "Smart collection “{{name}}” saved",
     "smartHint": "Smart collection: a saved search",
     "addedMany_one": "{{count}} project added to “{{name}}”",
-    "addedMany_other": "{{count}} projects added to “{{name}}”"
+    "addedMany_other": "{{count}} projects added to “{{name}}”",
+    "addNTo_one": "Add to collection",
+    "addNTo_other": "Add {{count}} to collection",
+    "removeNFrom_one": "Remove from this collection",
+    "removeNFrom_other": "Remove {{count}} from this collection"
   },
   "notify": {
     "scanTitle": "Library updated",
