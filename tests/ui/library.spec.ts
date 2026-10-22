@@ -805,6 +805,8 @@ test('duplicates: groups projects by shared model content, keeping one trashes t
   await expect(groups.nth(0)).toContainText('Twisted vase backup');
   await expect(groups.nth(1)).toHaveAttribute('data-kind', 'overlap');
   await expect(groups.nth(1)).toContainText('1 of 2 models shared');
+  // tiles never grow past their column: the view has no horizontal overflow
+  expect(await page.getByTestId('duplicates').evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   // keep the original: the copy goes to the trash after the usual confirmation
   const original = groups.nth(0).getByTestId('duplicate-member').filter({ hasText: 'Projects/Decor/Vase' });
   await original.getByTestId('duplicate-keep').click();

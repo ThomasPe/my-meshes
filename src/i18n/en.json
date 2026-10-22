@@ -503,6 +503,7 @@
     },
     "groupLine": "{{members}} projects · {{files}} shared files · {{size}}",
     "memberLine": "{{shared}} of {{models}} models shared · {{files}} files · {{size}} · {{modified}}",
-    "keep": "Keep this, trash the others"
+    "keep": "Keep this one",
+    "keepHint": "Keep this project and move the other members of the group to the trash"
   }
 }

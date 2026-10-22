@@ -503,6 +503,7 @@
     },
     "groupLine": "{{members}} Projekte · {{files}} gemeinsame Dateien · {{size}}",
     "memberLine": "{{shared}} von {{models}} Modellen gemeinsam · {{files}} Dateien · {{size}} · {{modified}}",
-    "keep": "Dieses behalten, andere in den Papierkorb"
+    "keep": "Dieses behalten",
+    "keepHint": "Dieses Projekt behalten und die anderen der Gruppe in den Papierkorb verschieben"
   }
 }

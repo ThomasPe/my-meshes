@@ -58,17 +58,19 @@ export function DuplicatesView({ actions }: { actions: ProjectActions }) {
               {g.members.map((m) => {
                 const sel = selected.includes(m.id);
                 return (
-                  <div key={m.id} className={cn('flex gap-3 rounded-xl border-2 border-transparent bg-background p-2.5 outline-none', sel && 'border-primary')} data-testid="duplicate-member" aria-selected={sel} tabIndex={0} onClick={() => select([m.id])} onDoubleClick={() => navigate({ page: 'project', id: m.id })} onKeyDown={(e) => { if (e.key === 'Enter') navigate({ page: 'project', id: m.id }); }}>
+                  <div key={m.id} className={cn('flex min-w-0 gap-3 overflow-hidden rounded-xl border-2 border-transparent bg-background p-2.5 outline-none', sel && 'border-primary')} data-testid="duplicate-member" aria-selected={sel} tabIndex={0} onClick={() => select([m.id])} onDoubleClick={() => navigate({ page: 'project', id: m.id })} onKeyDown={(e) => { if (e.key === 'Enter') navigate({ page: 'project', id: m.id }); }}>
                     <Thumb thumb={m.thumb} projectId={m.id} className="size-20 shrink-0 overflow-hidden rounded-lg" />
                     <div className="min-w-0 flex-1">
                       <div className="truncate font-bold" title={m.title}>{m.title}</div>
                       <div className="truncate font-mono text-[11px] text-muted-foreground" title={m.rel_path}>{m.rel_path || '/'}</div>
                       <div className="mt-1 text-xs text-muted-foreground">{t('duplicates.memberLine', { shared: m.shared_files, models: m.model_files, files: m.file_count, size: formatBytes(m.total_bytes, i18n.language), modified: formatDate(m.modified, i18n.language) })}</div>
-                      <div className="mt-1 flex flex-wrap items-center gap-1.5">
-                        {m.has_sidecar ? <Badge variant="outline">project.yaml</Badge> : null}
-                        {m.favorite ? <Badge variant="warning">★</Badge> : null}
-                        <Button size="sm" variant="outline" className="ml-auto h-7" disabled={m.offline} onClick={(e) => { e.stopPropagation(); keep(g, m); }} data-testid="duplicate-keep"><Trash2 />{t('duplicates.keep')}</Button>
-                      </div>
+                      {(m.has_sidecar || m.favorite) && (
+                        <div className="mt-1 flex flex-wrap items-center gap-1.5">
+                          {m.has_sidecar ? <Badge variant="outline">project.yaml</Badge> : null}
+                          {m.favorite ? <Badge variant="warning">★</Badge> : null}
+                        </div>
+                      )}
+                      <Button size="sm" variant="outline" className="mt-2 h-7 max-w-full" disabled={m.offline} title={t('duplicates.keepHint')} onClick={(e) => { e.stopPropagation(); keep(g, m); }} data-testid="duplicate-keep"><Trash2 /><span className="truncate">{t('duplicates.keep')}</span></Button>
                     </div>
                   </div>
                 );
