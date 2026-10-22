@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import i18n from '@/i18n';
 import { getBackend } from '@/lib/backend';
 import { kickThumbQueue, useThumbs } from '@/lib/thumbs/queue';
-import type { BatchUpdate, ImportRequest, ListQuery, Project, ProjectSummary, ThumbLocation, UpdateMetadata, PromoteItem } from '@/lib/types';
+import type { AiSettings, BatchUpdate, ImportRequest, ListQuery, Project, ProjectSummary, ThumbLocation, UpdateMetadata, PromoteItem } from '@/lib/types';
 
 export const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 10_000, retry: false, refetchOnWindowFocus: false } } });
 
@@ -25,6 +25,7 @@ export const keys = {
   smart: ['smart'] as const,
   smartProjects: (id: string, q: ListQuery) => ['smartProjects', id, q] as const,
   inbox: (rootId: string) => ['inbox', rootId] as const,
+  ai: ['ai'] as const,
 };
 
 export const useAppInfo = () => useQuery({ queryKey: keys.appInfo, queryFn: async () => (await getBackend()).appInfo(), staleTime: Infinity });
@@ -41,6 +42,8 @@ export const useContainerDirs = () => useQuery({ queryKey: keys.containers, quer
 
 export function invalidateLibrary(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ['projects'] });
+  // a rescan can change a project's sidecar state and stamp (edited or removed outside the app)
+  qc.invalidateQueries({ queryKey: ['project'] });
   qc.invalidateQueries({ queryKey: ['smartProjects'] });
   qc.invalidateQueries({ queryKey: ['inbox'] });
   qc.invalidateQueries({ queryKey: ['tags'] });
@@ -231,4 +234,29 @@ export function useExecuteImport() {
     mutationFn: async (request: ImportRequest) => (await getBackend()).executeImport(request),
     onSuccess: () => invalidateLibrary(qc),
   });
+}
+
+// ---- AI assistance (ADR-0003) ---------------------------------------------------------------
+
+export const useAiSettings = () => useQuery({ queryKey: keys.ai, queryFn: async () => (await getBackend()).getAiSettings() });
+
+export function useSetAiSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (settings: AiSettings) => (await getBackend()).setAiSettings(settings),
+    onSuccess: (view) => qc.setQueryData(keys.ai, view),
+  });
+}
+
+export function useSetAiKey() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (key: string | null) => (await getBackend()).setAiKey(key),
+    onSuccess: () => qc.invalidateQueries({ queryKey: keys.ai }),
+  });
+}
+
+/** A suggestion is a read: nothing is written until the user applies it through `useUpdateMetadata`. */
+export function useSuggestMetadata() {
+  return useMutation({ mutationFn: async (projectId: string) => (await getBackend()).suggestMetadata(projectId) });
 }

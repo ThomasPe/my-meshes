@@ -81,6 +81,11 @@ export function createTauriBackend(): Backend {
     onWatchError: (cb) => listen<{ rootId: string; message: string }>('watch://error', (e) => cb(e.payload)),
     checkUpdate: () => invoke('check_update'),
     installUpdate: () => invoke('install_update'),
+    getAiSettings: () => invoke('get_ai_settings'),
+    setAiSettings: (settings) => invoke('set_ai_settings', { settings }),
+    setAiKey: (key) => invoke('set_ai_key', { key }),
+    testAi: () => invoke('test_ai'),
+    suggestMetadata: (projectId) => invoke('suggest_metadata', { projectId }),
     onFileDrop: (cb) => getCurrentWebview().onDragDropEvent((e) => {
       const p = e.payload;
       if (p.type === 'enter') cb({ type: 'enter', paths: p.paths });

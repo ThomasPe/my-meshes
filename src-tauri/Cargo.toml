@@ -23,6 +23,8 @@ tauri-plugin-notification = "2"
 tauri-plugin-log = "2.10"
 # OS name/version for the "send feedback" context block (APP-12).
 os_info = { version = "3", default-features = false }
+# AI API key in the OS credential store (ADR-0003); native backends only, no D-Bus dependency.
+keyring = { version = "3", features = ["apple-native", "windows-native", "linux-native"] }
 log = "0.4"
 serde.workspace = true
 serde_json.workspace = true

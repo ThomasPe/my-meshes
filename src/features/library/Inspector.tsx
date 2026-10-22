@@ -1,4 +1,4 @@
-import { Check, CloudOff, ExternalLink, Eye, FileBox, FolderHeart, FolderInput, FolderOpen, ImageUp, Layers, Pencil, Plus, Scale, Star, StarOff, Trash2, X } from 'lucide-react';
+import { Check, CloudOff, ExternalLink, Eye, FileBox, FolderHeart, FolderInput, FolderOpen, ImageUp, Layers, Pencil, Plus, Scale, Sparkles, Star, StarOff, Trash2, X } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import type { ProjectActions } from '@/features/library/ProjectMenu';
+import { SuggestDialog } from '@/features/library/SuggestDialog';
 import { TagEditor } from '@/features/library/TagEditor';
 import { Thumb } from '@/features/library/Thumb';
 import { reportError } from '@/lib/errors';
@@ -35,6 +36,7 @@ export function Inspector({ selectedIds, visible, tagCounts, facets, filterTitle
   const roots = useRoots();
   const update = useUpdateMetadata();
   const ui = useUi();
+  const [suggesting, setSuggesting] = useState(false);
 
   if (selectedIds.length === 0 || (selectedIds.length === 1 && !project.data)) {
     return (
@@ -126,6 +128,7 @@ export function Inspector({ selectedIds, visible, tagCounts, facets, filterTitle
           <Button size="icon-sm" variant="outline" disabled={p.offline || p.rel_path === ''} onClick={() => actions.rename(summary)} title={t('actions.rename')} aria-label={t('actions.rename')} data-testid="inspector-rename"><Pencil /></Button>
           <Button size="icon-sm" variant="outline" disabled={p.offline || p.rel_path === ''} onClick={() => actions.move([summary])} title={t('actions.move')} aria-label={t('actions.move')} data-testid="inspector-move"><FolderInput /></Button>
           <Button size="icon-sm" variant="outline" disabled={p.offline} onClick={() => actions.rerenderThumbnail(summary)} title={t('actions.rerenderThumb')} aria-label={t('actions.rerenderThumb')} data-testid="inspector-rethumb"><ImageUp /></Button>
+          <Button size="icon-sm" variant="outline" disabled={p.offline} onClick={() => setSuggesting(true)} title={t('inspector.suggest')} aria-label={t('inspector.suggest')} data-testid="inspector-suggest"><Sparkles /></Button>
           <Button size="icon-sm" variant="outline" disabled={p.offline || p.rel_path === ''} onClick={() => actions.remove(summary)} title={t('actions.delete')} aria-label={t('actions.delete')} data-testid="inspector-delete" className="text-destructive hover:text-destructive"><Trash2 /></Button>
         </div>
         {p.offline && root && <p className="mb-3 rounded-[10px] bg-warning-soft p-3 text-xs font-semibold text-warning">{t('inspector.offlineHint', { path: root.path })}</p>}
@@ -156,6 +159,7 @@ export function Inspector({ selectedIds, visible, tagCounts, facets, filterTitle
         {p.warnings.length > 0 && <Section title={t('inspector.warnings')}><ul className="list-disc pl-4 text-xs text-warning">{p.warnings.map((w) => <li key={w}>{w}</li>)}</ul></Section>}
         {p.description && <Section title={t('project.description')}><p className="text-[13px] text-secondary-foreground">{p.description}</p></Section>}
       </div>
+      <SuggestDialog project={p} open={suggesting} onOpenChange={setSuggesting} />
     </ScrollArea>
   );
 }
