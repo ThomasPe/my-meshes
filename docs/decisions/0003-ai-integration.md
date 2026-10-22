@@ -1,7 +1,7 @@
 # ADR-0003: AI assistance with a user-supplied API key
 
-- Status: **proposed** 2026-10-21 (brainstorm consolidated into candidate features, principles
-  and a recommended first slice; no implementation yet).
+- Status: **accepted** 2026-10-22 (brainstorm consolidated 2026-10-21; open questions
+  decided as Q24, Q25, Q26 in `docs/open-questions.md`; first slice is Epic 9 in the backlog).
 - Date: 2026-10-21
 - Related: ADR-0001 (engine is shell-agnostic, all I/O in Rust), `spec/01-vision.md`
   ("offline first, private by default"), `spec/04-quality.md` (no network access unless the
@@ -131,13 +131,14 @@ follow-ups on the same base.
 
 ## Open questions
 
-Marked **[Q#]** in the spec once an implementation starts.
+Decided 2026-10-22, recorded in `docs/open-questions.md`:
 
-- Does background batch enrichment run at all, or stays everything explicit per project?
-  A capped, user-started batch with a review list is the current assumption.
-- Where do rejected suggestions go: remembered per project so they are not proposed
-  again, or forgotten?
-- Should the tag vocabulary be closed (only existing tags) by default, with "allow new
-  tags" as an option in the dialog?
-- Local provider (option C) in the first slice or later? Later is the assumption; the
-  trait must not block it.
+- **Q24 Tag vocabulary:** open. Suggestions may add new tags; the dialog marks them as new
+  and the user unticks what they do not want.
+- **Q25 Rejected suggestions:** forgotten. No per-project memory of rejections; the
+  response cache keyed by input hash keeps repeat cost down.
+- **Q26 Local provider:** later. The first slice ships the hosted client only, but the
+  settings model carries a base URL from the start so a local OpenAI-compatible server
+  becomes a configuration rather than a new client.
+- Background batch enrichment stays out of the first slice; the assumption remains a
+  capped, user-started batch with a review list when feature 2 is built.
