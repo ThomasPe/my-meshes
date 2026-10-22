@@ -2,7 +2,7 @@
 // the Tauri commands, including error codes, so UI tests exercise real flows.
 import type { Backend, Unlisten } from './index';
 import { generate3mf, generateObj, generateStl } from '@/lib/mesh/generate';
-import type { AppError, Collection, FacetCount, FileEntry, FileKind, ThumbLocation, FolderNode, ImportItem, ImportProgress, InboxFile, LibraryChanged, LibraryRoot, ListQuery, Project, ProjectSummary, ScanProgress, SidecarStamp, SmartCollection, TagCount, ThumbJob, UpdateMetadata } from '@/lib/types';
+import type { AiSettingsView, MetadataSuggestion, AppError, Collection, FacetCount, FileEntry, FileKind, ThumbLocation, FolderNode, ImportItem, ImportProgress, InboxFile, LibraryChanged, LibraryRoot, ListQuery, Project, ProjectSummary, ScanProgress, SidecarStamp, SmartCollection, TagCount, ThumbJob, UpdateMetadata } from '@/lib/types';
 
 const kindOf = (name: string): FileKind => {
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
@@ -99,6 +99,19 @@ export function createMockBackend(): Backend {
   let ignore = ['.git', '__MACOSX', '.DS_Store', 'Thumbs.db', '*.gcode'];
   let containers = ['files', 'stl', 'stls', 'models', '3d'];
   let thumbLocation: ThumbLocation = 'app_data';
+  // AI assistance: endpoint and model in "settings", the key only as a flag (never readable back).
+  // `?ai=unauthorized|rate_limited|invalid|unavailable` makes every call fail that way, like MESHKEEP_AI_MOCK.
+  const aiSettings: AiSettingsView = { provider: 'anthropic', base_url: null, model: 'claude-haiku-5-5', hasKey: false };
+  const aiFailure = new URLSearchParams(location.search).get('ai');
+  const aiCache = new Map<string, MetadataSuggestion>();
+  const aiCall = async () => {
+    await delay(250);
+    if (!aiSettings.hasKey) throw err('ai_disabled', 'AI assistance is not set up: no API key');
+    if (aiFailure === 'unauthorized') throw err('ai_unauthorized', 'the AI provider rejected the API key: mock');
+    if (aiFailure === 'rate_limited') throw err('ai_rate_limited', 'the AI provider is rate-limiting requests: mock');
+    if (aiFailure === 'invalid') throw err('ai_invalid_response', 'the AI answer could not be used: mock');
+    if (aiFailure === 'unavailable') throw err('ai_unavailable', 'the AI provider could not be reached: mock');
+  };
   const facet = (values: Array<string | null | undefined>): FacetCount[] => {
     const m = new Map<string, number>();
     for (const v of values) if (v) m.set(v, (m.get(v) ?? 0) + 1);
@@ -440,6 +453,41 @@ export function createMockBackend(): Backend {
     onCollectionsChanged: (cb) => sub(listeners.coll, cb),
     onInboxChanged: (cb) => sub(listeners.inbox, cb),
     async onWatchError() { return () => {}; },
+    async getAiSettings() { return { ...aiSettings }; },
+    async setAiSettings(s) {
+      const base = (s.base_url ?? '').trim().replace(/\/+$/, '');
+      if (base && !/^https?:\/\//.test(base)) throw err('not_allowed', `base URL must start with http:// or https://: ${base}`);
+      aiSettings.base_url = base || null; aiSettings.model = s.model.trim() || 'claude-haiku-5-5';
+      return { ...aiSettings };
+    },
+    async setAiKey(key) { aiSettings.hasKey = !!(key && key.trim()); return aiSettings.hasKey; },
+    async testAi() { await aiCall(); return { model: aiSettings.model }; },
+    async suggestMetadata(projectId) {
+      await aiCall();
+      const p = find(projectId);
+      if (p.offline) throw err('root_offline', 'root is offline');
+      const folder = p.rel_path.split('/').pop() ?? p.title;
+      const key = `${projectId}|${p.tags.join(',')}|${p.creator}|${p.description}`;
+      const cached = aiCache.get(key);
+      if (cached) return { ...cached, cached: true };
+      const vocabulary = new Set(projects.flatMap((x) => x.tags));
+      const words = folder.split(/[^\p{L}\p{N}]+/u).filter((w) => w.length > 2).map((w) => w.toLowerCase());
+      const tags = [...new Set([...words, 'mock'])];
+      const docs = p.files.filter((f) => f.kind === 'document' && /readme|license|notes/i.test(f.name)).slice(0, 2).map((f) => f.rel_path);
+      const s: MetadataSuggestion = {
+        title: folder.split(/[^\p{L}\p{N}]+/u).filter(Boolean).map((w) => w[0]!.toUpperCase() + w.slice(1)).join(' '),
+        creator: 'Mock Creator',
+        license: 'CC-BY-4.0',
+        description: `Mock description for ${folder}.`,
+        tags,
+        new_tags: tags.filter((t) => !vocabulary.has(t)),
+        model: 'mock',
+        cached: false,
+        sent: { thumbnail: !!p.thumb, files: p.files.length, documents: docs, sidecar: p.has_sidecar },
+      };
+      aiCache.set(key, s);
+      return s;
+    },
     async checkUpdate() { await delay(300); return { available: true, version: '0.2.0', notes: 'Mock release notes', date: null }; },
     async installUpdate() { await delay(300); },
     async onFileDrop() { return () => {}; },

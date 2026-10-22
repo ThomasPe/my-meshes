@@ -2,6 +2,7 @@
 //! Everything the user changes in Settings that the engine needs lives here so it survives
 //! a restart (APP-4). Rewritten atomically; unknown keys survive a round trip.
 
+use crate::ai::AiSettings;
 use crate::error::{io_err, EngineError, Result};
 use crate::model::ThumbLocation;
 use crate::scan::{DEFAULT_CONTAINER_DIRS, DEFAULT_IGNORE};
@@ -23,6 +24,9 @@ pub struct Settings {
     /// Where rendered previews are written (Q5: app data by default).
     #[serde(default)]
     pub thumb_location: ThumbLocation,
+    /// AI assistance (ADR-0003): provider, endpoint and model. Never the key.
+    #[serde(default)]
+    pub ai: AiSettings,
     #[serde(flatten)]
     pub extra: BTreeMap<String, serde_json::Value>,
 }
@@ -44,6 +48,7 @@ impl Default for Settings {
             ignore: default_ignore(),
             container_dirs: default_containers(),
             thumb_location: ThumbLocation::default(),
+            ai: AiSettings::default(),
             extra: BTreeMap::new(),
         }
     }

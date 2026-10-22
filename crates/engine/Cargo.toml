@@ -25,6 +25,9 @@ zip = { version = "9", default-features = false, features = ["deflate"] }
 trash = "5"
 dunce = "1"
 sevenz-rust2 = { version = "0.24", default-features = false, features = ["compress", "util"] }
+# AI assistance (ADR-0003): the Anthropic Messages API over plain HTTPS; rustls so no system TLS is needed.
+reqwest = { version = "0.12", default-features = false, features = ["blocking", "json", "rustls-tls"] }
+base64 = "0.22"
 
 [dev-dependencies]
 tempfile = "3"

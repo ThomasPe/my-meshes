@@ -13,6 +13,8 @@ pub struct RuntimeConfig {
     pub test_mode: bool,
     pub data_dir_override: Option<PathBuf>,
     pub fixture_root: Option<PathBuf>,
+    /// Test mode only: `MESHKEEP_AI_MOCK` swaps the hosted AI client for canned answers.
+    pub ai_mock: Option<meshkeep_engine::ai::MockMode>,
 }
 
 impl RuntimeConfig {
@@ -21,10 +23,17 @@ impl RuntimeConfig {
         let test_mode = args.iter().any(|a| a == "--test-mode") || std::env::var("MESHKEEP_TEST_MODE").map(|v| v == "1").unwrap_or(false);
         let data_dir_override = std::env::var_os("MESHKEEP_DATA_DIR").map(PathBuf::from);
         let fixture_root = std::env::var_os("MESHKEEP_FIXTURE_ROOT").map(PathBuf::from);
+        let ai_mock = std::env::var("MESHKEEP_AI_MOCK")
+            .ok()
+            .and_then(|v| meshkeep_engine::ai::MockMode::parse(&v));
+        if ai_mock.is_some() && !test_mode {
+            log::warn!("MESHKEEP_AI_MOCK ignored outside test mode");
+        }
         RuntimeConfig {
             test_mode,
             data_dir_override,
             fixture_root,
+            ai_mock: ai_mock.filter(|_| test_mode),
         }
     }
 
@@ -44,6 +53,7 @@ pub struct AppState {
     pub engine: Mutex<Engine>,
     pub watchers: Mutex<HashMap<String, RootWatcher>>,
     pub watch_tx: mpsc::Sender<WatchEvent>,
+    pub ai_keys: crate::keys::AiKeyStore,
     pub config: RuntimeConfig,
     pub data_dir: PathBuf,
 }

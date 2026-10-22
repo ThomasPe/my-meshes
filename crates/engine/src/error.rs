@@ -36,6 +36,16 @@ pub enum EngineError {
     AlreadyExists(String),
     #[error("not allowed: {0}")]
     NotAllowed(String),
+    #[error("AI assistance is not set up: no API key")]
+    AiDisabled,
+    #[error("the AI provider rejected the API key: {0}")]
+    AiUnauthorized(String),
+    #[error("the AI provider is rate-limiting requests: {0}")]
+    AiRateLimited(String),
+    #[error("the AI answer could not be used: {0}")]
+    AiInvalidResponse(String),
+    #[error("the AI provider could not be reached: {0}")]
+    AiUnavailable(String),
 }
 
 pub type Result<T> = std::result::Result<T, EngineError>;

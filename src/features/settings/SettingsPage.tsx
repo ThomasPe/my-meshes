@@ -1,4 +1,4 @@
-import { Bell, Bug, Download, FolderOpen, HardDrive, Images, Monitor, Moon, Plus, RefreshCw, Sun, Trash2, X } from 'lucide-react';
+import { Bell, Bug, Download, FolderOpen, HardDrive, Images, KeyRound, Loader2, Monitor, Moon, Plus, RefreshCw, Sparkles, Sun, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -16,11 +16,11 @@ import { LANGUAGES, setLanguage, type Language } from '@/i18n';
 import { getBackend } from '@/lib/backend';
 import { reportError } from '@/lib/errors';
 import { formatDate, formatDuration } from '@/lib/format';
-import { invalidateLibrary, keys, useAppInfo, useContainerDirs, useIgnorePatterns, useRoots, useSetThumbLocation, useThumbLocation, useThumbStats } from '@/lib/queries';
+import { invalidateLibrary, keys, useAiSettings, useAppInfo, useContainerDirs, useIgnorePatterns, useRoots, useSetAiKey, useSetAiSettings, useSetThumbLocation, useThumbLocation, useThumbStats } from '@/lib/queries';
 import { kickThumbQueue, useThumbs } from '@/lib/thumbs/queue';
 import { dropThumbnailCache } from '@/lib/thumbs/useThumbnail';
 import { applyTheme, loadNotifications, loadTheme, saveNotifications, type Theme } from '@/lib/store';
-import type { LibraryRoot, SyncMode, ThumbLocation, UpdateInfo } from '@/lib/types';
+import { isAppError, type AiTestReport, type LibraryRoot, type SyncMode, type ThumbLocation, type UpdateInfo } from '@/lib/types';
 import { useQueryClient } from '@tanstack/react-query';
 
 export function SettingsPage({ scanning, onScanEnd }: { scanning: ScanState; onScanEnd: (rootId: string) => void }) {
@@ -132,6 +132,8 @@ export function SettingsPage({ scanning, onScanEnd }: { scanning: ScanState; onS
           </Row>
         </Card>
 
+        <AiCard />
+
         <Card title={t('settings.appearance')}>
           <Row label={t('settings.theme')}>
             <ToggleGroup type="single" value={theme} onValueChange={(v) => { if (v) { applyTheme(v as Theme); setTheme(v as Theme); } }}>
@@ -180,6 +182,67 @@ export function SettingsPage({ scanning, onScanEnd }: { scanning: ScanState; onS
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+/**
+ * AI assistance (ADR-0003, Epic 9): endpoint and model go to settings.json, the key to the OS
+ * credential store, and the card says in plain words what a suggestion sends.
+ */
+function AiCard() {
+  const { t } = useTranslation();
+  const ai = useAiSettings();
+  const setSettings = useSetAiSettings();
+  const setKey = useSetAiKey();
+  const [baseUrl, setBaseUrl] = useState<string | null>(null);
+  const [model, setModel] = useState<string | null>(null);
+  const [key, setKeyInput] = useState('');
+  const [test, setTest] = useState<{ state: 'idle' | 'testing' | 'ok' | 'failed'; report?: AiTestReport; error?: string }>({ state: 'idle' });
+  const curBase = baseUrl ?? ai.data?.base_url ?? '';
+  const curModel = model ?? ai.data?.model ?? '';
+  const dirty = !!ai.data && (curBase !== (ai.data.base_url ?? '') || curModel !== ai.data.model);
+  const save = () => setSettings.mutate({ provider: 'anthropic', base_url: curBase.trim() || null, model: curModel }, {
+    onSuccess: () => { setBaseUrl(null); setModel(null); toast.success(t('settings.aiSaved')); },
+    onError: reportError,
+  });
+  const saveKey = () => setKey.mutate(key, { onSuccess: () => { setKeyInput(''); setTest({ state: 'idle' }); toast.success(t('settings.aiKeySaved')); }, onError: reportError });
+  const removeKey = () => setKey.mutate(null, { onSuccess: () => { setTest({ state: 'idle' }); toast(t('settings.aiKeyRemoved')); }, onError: reportError });
+  const runTest = async () => {
+    setTest({ state: 'testing' });
+    try { const b = await getBackend(); setTest({ state: 'ok', report: await b.testAi() }); } catch (e) { setTest({ state: 'failed', error: isAppError(e) ? t(`errors.${e.code}`, { defaultValue: e.message, message: e.message }) : String(e) }); }
+  };
+  return (
+    <Card title={t('settings.ai')} hint={t('settings.aiHint')} action={<Button size="sm" variant="outline" disabled={!ai.data?.hasKey || test.state === 'testing'} onClick={() => void runTest()} data-testid="ai-test"><Sparkles />{test.state === 'testing' ? t('settings.aiTesting') : t('settings.aiTest')}</Button>}>
+      <Row label={t('settings.aiProvider')}><span className="text-sm font-semibold text-secondary-foreground">{t('settings.aiProviderAnthropic')}</span></Row>
+      <Row label={t('settings.aiBaseUrl')}>
+        <div className="grid w-full max-w-md justify-items-end gap-1">
+          <Input value={curBase} placeholder="https://api.anthropic.com" className="h-8 w-full font-mono text-xs" onChange={(e) => setBaseUrl(e.target.value)} data-testid="ai-base-url" />
+          <span className="text-right text-xs text-muted-foreground">{t('settings.aiBaseUrlHint')}</span>
+        </div>
+      </Row>
+      <Row label={t('settings.aiModel')}>
+        <div className="flex w-full max-w-md items-center gap-2">
+          <Input value={curModel} className="h-8 font-mono text-xs" onChange={(e) => setModel(e.target.value)} data-testid="ai-model" />
+          <Button size="sm" disabled={!dirty || setSettings.isPending} onClick={save} data-testid="ai-save">{t('settings.aiSave')}</Button>
+        </div>
+      </Row>
+      <Row label={t('settings.aiKey')}>
+        <div className="grid w-full max-w-md justify-items-end gap-1.5">
+          <div className="flex items-center gap-1.5 text-xs font-semibold" data-testid="ai-key-status" data-state={ai.data?.hasKey ? 'stored' : 'missing'}><KeyRound className={ai.data?.hasKey ? 'size-3.5 text-success' : 'size-3.5 text-muted-foreground'} />{ai.data?.hasKey ? t('settings.aiKeyStored') : t('settings.aiKeyMissing')}</div>
+          <form className="flex w-full items-center gap-2" onSubmit={(e) => { e.preventDefault(); if (key.trim()) saveKey(); }}>
+            <Input type="password" autoComplete="off" value={key} placeholder={t('settings.aiKeyPlaceholder')} className="h-8 font-mono text-xs" onChange={(e) => setKeyInput(e.target.value)} data-testid="ai-key" />
+            <Button type="submit" size="sm" disabled={!key.trim() || setKey.isPending} data-testid="ai-key-save">{t('settings.aiKeySave')}</Button>
+            {ai.data?.hasKey && <Button type="button" size="sm" variant="ghost" disabled={setKey.isPending} onClick={removeKey} data-testid="ai-key-remove">{t('settings.aiKeyRemove')}</Button>}
+          </form>
+        </div>
+      </Row>
+      <div className="py-3 text-[13px] font-semibold text-secondary-foreground" data-testid="ai-test-status" data-state={test.state} aria-live="polite">
+        {test.state === 'testing' && <span className="inline-flex items-center gap-1.5"><Loader2 className="size-3.5 animate-spin" />{t('settings.aiTesting')}</span>}
+        {test.state === 'ok' && <span className="text-success">{t('settings.aiTestOk', { model: test.report?.model })}</span>}
+        {test.state === 'failed' && <span className="text-warning">{t('settings.aiTestFailed', { message: test.error })}</span>}
+      </div>
+      <p className="rounded-[10px] bg-accent p-3 text-xs font-semibold text-accent-foreground" data-testid="ai-sent">{t('settings.aiSent')}</p>
+    </Card>
   );
 }
 

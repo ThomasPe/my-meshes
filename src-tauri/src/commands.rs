@@ -1,4 +1,5 @@
 use crate::state::{self, AppState};
+use meshkeep_engine::ai::{AiSettings, AiTestReport, MetadataSuggestion};
 use meshkeep_engine::collections::{Collection, SmartCollection};
 use meshkeep_engine::import::{ImportItem, ImportReport, ImportRequest, InboxFile};
 use meshkeep_engine::model::{
@@ -38,6 +39,11 @@ impl From<EngineError> for AppError {
             EngineError::InvalidName(_) => "invalid_name",
             EngineError::AlreadyExists(_) => "already_exists",
             EngineError::NotAllowed(_) => "not_allowed",
+            EngineError::AiDisabled => "ai_disabled",
+            EngineError::AiUnauthorized(_) => "ai_unauthorized",
+            EngineError::AiRateLimited(_) => "ai_rate_limited",
+            EngineError::AiInvalidResponse(_) => "ai_invalid_response",
+            EngineError::AiUnavailable(_) => "ai_unavailable",
         };
         AppError {
             code,
@@ -844,4 +850,84 @@ pub async fn install_update(_app: AppHandle) -> CmdResult<()> {
         code: "updater",
         message: "this build has no updater".into(),
     })
+}
+
+// ---- AI assistance (ADR-0003) ---------------------------------------------------------
+
+/// The `ai` settings block plus whether a key is stored; the key itself never crosses IPC
+/// in this direction.
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct AiSettingsView {
+    #[serde(flatten)]
+    settings: AiSettings,
+    has_key: bool,
+}
+
+fn key_err(e: String) -> AppError {
+    AppError {
+        code: "keyring",
+        message: e,
+    }
+}
+
+#[tauri::command]
+pub fn get_ai_settings(state: State<AppState>) -> CmdResult<AiSettingsView> {
+    let settings = state.engine.lock().unwrap().ai_settings().clone();
+    let has_key = state.ai_keys.get().map_err(key_err)?.is_some();
+    Ok(AiSettingsView { settings, has_key })
+}
+
+#[tauri::command]
+pub fn set_ai_settings(state: State<AppState>, settings: AiSettings) -> CmdResult<AiSettingsView> {
+    let settings = { state.engine.lock().unwrap().set_ai_settings(settings)? };
+    let has_key = state.ai_keys.get().map_err(key_err)?.is_some();
+    Ok(AiSettingsView { settings, has_key })
+}
+
+/// Stores the key in the OS credential store; `None` or an empty string removes it. Never
+/// logged, never returned.
+#[tauri::command]
+pub fn set_ai_key(state: State<AppState>, key: Option<String>) -> CmdResult<bool> {
+    state.ai_keys.set(key.as_deref()).map_err(key_err)?;
+    Ok(state.ai_keys.get().map_err(key_err)?.is_some())
+}
+
+/// One tiny request against the configured provider. Runs off the UI thread and outside the
+/// engine lock (only the provider handle is taken under it).
+#[tauri::command]
+pub async fn test_ai(app: AppHandle) -> CmdResult<AiTestReport> {
+    let provider = {
+        let state = app.state::<AppState>();
+        let key = state.ai_keys.get().map_err(key_err)?;
+        let provider = state.engine.lock().unwrap().ai_provider(key.as_deref())?;
+        provider
+    };
+    tauri::async_runtime::spawn_blocking(move || meshkeep_engine::Engine::ai_run_test(provider.as_ref()))
+        .await
+        .map_err(|e| AppError {
+            code: "shell",
+            message: e.to_string(),
+        })?
+        .map_err(AppError::from)
+}
+
+/// Metadata suggestion for one project: inputs are gathered under the engine lock, the
+/// network call runs without it so scans and queries keep flowing meanwhile.
+#[tauri::command]
+pub async fn suggest_metadata(app: AppHandle, project_id: String) -> CmdResult<MetadataSuggestion> {
+    let (provider, prepared) = {
+        let state = app.state::<AppState>();
+        let key = state.ai_keys.get().map_err(key_err)?;
+        let engine = state.engine.lock().unwrap();
+        let provider = engine.ai_provider(key.as_deref())?;
+        (provider, engine.ai_prepare_suggestion(&project_id)?)
+    };
+    tauri::async_runtime::spawn_blocking(move || meshkeep_engine::ai::run_suggestion(prepared, provider.as_ref()))
+        .await
+        .map_err(|e| AppError {
+            code: "shell",
+            message: e.to_string(),
+        })?
+        .map_err(AppError::from)
 }

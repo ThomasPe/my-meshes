@@ -278,8 +278,49 @@ export interface ThumbStats {
 }
 
 export interface AppError {
-  code: 'sidecar_conflict' | 'sidecar_invalid' | 'root_offline' | 'not_found' | 'root_exists' | 'not_a_directory' | 'invalid_pattern' | 'invalid_name' | 'already_exists' | 'not_allowed' | 'io' | 'index' | 'serde' | 'watch' | 'shell' | 'updater' | 'mock';
+  code: 'sidecar_conflict' | 'sidecar_invalid' | 'root_offline' | 'not_found' | 'root_exists' | 'not_a_directory' | 'invalid_pattern' | 'invalid_name' | 'already_exists' | 'not_allowed' | 'io' | 'index' | 'serde' | 'watch' | 'shell' | 'updater' | 'mock' | 'ai_disabled' | 'ai_unauthorized' | 'ai_rate_limited' | 'ai_invalid_response' | 'ai_unavailable' | 'keyring';
   message: string;
+}
+
+// ---- AI assistance (ADR-0003); mirrors crates/engine/src/ai.rs ------------------------------
+
+export type AiProviderKind = 'anthropic';
+
+/** The `ai` block of settings.json: endpoint and model, never the key. */
+export interface AiSettings {
+  provider: AiProviderKind;
+  base_url: string | null;
+  model: string;
+}
+
+/** `AiSettings` plus whether a key is stored; the key itself never comes back over IPC. */
+export interface AiSettingsView extends AiSettings {
+  hasKey: boolean;
+}
+
+export interface AiTestReport {
+  model: string;
+}
+
+/** What left the machine for a suggestion, shown in the dialog. */
+export interface AiSent {
+  thumbnail: boolean;
+  files: number;
+  documents: string[];
+  sidecar: boolean;
+}
+
+export interface MetadataSuggestion {
+  title: string | null;
+  creator: string | null;
+  license: string | null;
+  description: string | null;
+  tags: string[];
+  /** Tags no project in the library carries yet. */
+  new_tags: string[];
+  model: string;
+  cached: boolean;
+  sent: AiSent;
 }
 
 export function isAppError(e: unknown): e is AppError {

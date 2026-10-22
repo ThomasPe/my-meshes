@@ -179,7 +179,7 @@ submission is outside the code: Partner Center identity values, screenshots
 All items follow the principles in ADR-0003: opt-in, user-triggered, suggestions only,
 no model geometry leaves the machine, deterministic mock provider in test mode.
 
-- [ ] **AI settings & provider layer.** Settings card "AI assistance" with provider,
+- [x] **AI settings & provider layer.** Settings card "AI assistance" with provider,
       base URL, model, key (OS credential store via `keyring`, never `settings.json`),
       a test button and a plain statement of what is sent. Engine: `AiProvider` trait,
       Anthropic client first (OpenAI-compatible base URL second, local server as a
@@ -188,13 +188,13 @@ no model geometry leaves the machine, deterministic mock provider in test mode.
       Test mode: `MESHKEEP_AI_MOCK` seam with canned answers. Acceptance: no request
       is made without a key; the key is absent from `settings.json`, logs and the
       feedback log tail.
-- [ ] **Metadata suggestions** in the inspector ("Suggest metadata"). Inputs: thumbnail
+- [x] **Metadata suggestions** in the inspector ("Suggest metadata"). Inputs: thumbnail
       (at most 512 px), folder and file names, README and license text, project images,
       current sidecar. Output as JSON against a fixed schema (title, tags from the
       existing vocabulary plus new ones, description, creator, SPDX license), validated
       in the engine. Diff dialog with per-field checkboxes; accepted fields go through
       the normal sidecar save with `sidecar_stamp` conflict handling.
-- [ ] **Tests for the slice.** Engine unit tests against the mock provider (schema
+- [x] **Tests for the slice.** Engine unit tests against the mock provider (schema
       validation, cache hits, error mapping); UI tests in browser mode for the settings
       card and the suggestion dialog; one E2E test proving no call happens without a key and the key never lands in
       `settings.json`.
