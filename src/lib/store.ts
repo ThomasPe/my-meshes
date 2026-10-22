@@ -5,6 +5,7 @@ export type LibraryFilter =
   | { kind: 'all' }
   | { kind: 'recent' }
   | { kind: 'favorites' }
+  | { kind: 'duplicates' }
   | { kind: 'root'; rootId: string }
   | { kind: 'folder'; rootId: string; path: string }
   | { kind: 'inbox'; rootId: string }

@@ -6,6 +6,7 @@ import type { ScanState } from '@/App';
 import { Button } from '@/components/ui/button';
 import { useImport } from '@/features/import/useImport';
 import { CollectionDialogs, useCollectionDialog } from '@/features/library/CollectionDialogs';
+import { DuplicatesView } from '@/features/library/DuplicatesView';
 import { InboxView } from '@/features/library/InboxView';
 import { Inspector } from '@/features/library/Inspector';
 import { ProjectGrid } from '@/features/library/ProjectGrid';
@@ -65,12 +66,12 @@ export function LibraryPage({ scanning, onScanEnd }: { scanning: ScanState; onSc
     sort: effectiveSort,
     limit: filter.kind === 'recent' ? 200 : null,
   }), [filter, tags, text, creator, license, material, fileType, effectiveSort, rootScoped, collectionId]);
-  const projects = useProjects(filter.kind === 'inbox' || smartId ? { ...query, limit: 0 } : query);
+  const projects = useProjects(filter.kind === 'inbox' || filter.kind === 'duplicates' || smartId ? { ...query, limit: 0 } : query);
   const smartOverrides = useMemo<ListQuery>(() => ({ sort: sort === 'collection' ? 'modified' : sort, text: text || null }), [sort, text]);
   const smartProjects = useSmartProjects(smartId, smartOverrides);
   const tagCounts = useTagCounts(rootScoped ? filter.rootId : null);
   const facets = useFacets(rootScoped ? filter.rootId : null);
-  const list = useMemo(() => (smartId ? smartProjects.data ?? [] : filter.kind === 'inbox' ? [] : projects.data ?? []), [smartId, smartProjects.data, filter.kind, projects.data]);
+  const list = useMemo(() => (smartId ? smartProjects.data ?? [] : filter.kind === 'inbox' || filter.kind === 'duplicates' ? [] : projects.data ?? []), [smartId, smartProjects.data, filter.kind, projects.data]);
   const pending = smartId ? smartProjects.isPending : projects.isPending;
   const selectedSet = useMemo(() => new Set(selected), [selected]);
 
@@ -89,6 +90,7 @@ export function LibraryPage({ scanning, onScanEnd }: { scanning: ScanState; onSc
     filter.kind === 'all' ? t('library.all')
     : filter.kind === 'recent' ? t('library.recent')
     : filter.kind === 'favorites' ? t('library.favorites')
+    : filter.kind === 'duplicates' ? t('library.duplicates')
     : filter.kind === 'folder' ? filter.path.split('/').pop()!
     : filter.kind === 'inbox' ? `${t('inbox.title')} · ${rootName(filter.rootId)}`
     : filter.kind === 'collection' ? collections.data?.find((c) => c.id === filter.id)?.name ?? ''
@@ -113,8 +115,10 @@ export function LibraryPage({ scanning, onScanEnd }: { scanning: ScanState; onSc
       <CollectionDialogs onCreated={(id, addIds) => { if (addIds?.length) addTo.mutate({ id, projectIds: addIds }, { onError: reportError }); }} />
       <Panel id="main" minSize={360} className="min-w-0">
       <main className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]" onKeyDown={onKey}>
-        <Toolbar title={filterTitle} count={filter.kind === 'inbox' ? 0 : list.length} onRescan={activeRoot && filter.kind !== 'inbox' ? () => void scan(activeRoot) : undefined} scanning={!!activeRoot && activeRoot in scanning} sortLocked={filter.kind === 'recent' || filter.kind === 'inbox'} onImport={() => void pickImport()} onSaveSmart={filtered && filter.kind !== 'inbox' && filter.kind !== 'collection' && filter.kind !== 'smart' ? saveSmart : undefined} collectionSort={filter.kind === 'collection'} />
-        {filter.kind === 'inbox' ? (
+        <Toolbar title={filterTitle} count={filter.kind === 'inbox' || filter.kind === 'duplicates' ? 0 : list.length} onRescan={activeRoot && filter.kind !== 'inbox' && filter.kind !== 'duplicates' ? () => void scan(activeRoot) : undefined} scanning={!!activeRoot && activeRoot in scanning} sortLocked={filter.kind === 'recent' || filter.kind === 'inbox' || filter.kind === 'duplicates'} onImport={() => void pickImport()} onSaveSmart={filtered && filter.kind !== 'inbox' && filter.kind !== 'duplicates' && filter.kind !== 'collection' && filter.kind !== 'smart' ? saveSmart : undefined} collectionSort={filter.kind === 'collection'} />
+        {filter.kind === 'duplicates' ? (
+          <DuplicatesView actions={actions} />
+        ) : filter.kind === 'inbox' ? (
           <InboxView rootId={filter.rootId} />
         ) : list.length === 0 && !pending ? (
           <div className="grid place-items-center p-10 text-center text-muted-foreground" data-testid="empty">

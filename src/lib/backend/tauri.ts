@@ -3,7 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 import type { Backend } from './index';
-import type { ImportProgress, LibraryChanged, ScanProgress } from '@/lib/types';
+import type { HashProgress, ImportProgress, LibraryChanged, ScanProgress } from '@/lib/types';
 
 export function createTauriBackend(): Backend {
   return {
@@ -76,6 +76,8 @@ export function createTauriBackend(): Backend {
     deleteSmartCollection: (id) => invoke('delete_smart_collection', { id }),
     listSmartCollection: (id, overrides) => invoke('list_smart_collection', { id, overrides: overrides ?? null }),
     onImportProgress: (cb) => listen<ImportProgress>('import://progress', (e) => cb(e.payload)),
+    findDuplicates: () => invoke('find_duplicates'),
+    onDuplicateProgress: (cb) => listen<HashProgress>('duplicates://progress', (e) => cb(e.payload)),
     onCollectionsChanged: (cb) => listen('collections://changed', () => cb()),
     onInboxChanged: (cb) => listen<{ rootId: string }>('inbox://changed', (e) => cb(e.payload)),
     onWatchError: (cb) => listen<{ rootId: string; message: string }>('watch://error', (e) => cb(e.payload)),

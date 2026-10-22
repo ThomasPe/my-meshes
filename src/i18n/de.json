@@ -85,7 +85,8 @@
     "filterBy": "Nach {{value}} filtern",
     "more": "+{{count}} weitere",
     "less": "weniger",
-    "showProjects": "Projekte anzeigen"
+    "showProjects": "Projekte anzeigen",
+    "duplicates": "Duplikate"
   },
   "inspector": {
     "open": "Öffnen",
@@ -487,5 +488,21 @@
     "opened": "Das Issue-Formular wurde im Browser geöffnet.",
     "openedWithLog": "Das Issue-Formular wurde im Browser geöffnet; der Log-Auszug liegt in der Zwischenablage.",
     "report": "Melden"
+  },
+  "duplicates": {
+    "hint": "Projekte, die Modelldateien mit gleichem Inhalt teilen. Identische Gruppen enthalten genau dieselben Modelle; Überschneidungen teilen einige.",
+    "scan": "Erneut prüfen",
+    "scanning": "Prüfe…",
+    "hashing": "{{done}} von {{total}} Dateien werden gehasht…",
+    "none": "Keine Duplikate gefunden",
+    "noneHint": "{{candidates}} Dateien mit gleicher Größe wurden inhaltlich verglichen; keine kommt in mehreren Projekten vor.",
+    "summary": "{{groups}} Gruppen · {{candidates}} Dateien verglichen · {{when}}",
+    "kind": {
+      "identical": "identisch",
+      "overlap": "Überschneidung"
+    },
+    "groupLine": "{{members}} Projekte · {{files}} gemeinsame Dateien · {{size}}",
+    "memberLine": "{{shared}} von {{models}} Modellen gemeinsam · {{files}} Dateien · {{size}} · {{modified}}",
+    "keep": "Dieses behalten, andere in den Papierkorb"
   }
 }

@@ -151,7 +151,9 @@ submission is outside the code: Partner Center identity values, screenshots
 ## Phase 2: Quality of life
 
 ### Epic 7: Metadata & hygiene
-- [ ] **Duplicate detection** (LIB-8).
+- [x] **Duplicate detection** (LIB-8): size pre-filter, SHA-256 on all cores, hash cache in
+      the index (schema v4, survives rescans and renames), identical/overlap groups, Duplicates
+      view in the sidebar with keep-one resolution and automatic refresh after changes.
 - [x] **Batch editing** (META-6): multi-selection can be favorited, added to a collection,
       deleted, tagged/untagged and given a creator in one engine call with a per-project
       failure report.

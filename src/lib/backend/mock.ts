@@ -2,7 +2,7 @@
 // the Tauri commands, including error codes, so UI tests exercise real flows.
 import type { Backend, Unlisten } from './index';
 import { generate3mf, generateObj, generateStl } from '@/lib/mesh/generate';
-import type { AppError, Collection, FacetCount, FileEntry, FileKind, ThumbLocation, FolderNode, ImportItem, ImportProgress, InboxFile, LibraryChanged, LibraryRoot, ListQuery, Project, ProjectSummary, ScanProgress, SidecarStamp, SmartCollection, TagCount, ThumbJob, UpdateMetadata } from '@/lib/types';
+import type { AppError, Collection, FacetCount, FileEntry, FileKind, ThumbLocation, FolderNode, ImportItem, ImportProgress, InboxFile, LibraryChanged, LibraryRoot, ListQuery, Project, ProjectSummary, ScanProgress, SidecarStamp, SmartCollection, TagCount, ThumbJob, UpdateMetadata, HashProgress } from '@/lib/types';
 
 const kindOf = (name: string): FileKind => {
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
@@ -93,6 +93,9 @@ export function createMockBackend(): Backend {
     mk('r1', 'Projects/Gridfinity/Bins', 'Gridfinity Bins 1×1 to 2×3', { creator: 'Zach Freedman', license: 'CC-BY-NC-SA-4.0', tags: ['gridfinity', 'organizer'], material: 'PLA', files: [f('bin_1x1.stl', 3 * MB), f('bin_1x2.stl', 5 * MB), f('bin_2x2.stl', 9 * MB), f('bin_2x3.stl', 14 * MB)], daysAgo: 120 }),
   ];
   // a few more to make virtualization matter
+  // duplicates for LIB-8: an exact copy of the vase and a bundle that re-uses the benchy
+  projects.push(mk('r1', 'Projects/Misc/Twisted vase backup', 'Twisted vase backup', { tags: ['vase'], has_sidecar: false, files: [f('vase_twist.stl', 9.8 * MB)], daysAgo: 2 }));
+  projects.push(mk('r1', 'Projects/Calibration/Benchy Pack', 'Benchy Pack', { creator: 'CreativeTools', tags: ['benchmark'], files: [f('benchy_lowpoly.stl', 3.1 * MB), f('benchy_hull.stl', 2.5 * MB)], daysAgo: 4 }));
   for (let i = 1; i <= 60; i++) {
     projects.push(mk('r1', `Projects/Misc/Part ${String(i).padStart(2, '0')}`, `Misc Part ${i}`, { creator: i % 3 ? 'Various' : null, tags: i % 2 ? ['misc'] : ['misc', 'spare'], has_sidecar: i % 4 !== 0, files: [f(`part_${i}.stl`, (i % 7 + 1) * MB)], daysAgo: 130 + i }));
   }
@@ -106,7 +109,7 @@ export function createMockBackend(): Backend {
   };
   const thumbs = new Map<string, ArrayBuffer>(); // key -> png
   const failed = new Set<string>();
-  const listeners = { scan: new Set<(p: ScanProgress) => void>(), lib: new Set<(e: LibraryChanged) => void>(), proj: new Set<(e: { projectId: string }) => void>(), imp: new Set<(p: ImportProgress) => void>(), coll: new Set<() => void>(), inbox: new Set<(e: { rootId: string }) => void>() };
+  const listeners = { dup: new Set<(p: HashProgress) => void>(), scan: new Set<(p: ScanProgress) => void>(), lib: new Set<(e: LibraryChanged) => void>(), proj: new Set<(e: { projectId: string }) => void>(), imp: new Set<(p: ImportProgress) => void>(), coll: new Set<() => void>(), inbox: new Set<(e: { rootId: string }) => void>() };
   const collections: Collection[] = [{ id: 'c_desk', name: 'Desk setup', projects: ['r1:Projects/Desk/Phone Stand', 'r1:Projects/Desk/Cable Clips'] }];
   const smart: SmartCollection[] = [{ id: 's_grid', name: 'Gridfinity PLA', query: { tags: ['gridfinity'], sort: 'title' } }];
   const inbox = new Map<string, InboxFile[]>([['r1', [{ name: 'quick_download.stl', kind: 'model', size: 2.2 * MB, modified: new Date(Date.now() - 864e5).toISOString() }, { name: 'reference.jpg', kind: 'image', size: 0.4 * MB, modified: new Date(Date.now() - 2 * 864e5).toISOString() }]]]);
@@ -226,6 +229,41 @@ export function createMockBackend(): Backend {
       const build = (prefix: string, n: N): FolderNode[] => [...n.children.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([name, c]) => { const rel = prefix ? `${prefix}/${name}` : name; return { name, rel_path: rel, project_count: c.count, is_project: c.isProject, children: build(rel, c) }; });
       return build('', root);
     },
+    async findDuplicates() {
+      // "content" of a mock file is its name + size; progress ticks like the real hasher
+      const byHash = new Map<string, Set<string>>();
+      const per = new Map<string, Map<string, number>>();
+      const models = new Map<string, number>();
+      for (const p of projects) {
+        if (p.offline) continue;
+        for (const x of p.files) {
+          if (x.kind !== 'model') continue;
+          models.set(p.id, (models.get(p.id) ?? 0) + 1);
+          const h = `${x.name}:${x.size}`;
+          (byHash.get(h) ?? byHash.set(h, new Set()).get(h)!).add(p.id);
+          (per.get(p.id) ?? per.set(p.id, new Map()).get(p.id)!).set(h, x.size);
+        }
+      }
+      for (let i = 1; i <= 4; i++) { await delay(40); listeners.dup.forEach((cb) => cb({ done: i * 3, total: 12 })); }
+      const parent = new Map<string, string>();
+      const findRoot = (x: string): string => { const p = parent.get(x) ?? x; if (p === x) return x; const r = findRoot(p); parent.set(x, r); return r; };
+      for (const ids of byHash.values()) if (ids.size > 1) { const [first, ...rest] = [...ids]; for (const o of rest) parent.set(findRoot(o), findRoot(first!)); }
+      const comps = new Map<string, string[]>();
+      for (const id of per.keys()) { const r = findRoot(id); (comps.get(r) ?? comps.set(r, []).get(r)!).push(id); }
+      const groups = [];
+      for (const ids of comps.values()) {
+        if (ids.length < 2) continue;
+        const shared = new Map<string, number>();
+        for (const id of ids) for (const [h, size] of per.get(id)!) if (byHash.get(h)!.size > 1) shared.set(h, size);
+        const first = per.get(ids[0]!)!;
+        const identical = ids.every((id) => { const m = per.get(id)!; return m.size === first.size && [...m.keys()].every((k) => first.has(k)) && models.get(id) === m.size; });
+        const members = ids.map((id) => ({ ...summary(find(id)), shared_files: [...per.get(id)!.keys()].filter((h) => shared.has(h)).length, model_files: models.get(id) ?? 0 })).sort((a, b) => a.rel_path.localeCompare(b.rel_path));
+        groups.push({ kind: identical ? 'identical' as const : 'overlap' as const, files: shared.size, bytes: [...shared.values()].reduce((a, b) => a + b, 0), members });
+      }
+      groups.sort((a, b) => Number(b.kind === 'identical') - Number(a.kind === 'identical') || b.bytes - a.bytes);
+      return { groups, candidates: 12, hashed: 12 };
+    },
+    onDuplicateProgress: (cb) => sub(listeners.dup, cb),
     async libraryStats(rootId) { const l = projects.filter((p) => !rootId || p.root_id === rootId); return { projects: l.length, totalBytes: l.reduce((a, p) => a + p.total_bytes, 0), favorites: projects.filter((p) => p.favorite).length }; },
     // Browser mode has no disk: synthesize plausible bytes per extension so parsers, viewer and thumbnails run for real.
     async readProjectFile(projectId, relPath) {

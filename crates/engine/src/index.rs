@@ -12,7 +12,7 @@ use crate::model::{
 };
 use crate::thumbs;
 use rusqlite::{params, Connection, OptionalExtension};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use time::format_description::well_known::Rfc3339;
 use time::OffsetDateTime;
@@ -21,7 +21,10 @@ pub struct Index {
     conn: Connection,
 }
 
-const SCHEMA_VERSION: i64 = 3;
+const SCHEMA_VERSION: i64 = 4;
+
+/// (project id, rel path) -> (size, modified, sha256), see `Index::file_hashes`.
+pub type HashCache = HashMap<(String, String), (u64, String, String)>;
 
 const SCHEMA: &str = r#"
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
@@ -51,11 +54,15 @@ CREATE TABLE IF NOT EXISTS thumbs (
   project_id TEXT PRIMARY KEY, source_rel TEXT NOT NULL, source_size INTEGER NOT NULL, source_mtime TEXT NOT NULL,
   key TEXT, error TEXT, updated TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS file_hashes (
+  project_id TEXT NOT NULL, rel_path TEXT NOT NULL, size INTEGER NOT NULL, modified TEXT NOT NULL, sha256 TEXT NOT NULL,
+  PRIMARY KEY (project_id, rel_path)
+);
 "#;
 
 const DROP: &str = r#"
 DROP TABLE IF EXISTS projects_fts; DROP TABLE IF EXISTS tags; DROP TABLE IF EXISTS files;
-DROP TABLE IF EXISTS projects; DROP TABLE IF EXISTS thumbs; DROP TABLE IF EXISTS meta;
+DROP TABLE IF EXISTS projects; DROP TABLE IF EXISTS thumbs; DROP TABLE IF EXISTS meta; DROP TABLE IF EXISTS file_hashes;
 "#;
 
 /// The thumbnail is current when its source file still has the recorded size and mtime.
@@ -141,7 +148,8 @@ impl Index {
                     params![pid, rel, ext_of(&name)],
                 )?;
             }
-        } else if version != SCHEMA_VERSION {
+        } else if version != SCHEMA_VERSION && version != 3 {
+            // v3 -> v4 only adds file_hashes (created below); anything else starts over
             conn.execute_batch(DROP)?;
         }
         conn.execute_batch(SCHEMA)?;
@@ -653,6 +661,69 @@ impl Index {
             .conn
             .query_row("SELECT project_id FROM thumbs WHERE key = ?1", params![key], |r| r.get(0))
             .optional()?)
+    }
+
+    // ---- content hashes (duplicate detection, LIB-8) -----------------------------------
+
+    /// Every model file of an online project: (project id, rel path, size, modified).
+    pub fn model_files(&self) -> Result<Vec<(String, String, u64, String)>> {
+        let mut st = self.conn.prepare(
+            "SELECT f.project_id, f.rel_path, f.size, f.modified FROM files f JOIN projects p ON p.id = f.project_id WHERE f.kind = 'model' AND p.offline = 0",
+        )?;
+        let rows = st
+            .query_map([], |r| Ok((r.get(0)?, r.get(1)?, r.get::<_, i64>(2)? as u64, r.get(3)?)))?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(rows)
+    }
+
+    /// Cached hashes keyed by (project id, rel path): (size, modified, sha256). The cache is
+    /// not tied to the projects table by a foreign key on purpose: a rescan rewrites project
+    /// rows and would otherwise throw every hash away.
+    pub fn file_hashes(&self) -> Result<HashCache> {
+        let mut st = self
+            .conn
+            .prepare("SELECT project_id, rel_path, size, modified, sha256 FROM file_hashes")?;
+        let rows = st.query_map([], |r| {
+            Ok(((r.get(0)?, r.get(1)?), (r.get::<_, i64>(2)? as u64, r.get(3)?, r.get(4)?)))
+        })?;
+        let mut out = HashMap::new();
+        for row in rows {
+            let (k, v) = row?;
+            out.insert(k, v);
+        }
+        Ok(out)
+    }
+
+    pub fn set_file_hashes(&mut self, rows: &[(String, String, u64, String, String)]) -> Result<()> {
+        let tx = self.conn.transaction()?;
+        for (pid, rel, size, modified, sha) in rows {
+            tx.execute(
+                "INSERT INTO file_hashes (project_id, rel_path, size, modified, sha256) VALUES (?1,?2,?3,?4,?5)
+                 ON CONFLICT(project_id, rel_path) DO UPDATE SET size=excluded.size, modified=excluded.modified, sha256=excluded.sha256",
+                params![pid, rel, *size as i64, modified, sha],
+            )?;
+        }
+        tx.commit()?;
+        Ok(())
+    }
+
+    /// Drops hashes of files that are gone (project removed, file deleted or changed kind).
+    pub fn prune_file_hashes(&mut self) -> Result<()> {
+        self.conn.execute(
+            "DELETE FROM file_hashes WHERE NOT EXISTS (SELECT 1 FROM files f WHERE f.project_id = file_hashes.project_id AND f.rel_path = file_hashes.rel_path)",
+            [],
+        )?;
+        Ok(())
+    }
+
+    pub fn rename_file_hashes(&mut self, old_id: &str, new_id: &str) -> Result<()> {
+        self.conn
+            .execute("DELETE FROM file_hashes WHERE project_id = ?2", params![old_id, new_id])?;
+        self.conn.execute(
+            "UPDATE file_hashes SET project_id = ?2 WHERE project_id = ?1",
+            params![old_id, new_id],
+        )?;
+        Ok(())
     }
 
     /// Every stored (project, key) pair, for cache maintenance.

@@ -110,7 +110,7 @@ test('feedback: the dialog opens a prefilled GitHub issue with version and syste
   expect(url.searchParams.get('title')).toBe('[Bug] Viewer stays on reading');
   expect(url.searchParams.get('description')).toBe('Opened a 3MF, nothing happens.');
   expect(url.searchParams.get('environment')).toContain('Meshkeep 0.1.0-mock (stable channel)');
-  expect(url.searchParams.get('environment')).toContain('Library: 72 projects');
+  expect(url.searchParams.get('environment')).toContain('Library: 74 projects');
   // the idea form carries no log field and no bug label
   await page.getByTestId('send-feedback').click();
   await page.getByTestId('feedback-kind').getByRole('radio', { name: 'Idea' }).click();
@@ -792,6 +792,27 @@ test('move: dragging a card onto a tree folder moves it there', async ({ page })
   await stand.getByRole('button', { name: 'expand' }).click();
   await card.dragTo(page.locator('[data-tree-row][data-label="Phone Stand"]'));
   await expect(page.getByText('moved to Phone Stand')).toHaveCount(0);
+});
+
+test('duplicates: groups projects by shared model content, keeping one trashes the rest', async ({ page }) => {
+  await page.getByTestId('filter-duplicates').click();
+  await expect(page.getByTestId('duplicates')).toBeVisible();
+  const groups = page.getByTestId('duplicate-group');
+  await expect(groups).toHaveCount(2);
+  await expect(page.getByTestId('duplicates-count')).toHaveText('2');
+  await expect(groups.nth(0)).toHaveAttribute('data-kind', 'identical');
+  await expect(groups.nth(0)).toContainText('Decorative Vase');
+  await expect(groups.nth(0)).toContainText('Twisted vase backup');
+  await expect(groups.nth(1)).toHaveAttribute('data-kind', 'overlap');
+  await expect(groups.nth(1)).toContainText('1 of 2 models shared');
+  // keep the original: the copy goes to the trash after the usual confirmation
+  const original = groups.nth(0).getByTestId('duplicate-member').filter({ hasText: 'Projects/Decor/Vase' });
+  await original.getByTestId('duplicate-keep').click();
+  await expect(page.getByTestId('delete-many-dialog')).toContainText('Twisted vase backup');
+  await page.getByTestId('delete-many-confirm').click();
+  await expect(page.getByText('1 project moved to trash')).toBeVisible();
+  await expect(page.getByTestId('duplicate-group')).toHaveCount(1, { timeout: 10_000 });
+  await expect(page.getByTestId('duplicates-count')).toHaveText('1');
 });
 
 test('folder tree: arrow keys navigate and select like Explorer', async ({ page }) => {

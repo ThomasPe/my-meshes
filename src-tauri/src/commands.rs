@@ -5,7 +5,7 @@ use meshkeep_engine::model::{
     Facets, FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, ScanReport, SyncMode, TagCount, ThumbJob, ThumbLocation,
     ThumbStats,
 };
-use meshkeep_engine::{BatchReport, BatchUpdate, EngineError, MoveReport, PromoteItem, PromoteReport, UpdateMetadata};
+use meshkeep_engine::{BatchReport, BatchUpdate, DuplicateReport, EngineError, MoveReport, PromoteItem, PromoteReport, UpdateMetadata};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -437,6 +437,28 @@ pub fn set_favorite(app: AppHandle, state: State<AppState>, project_id: String, 
     let project = { state.engine.lock().unwrap().set_favorite(&project_id, favorite)? };
     let _ = app.emit("project://changed", serde_json::json!({ "projectId": project.id }));
     Ok(project)
+}
+
+#[tauri::command]
+pub async fn find_duplicates(app: AppHandle) -> CmdResult<DuplicateReport> {
+    let handle = app.clone();
+    let report = tauri::async_runtime::spawn_blocking(move || {
+        let state = handle.state::<AppState>();
+        let mut engine = state.engine.lock().unwrap();
+        let mut last = Instant::now() - Duration::from_secs(1);
+        engine.find_duplicates(|p| {
+            if p.done == p.total || last.elapsed() >= Duration::from_millis(100) {
+                last = Instant::now();
+                let _ = handle.emit("duplicates://progress", &p);
+            }
+        })
+    })
+    .await
+    .map_err(|e| AppError {
+        code: "shell",
+        message: e.to_string(),
+    })??;
+    Ok(report)
 }
 
 #[tauri::command]

@@ -85,7 +85,8 @@
     "filterBy": "Filter by {{value}}",
     "more": "+{{count}} more",
     "less": "less",
-    "showProjects": "Show projects"
+    "showProjects": "Show projects",
+    "duplicates": "Duplicates"
   },
   "inspector": {
     "open": "Open",
@@ -487,5 +488,21 @@
     "opened": "The issue form opened in your browser.",
     "openedWithLog": "The issue form opened in your browser; the log excerpt is on your clipboard.",
     "report": "Report"
+  },
+  "duplicates": {
+    "hint": "Projects that share model files by content. Identical groups hold exactly the same models; overlap groups share some.",
+    "scan": "Scan again",
+    "scanning": "Scanning…",
+    "hashing": "Hashing {{done}} of {{total}} files…",
+    "none": "No duplicates found",
+    "noneHint": "{{candidates}} files with a matching size were compared by content; none are shared between projects.",
+    "summary": "{{groups}} groups · {{candidates}} files compared · {{when}}",
+    "kind": {
+      "identical": "identical",
+      "overlap": "overlap"
+    },
+    "groupLine": "{{members}} projects · {{files}} shared files · {{size}}",
+    "memberLine": "{{shared}} of {{models}} models shared · {{files}} files · {{size}} · {{modified}}",
+    "keep": "Keep this, trash the others"
   }
 }

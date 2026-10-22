@@ -611,3 +611,59 @@ fn settings_facets_batch_and_project_thumbnails() {
     assert!(engine.thumbnail_path(&key).is_err());
     assert_eq!(engine.thumb_stats().unwrap().done, 0);
 }
+
+#[test]
+fn duplicate_detection_by_content() {
+    use meshkeep_engine::DuplicateKind;
+    let data = tempfile::tempdir().unwrap();
+    let lib = tempfile::tempdir().unwrap();
+    let write = |p: &str, bytes: &[u8]| {
+        let path = lib.path().join(p);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, bytes).unwrap();
+    };
+    // A and B: identical model sets (same bytes, different names); C shares one file with A
+    // but has another; D has a file of the same size as A's but different content; E is unique
+    write("Dragons/A/dragon.stl", b"solid dragon 1");
+    write("Dragons/A/wings.stl", b"solid wings 1");
+    write("Copies/B/dragon_copy.stl", b"solid dragon 1");
+    write("Copies/B/wings_copy.stl", b"solid wings 1");
+    write("Copies/B/photo.jpg", b"not a model");
+    write("Mixed/C/dragon.stl", b"solid dragon 1");
+    write("Mixed/C/base.stl", b"solid base 11");
+    write("Other/D/same_size.stl", b"solid dragon 2");
+    write("Other/E/unique.stl", b"solid unique model");
+    let mut engine = Engine::open(data.path()).unwrap();
+    let root = engine.add_root(lib.path(), SyncMode::Manual).unwrap();
+    engine.scan_root(&root.id, |_| {}).unwrap();
+
+    let mut seen = Vec::new();
+    let report = engine.find_duplicates(|p| seen.push(p)).unwrap();
+    // dragon x3 + same_size (14 bytes), wings x2 + base (13 bytes): base shares a size only
+    assert_eq!(report.candidates, 7);
+    assert_eq!(report.hashed, 7);
+    assert!(seen.last().is_some_and(|p| p.done == p.total));
+    assert_eq!(report.groups.len(), 1, "{:?}", report.groups);
+    let g = &report.groups[0];
+    assert_eq!(g.kind, DuplicateKind::Overlap, "C makes the component an overlap");
+    assert_eq!(g.files, 2);
+    let names: Vec<_> = g.members.iter().map(|m| m.project.rel_path.as_str()).collect();
+    assert_eq!(names, vec!["Copies/B", "Dragons/A", "Mixed/C"]);
+    let c = g.members.iter().find(|m| m.project.rel_path == "Mixed/C").unwrap();
+    assert_eq!((c.shared_files, c.model_files), (1, 2));
+
+    // without C the remaining pair is identical; the second run hashes nothing new
+    fs::remove_dir_all(lib.path().join("Mixed")).unwrap();
+    engine.scan_root(&root.id, |_| {}).unwrap();
+    let report = engine.find_duplicates(|_| {}).unwrap();
+    assert_eq!(report.hashed, 0);
+    assert_eq!(report.groups.len(), 1);
+    assert_eq!(report.groups[0].kind, DuplicateKind::Identical);
+    assert_eq!(report.groups[0].members.len(), 2);
+    // a renamed project keeps its hashes
+    let a_id = format!("{}:Dragons/A", root.id);
+    engine.rename_project(&a_id, "A2").unwrap();
+    let report = engine.find_duplicates(|_| {}).unwrap();
+    assert_eq!(report.hashed, 0);
+    assert_eq!(report.groups[0].members.len(), 2);
+}

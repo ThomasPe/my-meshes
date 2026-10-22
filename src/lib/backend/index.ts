@@ -1,4 +1,4 @@
-import type { AppInfo, BatchReport, BatchUpdate, MoveReport, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata } from '@/lib/types';
+import type { AppInfo, BatchReport, BatchUpdate, DuplicateReport, HashProgress, MoveReport, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata } from '@/lib/types';
 
 export type Unlisten = () => void;
 
@@ -22,6 +22,9 @@ export interface Backend {
   notify(title: string, body: string): Promise<boolean>;
   folderTree(rootId: string): Promise<FolderNode[]>;
   libraryStats(rootId?: string | null): Promise<LibraryStats>;
+  /** Groups projects that share model files by content (LIB-8); hashes only size-collision candidates. */
+  findDuplicates(): Promise<DuplicateReport>;
+  onDuplicateProgress(cb: (p: HashProgress) => void): Promise<Unlisten>;
   /** Last lines of the app log with the home directory shortened, for a bug report. */
   logTail(lines: number): Promise<string>;
   /** Opens an http(s) link in the default browser. */

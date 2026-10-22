@@ -23,6 +23,7 @@ pub mod watch;
 
 mod engine;
 pub use engine::{
-    BatchReport, BatchUpdate, Deleter, Engine, MoveReport, PromoteFailure, PromoteItem, PromoteReport, ScanProgress, UpdateMetadata,
+    BatchReport, BatchUpdate, Deleter, DuplicateGroup, DuplicateKind, DuplicateMember, DuplicateReport, Engine, HashProgress, MoveReport,
+    PromoteFailure, PromoteItem, PromoteReport, ScanProgress, UpdateMetadata,
 };
 pub use error::{EngineError, Result};

@@ -3,6 +3,7 @@
 
 use crate::collections::{Collection, CollectionsStore, SmartCollection};
 use crate::error::{EngineError, Result};
+use crate::hash;
 use crate::import::{self, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile};
 use crate::index::{Index, ThumbSourceState};
 use crate::model::{
@@ -69,6 +70,52 @@ pub struct BatchFailure {
 pub struct BatchReport {
     pub updated: u32,
     pub failed: Vec<BatchFailure>,
+}
+
+/// Progress of the hashing step of duplicate detection.
+#[derive(Debug, Clone, Copy, Serialize)]
+pub struct HashProgress {
+    pub done: u32,
+    pub total: u32,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum DuplicateKind {
+    /// The projects hold exactly the same model files (by content).
+    Identical,
+    /// The projects share some model files but differ in others.
+    Overlap,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DuplicateMember {
+    #[serde(flatten)]
+    pub project: ProjectSummary,
+    /// How many of the group's shared files this project holds.
+    pub shared_files: u32,
+    /// All model files of this project.
+    pub model_files: u32,
+}
+
+#[derive(Debug, Clone, Serialize)]
+pub struct DuplicateGroup {
+    pub kind: DuplicateKind,
+    /// Distinct model files (by content) that at least two members share.
+    pub files: u32,
+    /// Their size, counted once.
+    pub bytes: u64,
+    pub members: Vec<DuplicateMember>,
+}
+
+/// Outcome of duplicate detection (LIB-8).
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct DuplicateReport {
+    pub groups: Vec<DuplicateGroup>,
+    /// Model files considered (same size as a file in another project).
+    pub candidates: u32,
+    /// Files hashed in this run (the rest came from the cache).
+    pub hashed: u32,
 }
 
 /// Outcome of moving projects into another folder (IMP-7): the projects under their new
@@ -843,8 +890,166 @@ impl Engine {
         let new_id = Project::make_id(&current.root_id, &new_rel);
         self.collections.rename(project_id, &new_id)?;
         self.index.rename_thumb(project_id, &new_id)?;
+        self.index.rename_file_hashes(project_id, &new_id)?;
         self.index.remove_project(project_id)?;
         self.reindex_dir(&current.root_id, &new_dir)
+    }
+
+    /// Finds projects that share model files by content (LIB-8). Only files whose size
+    /// matches a file in another project are hashed (SHA-256, all cores); hashes are cached
+    /// per file size and mtime, so a second run touches only changed files.
+    pub fn find_duplicates(&mut self, mut progress: impl FnMut(HashProgress)) -> Result<DuplicateReport> {
+        use std::collections::{BTreeMap, BTreeSet, HashMap};
+        self.index.prune_file_hashes()?;
+        let files = self.index.model_files()?;
+        let mut models_per_project: HashMap<String, u32> = HashMap::new();
+        let mut by_size: HashMap<u64, Vec<usize>> = HashMap::new();
+        for (i, (pid, _, size, _)) in files.iter().enumerate() {
+            *models_per_project.entry(pid.clone()).or_default() += 1;
+            by_size.entry(*size).or_default().push(i);
+        }
+        let candidates: Vec<usize> = by_size
+            .values()
+            .filter(|idx| idx.iter().map(|&i| &files[i].0).collect::<BTreeSet<_>>().len() >= 2)
+            .flatten()
+            .copied()
+            .collect();
+        let cached = self.index.file_hashes()?;
+        let mut hashes: HashMap<usize, String> = HashMap::new();
+        let mut todo: Vec<usize> = Vec::new();
+        for &i in &candidates {
+            let (pid, rel, size, modified) = &files[i];
+            match cached.get(&(pid.clone(), rel.clone())) {
+                Some((s, m, sha)) if s == size && m == modified => {
+                    hashes.insert(i, sha.clone());
+                }
+                _ => todo.push(i),
+            }
+        }
+        let total = todo.len() as u32;
+        progress(HashProgress { done: 0, total });
+        let mut done = 0u32;
+        let roots: HashMap<String, PathBuf> = self.roots()?.into_iter().map(|r| (r.id, r.path)).collect();
+        for chunk in todo.chunks(32) {
+            let paths: Vec<PathBuf> = chunk
+                .iter()
+                .filter_map(|&i| {
+                    let (pid, rel, _, _) = &files[i];
+                    let (root_id, proj_rel) = Project::split_id(pid)?;
+                    let root = roots.get(root_id)?;
+                    let dir = if proj_rel.is_empty() { root.clone() } else { root.join(proj_rel) };
+                    Some(dir.join(rel))
+                })
+                .collect();
+            let results = hash::sha256_many(&paths);
+            let mut rows = Vec::new();
+            for (&i, (_, res)) in chunk.iter().zip(results.iter()) {
+                if let Ok(sha) = res {
+                    let (pid, rel, size, modified) = &files[i];
+                    hashes.insert(i, sha.clone());
+                    rows.push((pid.clone(), rel.clone(), *size, modified.clone(), sha.clone()));
+                }
+            }
+            self.index.set_file_hashes(&rows)?;
+            done += chunk.len() as u32;
+            progress(HashProgress { done, total });
+        }
+
+        // project -> its hashed files; hash -> projects holding it
+        let mut per_project: HashMap<&str, BTreeMap<&str, u64>> = HashMap::new();
+        let mut holders: HashMap<&str, BTreeSet<&str>> = HashMap::new();
+        for (&i, sha) in &hashes {
+            let (pid, _, size, _) = &files[i];
+            per_project.entry(pid.as_str()).or_default().insert(sha.as_str(), *size);
+            holders.entry(sha.as_str()).or_default().insert(pid.as_str());
+        }
+        // union-find over projects that share at least one file
+        let ids: Vec<&str> = per_project.keys().copied().collect();
+        let pos: HashMap<&str, usize> = ids.iter().enumerate().map(|(i, id)| (*id, i)).collect();
+        let mut parent: Vec<usize> = (0..ids.len()).collect();
+        fn find(parent: &mut [usize], i: usize) -> usize {
+            let mut r = i;
+            while parent[r] != r {
+                r = parent[r];
+            }
+            let mut c = i;
+            while parent[c] != r {
+                let next = parent[c];
+                parent[c] = r;
+                c = next;
+            }
+            r
+        }
+        for members in holders.values().filter(|m| m.len() >= 2) {
+            let mut it = members.iter();
+            let first = find(&mut parent, pos[it.next().unwrap()]);
+            for m in it {
+                let r = find(&mut parent, pos[m]);
+                parent[r] = first;
+            }
+        }
+        let mut components: BTreeMap<usize, Vec<&str>> = BTreeMap::new();
+        for (i, id) in ids.iter().enumerate() {
+            let r = find(&mut parent, i);
+            components.entry(r).or_default().push(id);
+        }
+        let summaries: HashMap<String, ProjectSummary> = self
+            .index
+            .list(&ListQuery::default(), None)?
+            .into_iter()
+            .map(|p| (p.id.clone(), p))
+            .collect();
+        let mut groups = Vec::new();
+        for members in components.values().filter(|m| m.len() >= 2) {
+            let shared: BTreeMap<&str, u64> = members
+                .iter()
+                .flat_map(|m| per_project[m].iter())
+                .filter(|(sha, _)| holders[**sha].len() >= 2)
+                .map(|(sha, size)| (*sha, *size))
+                .collect();
+            let first = &per_project[members[0]];
+            let identical = members.iter().all(|m| {
+                let mine = &per_project[m];
+                mine.len() == first.len()
+                    && mine.keys().eq(first.keys())
+                    && models_per_project.get(*m).copied().unwrap_or(0) as usize == mine.len()
+            });
+            let mut rows: Vec<DuplicateMember> = members
+                .iter()
+                .filter_map(|m| {
+                    let project = summaries.get(*m)?.clone();
+                    Some(DuplicateMember {
+                        shared_files: per_project[m].keys().filter(|k| shared.contains_key(*k)).count() as u32,
+                        model_files: models_per_project.get(*m).copied().unwrap_or(0),
+                        project,
+                    })
+                })
+                .collect();
+            if rows.len() < 2 {
+                continue;
+            }
+            rows.sort_by(|a, b| a.project.rel_path.cmp(&b.project.rel_path));
+            groups.push(DuplicateGroup {
+                kind: if identical {
+                    DuplicateKind::Identical
+                } else {
+                    DuplicateKind::Overlap
+                },
+                files: shared.len() as u32,
+                bytes: shared.values().sum(),
+                members: rows,
+            });
+        }
+        groups.sort_by(|a, b| {
+            (b.kind == DuplicateKind::Identical)
+                .cmp(&(a.kind == DuplicateKind::Identical))
+                .then(b.bytes.cmp(&a.bytes))
+        });
+        Ok(DuplicateReport {
+            groups,
+            candidates: candidates.len() as u32,
+            hashed: total,
+        })
     }
 
     /// Moves project folders into another folder of any root (IMP-7). The destination is
@@ -964,6 +1169,7 @@ impl Engine {
             let new_id = Project::make_id(dest_root, &rel);
             self.collections.rename(old_id, &new_id)?;
             self.index.rename_thumb(old_id, &new_id)?;
+            self.index.rename_file_hashes(old_id, &new_id)?;
             self.index.remove_project(old_id)?;
             if old_id != project_id {
                 nested_dirs.push(rel);

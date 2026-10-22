@@ -93,6 +93,7 @@ pub fn run() {
             commands::set_favorite,
             commands::rename_project,
             commands::move_projects,
+            commands::find_duplicates,
             commands::delete_project,
             commands::delete_file,
             commands::thumb_queue,

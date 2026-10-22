@@ -1,4 +1,4 @@
-import { Box, ChevronDown, ChevronRight, Clock, Eye, Folder, FolderInput, FolderHeart, FolderOpen, HardDrive, Inbox, LayoutGrid, Pencil, Plus, RefreshCw, Settings, Sparkles, Star, Tag, Trash2 } from 'lucide-react';
+import { Box, ChevronDown, ChevronRight, Clock, Copy, Eye, Folder, FolderInput, FolderHeart, FolderOpen, HardDrive, Inbox, LayoutGrid, Pencil, Plus, RefreshCw, Settings, Sparkles, Star, Tag, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
@@ -9,6 +9,7 @@ import { useCollectionDialog } from '@/features/library/CollectionDialogs';
 import { useCollections, useFolderTree, useInbox, useLibraryStats, useRoots, useSmartCollections, useTagCounts } from '@/lib/queries';
 import { navigate, routeHref, useRoute } from '@/lib/router';
 import { MoveDialog } from '@/features/library/MoveDialog';
+import { useDuplicates } from '@/features/library/useDuplicates';
 import { useMove } from '@/features/library/useMove';
 import { create } from 'zustand';
 
@@ -61,6 +62,7 @@ export function Sidebar({ onRescan }: { onRescan?: (rootId: string) => void } = 
   const storeToggleTag = useUi((s) => s.toggleTag);
   // the sidebar lives in the shell and stays visible on a project page: picking a view,
   // folder or tag there returns to the library with that selection (NAV-1)
+  const dupReport = useDuplicates((s) => s.report);
   const route = useRoute();
   const inLibrary = route.page === 'library';
   const currentProject = route.page === 'project' ? route.id : null;
@@ -139,6 +141,9 @@ export function Sidebar({ onRescan }: { onRescan?: (rootId: string) => void } = 
           </button>
           <button type="button" data-testid="filter-favorites" className={cn(itemClass, filter.kind === 'favorites' && activeClass)} onClick={() => setFilter({ kind: 'favorites' })}>
             <Star />{t('library.favorites')}<span className="ml-auto text-xs tabular text-muted-foreground" data-testid="favorites-count">{stats.data?.favorites ?? ''}</span>
+          </button>
+          <button type="button" data-testid="filter-duplicates" className={cn(itemClass, filter.kind === 'duplicates' && activeClass)} onClick={() => setFilter({ kind: 'duplicates' })}>
+            <Copy />{t('library.duplicates')}<span className="ml-auto text-xs tabular text-muted-foreground" data-testid="duplicates-count">{dupReport ? dupReport.groups.length : ''}</span>
           </button>
         </section>
         <section>

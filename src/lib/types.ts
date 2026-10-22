@@ -137,6 +137,11 @@ export interface BatchUpdate {
   license?: string;
 }
 
+export interface HashProgress { done: number; total: number }
+export type DuplicateKind = 'identical' | 'overlap';
+export interface DuplicateMember extends ProjectSummary { shared_files: number; model_files: number }
+export interface DuplicateGroup { kind: DuplicateKind; files: number; bytes: number; members: DuplicateMember[] }
+export interface DuplicateReport { groups: DuplicateGroup[]; candidates: number; hashed: number }
 export interface MoveReport { moved: Project[]; failed: Array<{ project_id: string; message: string }> }
 export interface PromoteItem { file: string; name: string }
 export interface PromoteReport { created: Project[]; failed: Array<{ file: string; message: string }> }

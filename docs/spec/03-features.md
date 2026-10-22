@@ -14,7 +14,7 @@
 | LIB-5 | Offline protection: a missing root marks its content as offline; nothing is deleted from the index. A later rescan clears the offline state. | MVP |
 | LIB-6 | Sync status per root: last sync time, syncing-in-progress indicator, and a detailed status log. | MVP |
 | LIB-7 | A status bar shows background activity (indexing, hashing, thumbnail generation) with progress. | MVP |
-| LIB-8 | Duplicate detection via content hashes; duplicates are flagged in the UI with a resolution flow. | Later |
+| LIB-8 | Duplicate detection via content hashes: only model files whose size matches a file in another project are hashed (SHA-256, cached per size and mtime in the index), projects are grouped as identical (same model set) or overlap (some shared files); the Duplicates view lists groups side by side with "keep this, trash the others". | Done |
 
 ## 3.2 Metadata
 
