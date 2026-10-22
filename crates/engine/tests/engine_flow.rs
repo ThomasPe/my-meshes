@@ -651,6 +651,11 @@ fn duplicate_detection_by_content() {
     assert_eq!(names, vec!["Copies/B", "Dragons/A", "Mixed/C"]);
     let c = g.members.iter().find(|m| m.project.rel_path == "Mixed/C").unwrap();
     assert_eq!((c.shared_files, c.model_files), (1, 2));
+    // keeping A may trash B (identical) but never C, which has a model A lacks; C covers nobody
+    let by = |rel: &str| g.members.iter().find(|m| m.project.rel_path == rel).unwrap();
+    assert_eq!(by("Dragons/A").covers, vec![format!("{}:Copies/B", root.id)]);
+    assert_eq!(by("Copies/B").covers, vec![format!("{}:Dragons/A", root.id)]);
+    assert!(c.covers.is_empty());
 
     // without C the remaining pair is identical; the second run hashes nothing new
     fs::remove_dir_all(lib.path().join("Mixed")).unwrap();

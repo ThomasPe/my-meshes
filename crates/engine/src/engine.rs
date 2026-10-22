@@ -96,6 +96,9 @@ pub struct DuplicateMember {
     pub shared_files: u32,
     /// All model files of this project.
     pub model_files: u32,
+    /// Members whose model files all exist in this project (by content): the ones that can
+    /// go when this one is kept. A project with a model the kept one lacks is never covered.
+    pub covers: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -1014,13 +1017,21 @@ impl Engine {
                     && mine.keys().eq(first.keys())
                     && models_per_project.get(*m).copied().unwrap_or(0) as usize == mine.len()
             });
+            let fully_hashed = |m: &str| models_per_project.get(m).copied().unwrap_or(0) as usize == per_project[m].len();
             let mut rows: Vec<DuplicateMember> = members
                 .iter()
                 .filter_map(|m| {
                     let project = summaries.get(*m)?.clone();
+                    let mine = &per_project[m];
+                    let covers = members
+                        .iter()
+                        .filter(|o| *o != m && fully_hashed(o) && per_project[*o].keys().all(|k| mine.contains_key(k)))
+                        .map(|o| (*o).to_string())
+                        .collect();
                     Some(DuplicateMember {
-                        shared_files: per_project[m].keys().filter(|k| shared.contains_key(*k)).count() as u32,
+                        shared_files: mine.keys().filter(|k| shared.contains_key(*k)).count() as u32,
                         model_files: models_per_project.get(*m).copied().unwrap_or(0),
+                        covers,
                         project,
                     })
                 })

@@ -31,7 +31,9 @@ export function DuplicatesView({ actions }: { actions: ProjectActions }) {
     getBackend().then(async (b) => { const u = await b.onLibraryChanged(() => { if (useDuplicates.getState().report) void useDuplicates.getState().scan(); }); if (dead) u(); else off = u; });
     return () => { dead = true; off?.(); };
   }, []);
-  const keep = (g: DuplicateGroup, m: DuplicateMember) => actions.removeMany(g.members.filter((x) => x.id !== m.id));
+  // keeping a member trashes only the members it fully contains; the rest of the group stays
+  const keep = (g: DuplicateGroup, m: DuplicateMember) => actions.removeMany(g.members.filter((x) => m.covers.includes(x.id)));
+  const nameOf = (g: DuplicateGroup, id: string) => g.members.find((x) => x.id === id)?.title ?? id;
   return (
     <div className="h-full overflow-auto px-5 pb-6 pt-3" data-testid="duplicates">
       <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -70,7 +72,9 @@ export function DuplicatesView({ actions }: { actions: ProjectActions }) {
                           {m.favorite ? <Badge variant="warning">★</Badge> : null}
                         </div>
                       )}
-                      <Button size="sm" variant="outline" className="mt-2 h-7 max-w-full" disabled={m.offline} title={t('duplicates.keepHint')} onClick={(e) => { e.stopPropagation(); keep(g, m); }} data-testid="duplicate-keep"><Trash2 /><span className="truncate">{t('duplicates.keep')}</span></Button>
+                      {m.covers.length > 0 && <div className="mt-1 truncate text-xs text-muted-foreground" title={m.covers.map((id) => nameOf(g, id)).join(', ')} data-testid="duplicate-covers">{t('duplicates.contains', { count: m.covers.length, names: m.covers.map((id) => nameOf(g, id)).join(', ') })}</div>}
+                      {(() => { const within = g.members.filter((x) => x.covers.includes(m.id)); return within.length > 0 && m.covers.length === 0 ? <div className="mt-1 truncate text-xs text-muted-foreground" title={within.map((x) => x.title).join(', ')}>{t('duplicates.containedIn', { names: within.map((x) => x.title).join(', ') })}</div> : null; })()}
+                      <Button size="sm" variant="outline" className="mt-2 h-7 max-w-full" disabled={m.offline || m.covers.length === 0} title={m.covers.length ? t('duplicates.keepHint', { count: m.covers.length }) : t('duplicates.keepNone')} onClick={(e) => { e.stopPropagation(); keep(g, m); }} data-testid="duplicate-keep"><Trash2 /><span className="truncate">{t('duplicates.keep', { count: m.covers.length })}</span></Button>
                     </div>
                   </div>
                 );

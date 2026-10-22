@@ -257,7 +257,8 @@ export function createMockBackend(): Backend {
         for (const id of ids) for (const [h, size] of per.get(id)!) if (byHash.get(h)!.size > 1) shared.set(h, size);
         const first = per.get(ids[0]!)!;
         const identical = ids.every((id) => { const m = per.get(id)!; return m.size === first.size && [...m.keys()].every((k) => first.has(k)) && models.get(id) === m.size; });
-        const members = ids.map((id) => ({ ...summary(find(id)), shared_files: [...per.get(id)!.keys()].filter((h) => shared.has(h)).length, model_files: models.get(id) ?? 0 })).sort((a, b) => a.rel_path.localeCompare(b.rel_path));
+        const fully = (id: string) => (models.get(id) ?? 0) === per.get(id)!.size;
+        const members = ids.map((id) => ({ ...summary(find(id)), shared_files: [...per.get(id)!.keys()].filter((h) => shared.has(h)).length, model_files: models.get(id) ?? 0, covers: ids.filter((o) => o !== id && fully(o) && [...per.get(o)!.keys()].every((h) => per.get(id)!.has(h))) })).sort((a, b) => a.rel_path.localeCompare(b.rel_path));
         groups.push({ kind: identical ? 'identical' as const : 'overlap' as const, files: shared.size, bytes: [...shared.values()].reduce((a, b) => a + b, 0), members });
       }
       groups.sort((a, b) => Number(b.kind === 'identical') - Number(a.kind === 'identical') || b.bytes - a.bytes);

@@ -805,6 +805,14 @@ test('duplicates: groups projects by shared model content, keeping one trashes t
   await expect(groups.nth(0)).toContainText('Twisted vase backup');
   await expect(groups.nth(1)).toHaveAttribute('data-kind', 'overlap');
   await expect(groups.nth(1)).toContainText('1 of 2 models shared');
+  // in the overlap group the bundle contains the single benchy, never the other way round
+  // "contained in Benchy Pack" appears on the single tile too, so match the bold title only
+  const pack = groups.nth(1).getByTestId('duplicate-member').filter({ has: page.locator('.font-bold[title="Benchy Pack"]') });
+  const single = groups.nth(1).getByTestId('duplicate-member').filter({ has: page.locator('.font-bold[title="Low-Poly Benchy"]') });
+  await expect(pack.getByTestId('duplicate-covers')).toContainText('contains Low-Poly Benchy');
+  await expect(pack.getByTestId('duplicate-keep')).toBeEnabled();
+  await expect(single.getByTestId('duplicate-keep')).toBeDisabled();
+  await expect(single).toContainText('contained in Benchy Pack');
   // tiles never grow past their column: the view has no horizontal overflow
   expect(await page.getByTestId('duplicates').evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true);
   // keep the original: the copy goes to the trash after the usual confirmation

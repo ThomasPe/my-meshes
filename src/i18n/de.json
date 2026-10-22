@@ -490,7 +490,7 @@
     "report": "Melden"
   },
   "duplicates": {
-    "hint": "Projekte, die Modelldateien mit gleichem Inhalt teilen. Identische Gruppen enthalten genau dieselben Modelle; Überschneidungen teilen einige.",
+    "hint": "Projekte, die Modelldateien mit gleichem Inhalt teilen. Behalten löscht nur Projekte, die vollständig im behaltenen enthalten sind; ein Projekt mit eigenen Modellen wird nie entfernt.",
     "scan": "Erneut prüfen",
     "scanning": "Prüfe…",
     "hashing": "{{done}} von {{total}} Dateien werden gehasht…",
@@ -504,6 +504,14 @@
     "groupLine": "{{members}} Projekte · {{files}} gemeinsame Dateien · {{size}}",
     "memberLine": "{{shared}} von {{models}} Modellen gemeinsam · {{files}} Dateien · {{size}} · {{modified}}",
     "keep": "Dieses behalten",
-    "keepHint": "Dieses Projekt behalten und die anderen der Gruppe in den Papierkorb verschieben"
+    "keepHint": "Dieses Projekt behalten und die anderen der Gruppe in den Papierkorb verschieben",
+    "keep_one": "Behalten, {{count}} löschen",
+    "keep_other": "Behalten, {{count}} löschen",
+    "keepHint_one": "Dieses Projekt behalten und das {{count}} Projekt, das es vollständig enthält, in den Papierkorb verschieben",
+    "keepHint_other": "Dieses Projekt behalten und die {{count}} Projekte, die es vollständig enthält, in den Papierkorb verschieben",
+    "keepNone": "Kein anderes Projekt ist vollständig in diesem enthalten; Behalten löscht nichts.",
+    "contains_one": "enthält {{names}}",
+    "contains_other": "enthält {{count}} andere: {{names}}",
+    "containedIn": "enthalten in {{names}}"
   }
 }

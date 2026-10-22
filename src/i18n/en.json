@@ -490,7 +490,7 @@
     "report": "Report"
   },
   "duplicates": {
-    "hint": "Projects that share model files by content. Identical groups hold exactly the same models; overlap groups share some.",
+    "hint": "Projects that share model files by content. Keeping a project trashes only the ones it fully contains; a project with models of its own is never removed.",
     "scan": "Scan again",
     "scanning": "Scanning…",
     "hashing": "Hashing {{done}} of {{total}} files…",
@@ -504,6 +504,14 @@
     "groupLine": "{{members}} projects · {{files}} shared files · {{size}}",
     "memberLine": "{{shared}} of {{models}} models shared · {{files}} files · {{size}} · {{modified}}",
     "keep": "Keep this one",
-    "keepHint": "Keep this project and move the other members of the group to the trash"
+    "keepHint": "Keep this project and move the other members of the group to the trash",
+    "keep_one": "Keep this, trash {{count}}",
+    "keep_other": "Keep this, trash {{count}}",
+    "keepHint_one": "Keep this project and move the {{count}} project it fully contains to the trash",
+    "keepHint_other": "Keep this project and move the {{count}} projects it fully contains to the trash",
+    "keepNone": "No other project is fully contained in this one, so keeping it trashes nothing.",
+    "contains_one": "contains {{names}}",
+    "contains_other": "contains {{count}} others: {{names}}",
+    "containedIn": "contained in {{names}}"
   }
 }
