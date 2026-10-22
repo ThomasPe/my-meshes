@@ -71,7 +71,7 @@ jobs:
         run: |
           ./msix/build-msix.ps1 -Version "${{ steps.ver.outputs.msix }}"
           ./msix/sideload-test.ps1
-      - uses: actions/upload-artifact@v5
+      - uses: actions/upload-artifact@v7
         with:
           name: meshkeep-${{ steps.ver.outputs.version }}-msix
           path: |
