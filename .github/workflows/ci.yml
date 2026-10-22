@@ -21,7 +21,7 @@ jobs:
     name: engine · cargo fmt, clippy, test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: dtolnay/rust-toolchain@stable
         with: { components: 'rustfmt, clippy' }
       - uses: Swatinem/rust-cache@v2
@@ -34,8 +34,8 @@ jobs:
     name: frontend · typecheck, unit, UI (browser mode)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - run: npm run typecheck
@@ -45,7 +45,7 @@ jobs:
         env: { PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "" }
       - run: npm run test:ui
         env: { CI: "1" }
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: failure()
         with:
           name: ui-test-results
@@ -59,8 +59,8 @@ jobs:
     timeout-minutes: 60
     defaults: { run: { shell: pwsh } }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with: { node-version: 22, cache: npm }
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
@@ -78,7 +78,7 @@ jobs:
         run: |
           ./msix/build-msix.ps1 -Version "0.1.0.${{ github.run_number }}"
           ./msix/sideload-test.ps1
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: app-windows-${{ github.run_number }}

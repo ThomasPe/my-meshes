@@ -17,24 +17,52 @@ settings page shows "Updates arrive through the Microsoft Store" for Store build
 ## Dev channel (fast local iteration)
 
 `.github/workflows/dev-channel.yml` turns every push to `main` or a working branch
-(`claude/**`, `feat/**`, `fix/**`) into an installable,
-self-updating Windows build without a local toolchain:
+(`claude/**`, `feat/**`, `fix/**`) into installable, self-updating Windows and macOS
+builds without a local toolchain. One job per platform, both from the same commit:
 
-1. Builds the NSIS installer with `--features updater` and the dev overlay
+1. Builds with `--features updater,devtools` and the dev overlay
    (`src-tauri/tauri.updater.dev.conf.json`: dev endpoint, channel `dev`), versioned
    `<package.json version>-dev.<run number>` so every build is newer than the last and
    older than the next stable release. LTO is off for this job; it takes about half the
-   time of a release build.
-2. Signs the installer with the updater key and publishes installer, `.sig` and
-   `latest.json` to the rolling pre-release tagged **`dev`** (recreated on every run).
-3. An installed dev build checks `releases/download/dev/latest.json` once on startup and
-   offers "Install and restart"; nothing installs without the click. Settings shows the
-   channel badge and a manual check.
+   time of a release build. Windows produces the NSIS installer, macOS the `.app` bundle
+   packed as `Meshkeep.app.tar.gz` (Apple Silicon only; `macos-latest` is an arm64
+   runner. A universal build would also cover Intel Macs at twice the compile time).
+2. Signs the artifact with the updater key and publishes it, its `.sig` and the
+   platform's feed to the rolling pre-release tagged **`dev`**
+   (`.github/scripts/dev-channel-publish.sh`). The feed is per platform:
+   `latest-windows.json` and `latest-darwin.json`, selected by the `{{target}}`
+   placeholder in the updater endpoint, so each job only replaces its own assets and a
+   failed build on one platform leaves the other platform's feed intact. The Windows job
+   also writes a plain `latest.json` for dev builds installed before the split; it can go
+   once those have updated.
+3. An installed dev build checks its feed once on startup and offers "Install and
+   restart"; nothing installs without the click. Settings shows the channel badge and a
+   manual check.
 
-First install: download `Meshkeep_<version>_x64-setup.exe` from the `dev` release once
-(SmartScreen warns because the installer is not code-signed; updates fetched by the app
-do not trigger that prompt). From then on, push and restart the app; the release body
-names the branch and commit the build came from.
+First install on Windows: download `Meshkeep_<version>_x64-setup.exe` from the `dev`
+release once (SmartScreen warns because the installer is not code-signed; updates fetched
+by the app do not trigger that prompt).
+
+First install on macOS: download `Meshkeep.app.tar.gz`, unpack it and move `Meshkeep.app`
+to Applications. The build is neither signed with a Developer ID nor notarized, so
+Gatekeeper blocks the first launch (on macOS 15 the right-click "Open" workaround no
+longer exists). Either open System Settings → Privacy & Security and click "Open Anyway"
+below the message about Meshkeep, or clear the quarantine flag in a terminal:
+
+```bash
+xattr -d com.apple.quarantine /Applications/Meshkeep.app
+```
+
+Updates the app downloads itself carry no quarantine flag, so later dev builds install
+without this step. Signing and notarization (Apple Developer Program, `APPLE_CERTIFICATE`,
+`APPLE_SIGNING_IDENTITY`, `APPLE_ID`, `APPLE_PASSWORD`, `APPLE_TEAM_ID` secrets consumed by
+`tauri build`) remove the Gatekeeper step and are the planned follow-up; the Mac App Store
+build (spec `04-quality.md`, APP-11) is a separate, sandboxed flavor and not what the dev
+channel ships. The dev channel is also the first place the app is built on macOS at all;
+CI (`ci.yml`) still builds and tests the real app on Windows only.
+
+From then on, push and restart the app; the release body names the branch and commit the
+build came from.
 
 The stable channel uses `src-tauri/tauri.updater.conf.json` (`releases/latest`) and is
 produced by `release.yml` on tags. Store builds have no updater at all.
