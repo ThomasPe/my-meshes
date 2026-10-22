@@ -65,7 +65,11 @@ describe('Meshkeep AI assistance (mock provider)', () => {
     // the answer is a cache entry in app data, never library content
     expect(fs.readdirSync(path.join(dataDir(), 'ai-cache')).filter((f) => f.endsWith('.json')).length).toBeGreaterThanOrEqual(1);
     expect(fs.existsSync(path.join(fixture(), 'Decor/Vase/ai-cache'))).toBe(false);
-    fs.unlinkSync(sidecar); // leave the fixture as it was
+    // leave the fixture as it was, and tell the app: every spec file shares this app instance,
+    // so its index and caches must see the sidecar go before the next spec touches the project
+    fs.unlinkSync(sidecar);
+    await $('[data-testid="rescan"]').click();
+    await browser.waitUntil(async () => (await $('[data-testid="inspector"]').getText()).includes('no project.yaml yet'), { timeout: 15000, timeoutMsg: 'the rescan did not drop the removed sidecar' });
     await $('[data-testid="search"]').clearValue();
     await browser.waitUntil(async () => (await $('[data-testid="search"]').getValue()) === '', { timeout: 5000 });
   });

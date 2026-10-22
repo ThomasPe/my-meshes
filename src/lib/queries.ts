@@ -42,6 +42,8 @@ export const useContainerDirs = () => useQuery({ queryKey: keys.containers, quer
 
 export function invalidateLibrary(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ['projects'] });
+  // a rescan can change a project's sidecar state and stamp (edited or removed outside the app)
+  qc.invalidateQueries({ queryKey: ['project'] });
   qc.invalidateQueries({ queryKey: ['smartProjects'] });
   qc.invalidateQueries({ queryKey: ['inbox'] });
   qc.invalidateQueries({ queryKey: ['tags'] });
