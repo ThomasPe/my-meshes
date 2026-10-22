@@ -98,7 +98,9 @@ client.** A key is optional when the base URL is local.
 
 ## Recommended first slice
 
-Build features **1 (metadata suggestions)** and **4 (natural-language search)** together:
+Build feature **1 (metadata suggestions)** with the plumbing every later feature reuses
+(revised 2026-10-22: natural-language search was dropped from the first slice and is the
+first follow-up):
 
 - Settings card "AI assistance": provider, base URL, key (stored in the credential
   store), a test button, and a plain statement of what is sent.
@@ -106,13 +108,13 @@ Build features **1 (metadata suggestions)** and **4 (natural-language search)** 
   errors (`ai_disabled`, `ai_unauthorized`, `ai_rate_limited`, `ai_invalid_response`).
 - Inspector: "Suggest metadata" opens a diff dialog; accepted fields go through the
   normal save with conflict handling.
-- Search box: "Ask" mode turns the text into a smart-collection query, shows the
-  resulting filter chips so the user sees what was understood, and offers to save it.
 - Tests: engine unit tests against the mock provider (schema validation, cache hits,
-  error mapping); UI tests in browser mode for both dialogs; one E2E test that the key is
-  not in `settings.json` and that no call happens without a key.
+  error mapping); UI tests in browser mode for the settings card and the suggestion
+  dialog; one E2E test that the key is not in `settings.json` and that no call happens
+  without a key.
 
-Then 2 (batch enrichment) and 3 (import proposals) as follow-ups on the same base.
+Then 4 (natural-language search), 2 (batch enrichment) and 3 (import proposals) as
+follow-ups on the same base.
 
 ## Consequences
 

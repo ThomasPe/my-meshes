@@ -188,17 +188,14 @@ no model geometry leaves the machine, deterministic mock provider in test mode.
       existing vocabulary plus new ones, description, creator, SPDX license), validated
       in the engine. Diff dialog with per-field checkboxes; accepted fields go through
       the normal sidecar save with `sidecar_stamp` conflict handling.
-- [ ] **Natural-language search** ("Ask" mode in the search box). The query text is the
-      only input; the result is a smart-collection query in the existing `{ all: [...] }`
-      schema, executed locally. The understood filter is shown as chips and can be saved
-      as a smart collection.
 - [ ] **Tests for the slice.** Engine unit tests against the mock provider (schema
-      validation, cache hits, error mapping); UI tests in browser mode for both dialogs;
-      one E2E test proving no call happens without a key and the key never lands in
+      validation, cache hits, error mapping); UI tests in browser mode for the settings
+      card and the suggestion dialog; one E2E test proving no call happens without a key and the key never lands in
       `settings.json`.
 
-Follow-ups on the same base (not scheduled): batch enrichment with a review list and
-cost estimate, import proposals in the staging dialog (see ADR-0003, features 2 and 3).
+Follow-ups on the same base (not scheduled): natural-language search ("Ask" mode that
+turns the query into a smart-collection query), batch enrichment with a review list and
+cost estimate, import proposals in the staging dialog (see ADR-0003, features 4, 2 and 3).
 
 ## Phase 3: Model tools
 - [ ] **Transforms & mesh analysis** (VIEW-7).
