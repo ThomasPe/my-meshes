@@ -216,13 +216,14 @@ export function createMockBackend(): Backend {
       return true;
     },
     async folderTree(rootId) {
-      type N = { count: number; children: Map<string, N> };
-      const root: N = { count: 0, children: new Map() };
+      type N = { count: number; isProject: boolean; children: Map<string, N> };
+      const root: N = { count: 0, isProject: false, children: new Map() };
       for (const p of projects.filter((x) => x.root_id === rootId)) {
         let cur = root; cur.count++;
-        for (const seg of p.rel_path.split('/').filter(Boolean)) { if (!cur.children.has(seg)) cur.children.set(seg, { count: 0, children: new Map() }); cur = cur.children.get(seg)!; cur.count++; }
+        for (const seg of p.rel_path.split('/').filter(Boolean)) { if (!cur.children.has(seg)) cur.children.set(seg, { count: 0, isProject: false, children: new Map() }); cur = cur.children.get(seg)!; cur.count++; }
+        cur.isProject = true;
       }
-      const build = (prefix: string, n: N): FolderNode[] => [...n.children.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([name, c]) => { const rel = prefix ? `${prefix}/${name}` : name; return { name, rel_path: rel, project_count: c.count, children: build(rel, c) }; });
+      const build = (prefix: string, n: N): FolderNode[] => [...n.children.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([name, c]) => { const rel = prefix ? `${prefix}/${name}` : name; return { name, rel_path: rel, project_count: c.count, is_project: c.isProject, children: build(rel, c) }; });
       return build('', root);
     },
     async libraryStats(rootId) { const l = projects.filter((p) => !rootId || p.root_id === rootId); return { projects: l.length, totalBytes: l.reduce((a, p) => a + p.total_bytes, 0), favorites: projects.filter((p) => p.favorite).length }; },
@@ -289,6 +290,31 @@ export function createMockBackend(): Backend {
       if (!p.has_sidecar) p.title = name;
       listeners.lib.forEach((cb) => cb({ rootId: p.root_id, report: null, reason: 'rename', oldId, newId: p.id }));
       return { ...p };
+    },
+    async moveProjects(projectIds, rootId, destRel) {
+      await delay(80);
+      const dest = destRel.replace(/^\/+|\/+$/g, '');
+      if (!roots.some((r) => r.id === rootId)) throw err('not_found', rootId);
+      if (/^_inbox(\/|$)/i.test(dest) || dest.split('/').some((s) => s === '.cache' || s === '.meshkeep')) throw err('not_allowed', `${dest} is reserved`);
+      if (dest.split('/').some((s) => s && (BAD_NAME.test(s) || s === '..'))) throw err('invalid_name', `invalid name: ${dest}`);
+      if (projects.some((p) => p.root_id === rootId && (p.rel_path === dest || dest.startsWith(p.rel_path + '/')))) throw err('not_allowed', `${dest}: a project folder cannot contain other projects`);
+      const moved = [], failed = [], oldIds: string[] = [];
+      for (const id of projectIds) {
+        const p = projects.find((x) => x.id === id);
+        if (!p) { failed.push({ project_id: id, message: `project not found: ${id}` }); continue; }
+        if (p.offline) { failed.push({ project_id: id, message: 'root is offline' }); continue; }
+        const name = p.rel_path.split('/').pop()!;
+        const parent = p.rel_path.includes('/') ? p.rel_path.slice(0, p.rel_path.lastIndexOf('/')) : '';
+        if (p.root_id === rootId && parent === dest) { moved.push({ ...p }); continue; }
+        const newRel = dest ? `${dest}/${name}` : name;
+        if (projects.some((x) => x.root_id === rootId && x.rel_path.toLowerCase() === newRel.toLowerCase())) { failed.push({ project_id: id, message: `a file or folder named ${name} already exists` }); continue; }
+        const oldId = p.id;
+        p.root_id = rootId; p.rel_path = newRel; p.id = `${rootId}:${newRel}`;
+        for (const c of collections) c.projects = c.projects.map((x) => (x === oldId ? p.id : x));
+        oldIds.push(oldId); moved.push({ ...p });
+      }
+      if (oldIds.length) listeners.lib.forEach((cb) => cb({ rootId, report: null, reason: 'move', oldIds }));
+      return { moved, failed };
     },
     async deleteProject(projectId) {
       await delay(80);
@@ -390,6 +416,13 @@ export function createMockBackend(): Backend {
       listeners.lib.forEach((cb) => cb({ rootId, report: null, reason: 'import', newId: p.id }));
       return { ...p };
     },
+    async promoteInboxEach(rootId, items) {
+      const created = [], failed = [];
+      for (const it of items) {
+        try { created.push(await this.promoteInbox(rootId, [it.file], it.name)); } catch (e) { failed.push({ file: it.file, message: (e as { message: string }).message }); }
+      }
+      return { created, failed };
+    },
     async deleteInboxFile(rootId, name) { inbox.set(rootId, (inbox.get(rootId) ?? []).filter((x) => x.name !== name)); listeners.inbox.forEach((cb) => cb({ rootId })); },
     async getCollections() { return collections.map((c) => ({ ...c, projects: c.projects.slice() })); },
     async createCollection(name) { if (!name.trim()) throw err('invalid_name', 'collection name is empty'); const c = { id: 'c_' + Math.random().toString(36).slice(2, 8), name: name.trim(), projects: [] }; collections.push(c); collChanged(); return { ...c }; },
@@ -410,6 +443,13 @@ export function createMockBackend(): Backend {
     async checkUpdate() { await delay(300); return { available: true, version: '0.2.0', notes: 'Mock release notes', date: null }; },
     async installUpdate() { await delay(300); },
     async onFileDrop() { return () => {}; },
+    async resetThumbnail(projectId) {
+      const p = find(projectId);
+      if (p.thumb) thumbs.delete(p.thumb);
+      p.thumb = null; failed.delete(projectId);
+      const w = window as unknown as { __mockThumbResets?: string[] }; (w.__mockThumbResets ??= []).push(projectId);
+      listeners.proj.forEach((cb) => cb({ projectId }));
+    },
     async clearThumbnails() { thumbs.clear(); failed.clear(); for (const p of projects) p.thumb = null; listeners.lib.forEach((cb) => cb({ rootId: null, report: null, reason: 'thumbs_cleared' })); },
     async pickFolder() { return 'E:\\More Models'; },
     async getIgnorePatterns() { return ignore.slice(); },

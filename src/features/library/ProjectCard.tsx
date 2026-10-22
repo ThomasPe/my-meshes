@@ -12,22 +12,25 @@ import { cn } from '@/lib/utils';
 interface Props {
   project: ProjectSummary;
   selected: boolean;
+  /** Current selection (summaries), so the context menu can act on all of it. */
+  selection?: ProjectSummary[];
   onSelect: (e: React.MouseEvent) => void;
   onOpen: () => void;
   onTag: (tag: string) => void;
   actions: ProjectActions;
 }
 
-export const ProjectCard = memo(function ProjectCard({ project: p, selected, onSelect, onOpen, onTag, actions }: Props) {
+export const ProjectCard = memo(function ProjectCard({ project: p, selected, selection, onSelect, onOpen, onTag, actions }: Props) {
   const { t, i18n } = useTranslation();
   return (
-    <ProjectMenu project={p} actions={actions}>
+    <ProjectMenu project={p} selection={selection} actions={actions}>
       <article
         data-testid="project-card"
         data-id={p.id}
         aria-selected={selected}
         tabIndex={0}
         onClick={onSelect}
+        onContextMenu={(e) => { if (!selected) onSelect(e); }}
         onDoubleClick={onOpen}
         onKeyDown={(e) => { if (e.key === 'Enter') onOpen(); if (e.key === ' ') { e.preventDefault(); onSelect(e as unknown as React.MouseEvent); } }}
         className={cn('group relative flex h-full flex-col overflow-hidden rounded-2xl border-2 border-transparent bg-card shadow-card outline-none transition-[transform,box-shadow] hover:-translate-y-0.5 hover:shadow-card-hover focus-visible:border-ring', selected && 'border-primary', p.offline && 'opacity-75')}

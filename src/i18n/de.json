@@ -304,7 +304,11 @@
   },
   "favorites": {
     "add": "Zu Favoriten hinzufügen",
-    "remove": "Aus Favoriten entfernen"
+    "remove": "Aus Favoriten entfernen",
+    "addN_one": "Zu Favoriten hinzufügen",
+    "addN_other": "{{count}} zu Favoriten hinzufügen",
+    "removeN_one": "Aus Favoriten entfernen",
+    "removeN_other": "{{count}} aus Favoriten entfernen"
   },
   "actions": {
     "rename": "Umbenennen",
@@ -324,7 +328,30 @@
     "deleteManyTitle_one": "{{count}} Projekt in den Papierkorb verschieben?",
     "deleteManyTitle_other": "{{count}} Projekte in den Papierkorb verschieben?",
     "deletedMany_one": "{{count}} Projekt in den Papierkorb verschoben",
-    "deletedMany_other": "{{count}} Projekte in den Papierkorb verschoben"
+    "deletedMany_other": "{{count}} Projekte in den Papierkorb verschoben",
+    "rerenderThumb": "Vorschau neu erzeugen",
+    "rerenderQueued": "Neue Vorschau für „{{name}}“ wird gerendert…",
+    "move": "Verschieben nach…",
+    "moveTitle_one": "„{{name}}“ verschieben",
+    "moveTitle_other": "{{count}} Projekte verschieben",
+    "moveBody": "Der Projektordner wandert in den gewählten Ordner. Tags, Favoriten und Sammlungen bleiben erhalten.",
+    "moveNewFolder": "Neuer Unterordner (optional)",
+    "moveNewFolderHint": "wird im gewählten Ordner angelegt",
+    "moveConfirm": "Verschieben",
+    "moved_one": "{{count}} Projekt nach {{dest}} verschoben",
+    "moved_other": "{{count}} Projekte nach {{dest}} verschoben",
+    "movedBack_one": "{{count}} Projekt zurückverschoben",
+    "movedBack_other": "{{count}} Projekte zurückverschoben",
+    "moveNoop": "Liegt bereits in diesem Ordner.",
+    "moveFailedSome_one": "{{count}} Projekt konnte nicht verschoben werden",
+    "moveFailedSome_other": "{{count}} Projekte konnten nicht verschoben werden",
+    "undo": "Rückgängig",
+    "moveN_one": "Verschieben nach…",
+    "moveN_other": "{{count}} Projekte verschieben nach…",
+    "rerenderN_one": "Vorschau neu erzeugen",
+    "rerenderN_other": "{{count}} Vorschauen neu erzeugen",
+    "deleteN_one": "Löschen",
+    "deleteN_other": "{{count}} Projekte löschen"
   },
   "import": {
     "title": "Importieren",
@@ -374,11 +401,25 @@
     "makeProject_other": "Projekt erstellen ({{count}})",
     "makeProjectShort": "Projekt erstellen",
     "empty": "Der Posteingang ist leer",
-    "emptyHint": "Zieh einzelne Modelldateien auf die App oder wähle im Import-Dialog „Posteingang“; sie landen hier, bis du Projekte daraus machst.",
+    "emptyHint": "Zieh einzelne Modelldateien auf die App oder nutze „Importieren…“ in der Werkzeugleiste; lose Dateien landen hier, bis du Projekte daraus machst.",
     "promoteTitle_one": "{{count}} Datei zu einem Projekt machen",
     "promoteTitle_other": "{{count}} Dateien zu einem Projekt machen",
     "promoteBody": "Ein neuer Projektordner entsteht direkt unter dem Bibliotheksordner, die Dateien ziehen dorthin um.",
-    "promoted": "Projekt „{{name}}“ erstellt"
+    "promoted": "Projekt „{{name}}“ erstellt",
+    "makeEach": "{{count}} einzelne Projekte erstellen",
+    "moreOptions": "Weitere Möglichkeiten, Projekte zu erstellen",
+    "promoteEachTitle": "Ein Projekt pro Datei",
+    "promoteEachBody": "Jede Datei bekommt einen eigenen Projektordner direkt unter dem Bibliotheksordner. Passe die Namen vor dem Erstellen an.",
+    "stripPrefix": "Gemeinsames Präfix „{{prefix}}“ entfernen",
+    "fileColumn": "Datei",
+    "nameColumn": "Projektordner",
+    "createMany_one": "{{count}} Projekt erstellen",
+    "createMany_other": "{{count}} Projekte erstellen",
+    "promotedMany_one": "{{count}} Projekt erstellt",
+    "promotedMany_other": "{{count}} Projekte erstellt",
+    "promoteFailedSome_one": "{{count}} Datei konnte nicht zum Projekt werden",
+    "promoteFailedSome_other": "{{count}} Dateien konnten nicht zu Projekten werden",
+    "duplicateName": "Dieser Name wird doppelt verwendet"
   },
   "collections": {
     "title": "Sammlungen",
@@ -404,7 +445,11 @@
     "smartSaved": "Smarte Sammlung „{{name}}“ gespeichert",
     "smartHint": "Smarte Sammlung: eine gespeicherte Suche",
     "addedMany_one": "{{count}} Projekt zu „{{name}}“ hinzugefügt",
-    "addedMany_other": "{{count}} Projekte zu „{{name}}“ hinzugefügt"
+    "addedMany_other": "{{count}} Projekte zu „{{name}}“ hinzugefügt",
+    "addNTo_one": "Zu Sammlung hinzufügen",
+    "addNTo_other": "{{count}} zu Sammlung hinzufügen",
+    "removeNFrom_one": "Aus dieser Sammlung entfernen",
+    "removeNFrom_other": "{{count}} aus dieser Sammlung entfernen"
   },
   "notify": {
     "scanTitle": "Bibliothek aktualisiert",

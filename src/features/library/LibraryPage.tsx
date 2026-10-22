@@ -10,7 +10,6 @@ import { InboxView } from '@/features/library/InboxView';
 import { Inspector } from '@/features/library/Inspector';
 import { ProjectGrid } from '@/features/library/ProjectGrid';
 import { ProjectList } from '@/features/library/ProjectList';
-import { Sidebar } from '@/features/library/Sidebar';
 import { Toolbar } from '@/features/library/Toolbar';
 import { useLibraryActions } from '@/features/library/useLibraryActions';
 import { useProjectActions } from '@/features/library/useProjectActions';
@@ -21,17 +20,17 @@ import { useUi } from '@/lib/store';
 import type { ListQuery } from '@/lib/types';
 
 const LAYOUT_KEY = 'mm.library.panels';
-type PanelPx = { sidebar: number; inspector: number };
-/** Sidebar widths are remembered in pixels, so a different window size keeps the same panels. */
-function loadPanels(): Partial<PanelPx> {
-  try { const l = JSON.parse(localStorage.getItem(LAYOUT_KEY) ?? 'null'); return l && typeof l === 'object' ? (l as Partial<PanelPx>) : {}; } catch { return {}; }
+type PanelPx = { inspector: number };
+/** Panel widths are remembered in pixels, so a different window size keeps the same panels. */
+export function loadPanels<T extends object>(key: string): Partial<T> {
+  try { const l = JSON.parse(localStorage.getItem(key) ?? 'null'); return l && typeof l === 'object' ? (l as Partial<T>) : {}; } catch { return {}; }
 }
-function savePanels(layout: Layout, groupWidth: number) {
+export function savePanels(key: string, ids: string[], layout: Layout, groupWidth: number) {
   if (!groupWidth) return;
   const px = (k: string) => Math.round(((layout[k] ?? 0) / 100) * groupWidth);
-  try { localStorage.setItem(LAYOUT_KEY, JSON.stringify({ sidebar: px('sidebar'), inspector: px('inspector') })); } catch { /* ignore */ }
+  try { localStorage.setItem(key, JSON.stringify(Object.fromEntries(ids.map((k) => [k, px(k)])))); } catch { /* ignore */ }
 }
-const separatorClass = 'group relative w-1 shrink-0 bg-transparent transition-colors hover:bg-primary/40 data-[separator-active]:bg-primary/60 data-[resize-handle-active]:bg-primary/60';
+export const separatorClass = 'group relative w-1 shrink-0 bg-transparent transition-colors hover:bg-primary/40 data-[separator-active]:bg-primary/60 data-[resize-handle-active]:bg-primary/60';
 
 export function LibraryPage({ scanning, onScanEnd }: { scanning: ScanState; onScanEnd: (rootId: string) => void }) {
   const { t } = useTranslation();
@@ -48,7 +47,7 @@ export function LibraryPage({ scanning, onScanEnd }: { scanning: ScanState; onSc
   const openCollectionDialog = useCollectionDialog((s) => s.open);
   const pickImport = useImport((s) => s.pick);
   const groupRef = useRef<HTMLDivElement | null>(null);
-  const panels = useMemo(loadPanels, []);
+  const panels = useMemo(() => loadPanels<PanelPx>(LAYOUT_KEY), []);
 
   const rootScoped = filter.kind === 'root' || filter.kind === 'folder' || filter.kind === 'inbox';
   const effectiveSort = filter.kind === 'recent' ? 'added' : filter.kind === 'collection' ? (sort === 'collection' || sort === 'modified' ? 'collection' : sort) : sort === 'collection' ? 'modified' : sort;
@@ -109,9 +108,7 @@ export function LibraryPage({ scanning, onScanEnd }: { scanning: ScanState; onSc
   const onReorder = collectionId && effectiveSort === 'collection' ? (ids: string[]) => reorder.mutate({ id: collectionId, order: ids }, { onError: reportError }) : undefined;
 
   return (
-    <Group orientation="horizontal" className="h-full" elementRef={groupRef} onLayoutChanged={(l) => savePanels(l, groupRef.current?.clientWidth ?? 0)} data-testid="library">
-      <Panel id="sidebar" defaultSize={panels.sidebar ?? 250} minSize={200} maxSize={480} className="min-w-0" data-testid="panel-sidebar"><Sidebar onRescan={(id) => void scan(id)} /></Panel>
-      <Separator className={separatorClass} aria-label="resize sidebar" data-testid="resize-sidebar" />
+    <Group orientation="horizontal" className="h-full" elementRef={groupRef} onLayoutChanged={(l) => savePanels(LAYOUT_KEY, ['inspector'], l, groupRef.current?.clientWidth ?? 0)} data-testid="library">
       {dialogs}
       <CollectionDialogs onCreated={(id, addIds) => { if (addIds?.length) addTo.mutate({ id, projectIds: addIds }, { onError: reportError }); }} />
       <Panel id="main" minSize={360} className="min-w-0">

@@ -5,7 +5,7 @@ use meshkeep_engine::model::{
     Facets, FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, ScanReport, SyncMode, TagCount, ThumbJob, ThumbLocation,
     ThumbStats,
 };
-use meshkeep_engine::{BatchReport, BatchUpdate, EngineError, UpdateMetadata};
+use meshkeep_engine::{BatchReport, BatchUpdate, EngineError, MoveReport, PromoteItem, PromoteReport, UpdateMetadata};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -440,6 +440,28 @@ pub fn set_favorite(app: AppHandle, state: State<AppState>, project_id: String, 
 }
 
 #[tauri::command]
+pub fn move_projects(
+    app: AppHandle,
+    state: State<AppState>,
+    project_ids: Vec<String>,
+    root_id: String,
+    dest_rel: String,
+) -> CmdResult<MoveReport> {
+    let report = { state.engine.lock().unwrap().move_projects(&project_ids, &root_id, &dest_rel)? };
+    if !report.moved.is_empty() {
+        let old_ids: Vec<&String> = project_ids
+            .iter()
+            .filter(|id| report.failed.iter().all(|f| &f.project_id != *id))
+            .collect();
+        let _ = app.emit(
+            "library://changed",
+            serde_json::json!({ "rootId": root_id, "report": serde_json::Value::Null, "reason": "move", "oldIds": old_ids }),
+        );
+    }
+    Ok(report)
+}
+
+#[tauri::command]
 pub fn rename_project(app: AppHandle, state: State<AppState>, project_id: String, new_name: String) -> CmdResult<Project> {
     let project = { state.engine.lock().unwrap().rename_project(&project_id, &new_name)? };
     let _ = app.emit(
@@ -544,6 +566,13 @@ pub async fn read_thumbnail(app: AppHandle, key: String) -> CmdResult<Response> 
 }
 
 #[tauri::command]
+pub fn reset_thumbnail(app: AppHandle, state: State<AppState>, project_id: String) -> CmdResult<()> {
+    state.engine.lock().unwrap().reset_thumbnail(&project_id)?;
+    let _ = app.emit("project://changed", serde_json::json!({ "projectId": project_id }));
+    Ok(())
+}
+
+#[tauri::command]
 pub fn clear_thumbnails(app: AppHandle, state: State<AppState>) -> CmdResult<()> {
     state.engine.lock().unwrap().clear_thumbnails()?;
     let _ = app.emit(
@@ -615,6 +644,18 @@ pub fn promote_inbox(app: AppHandle, state: State<AppState>, root_id: String, fi
         serde_json::json!({ "rootId": root_id, "report": serde_json::Value::Null, "reason": "import", "newId": project.id }),
     );
     Ok(project)
+}
+
+#[tauri::command]
+pub fn promote_inbox_each(app: AppHandle, state: State<AppState>, root_id: String, items: Vec<PromoteItem>) -> CmdResult<PromoteReport> {
+    let report = { state.engine.lock().unwrap().promote_inbox_each(&root_id, &items)? };
+    if !report.created.is_empty() {
+        let _ = app.emit(
+            "library://changed",
+            serde_json::json!({ "rootId": root_id, "report": serde_json::Value::Null, "reason": "import" }),
+        );
+    }
+    Ok(report)
 }
 
 #[tauri::command]

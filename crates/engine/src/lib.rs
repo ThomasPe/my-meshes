@@ -22,5 +22,7 @@ pub mod thumbs;
 pub mod watch;
 
 mod engine;
-pub use engine::{BatchReport, BatchUpdate, Deleter, Engine, ScanProgress, UpdateMetadata};
+pub use engine::{
+    BatchReport, BatchUpdate, Deleter, Engine, MoveReport, PromoteFailure, PromoteItem, PromoteReport, ScanProgress, UpdateMetadata,
+};
 pub use error::{EngineError, Result};

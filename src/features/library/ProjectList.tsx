@@ -1,6 +1,6 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ArrowDown, Star } from 'lucide-react';
-import { useRef } from 'react';
+import { useRef, useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { ProjectMenu, type ProjectActions } from '@/features/library/ProjectMenu';
@@ -24,6 +24,7 @@ interface Props {
 const ROW = 60;
 
 export function ProjectList({ projects, selected, sort, onSort, onSelect, onOpen, onTag, actions }: Props) {
+  const selection = useMemo(() => projects.filter((p) => selected.has(p.id)), [projects, selected]);
   const { t, i18n } = useTranslation();
   const parentRef = useRef<HTMLDivElement>(null);
   const virt = useVirtualizer({ count: projects.length, getScrollElement: () => parentRef.current, estimateSize: () => ROW, overscan: 10 });
@@ -46,8 +47,8 @@ export function ProjectList({ projects, selected, sort, onSort, onSelect, onOpen
               const p = projects[row.index]!;
               const sel = selected.has(p.id);
               return (
-                <ProjectMenu key={p.id} project={p} actions={actions}>
-                <div data-testid="project-row" data-id={p.id} aria-selected={sel} tabIndex={0} onClick={(e) => onSelect(p.id, e)} onDoubleClick={() => onOpen(p.id)} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(p.id); }}
+                <ProjectMenu key={p.id} project={p} selection={selection} actions={actions}>
+                <div data-testid="project-row" data-id={p.id} aria-selected={sel} tabIndex={0} onClick={(e) => onSelect(p.id, e)} onContextMenu={(e) => { if (!sel) onSelect(p.id, e); }} onDoubleClick={() => onOpen(p.id)} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(p.id); }}
                   className={cn('absolute left-0 top-0 grid w-full cursor-default items-center gap-3 border-b border-border px-3 text-sm outline-none hover:bg-secondary/60 focus-visible:bg-secondary', cols, sel && 'bg-accent hover:bg-accent')} style={{ height: ROW, transform: `translateY(${row.start}px)` }}>
                   <Thumb thumb={p.thumb} projectId={p.id} className="size-10 overflow-hidden rounded-[10px]" />
                   <div className="min-w-0"><div className="flex min-w-0 items-center gap-1 font-bold"><Truncated text={p.title} />{p.offline && <Badge variant="outline" className="shrink-0">{t('library.offline')}</Badge>}</div><Truncated as="div" text={p.rel_path || '/'} className="font-mono text-[11px] text-muted-foreground" /></div>

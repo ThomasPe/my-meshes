@@ -86,3 +86,18 @@ export function applyTheme(theme: Theme) {
 export function loadTheme(): Theme {
   try { return (localStorage.getItem('mm.theme') as Theme) || 'system'; } catch { return 'system'; }
 }
+
+/**
+ * Which tree rows are expanded (root id, or `root:rel_path`), remembered across collapses
+ * of the root and across restarts like Explorer does. Rows without an entry use their
+ * default (root and first level open, deeper levels closed).
+ */
+interface TreeState {
+  open: Record<string, boolean>;
+  setOpen: (key: string, open: boolean) => void;
+}
+const treePersisted = (() => { try { const v = JSON.parse(localStorage.getItem('mm.tree') ?? '{}'); return v && typeof v === 'object' ? (v as Record<string, boolean>) : {}; } catch { return {}; } })();
+export const useTree = create<TreeState>((set) => ({
+  open: treePersisted,
+  setOpen: (key, open) => set((s) => { const next = { ...s.open, [key]: open }; try { localStorage.setItem('mm.tree', JSON.stringify(next)); } catch { /* ignore */ } return { open: next }; }),
+}));

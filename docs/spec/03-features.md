@@ -32,12 +32,13 @@
 
 | ID | Requirement | Priority |
 |---|---|---|
-| NAV-1 | Sidebar with: library views (All, Recent imports, Favorites, Inbox), smart collections, manual collections, and the physical folder tree scoped to library roots. | MVP |
+| NAV-1 | Sidebar with: library views (All, Recent imports, Favorites, Inbox), smart collections, manual collections, and the physical folder tree scoped to library roots. It belongs to the application shell and stays visible on the project page (picking anything in it returns to the library with that selection); only Welcome and Settings are full-width. A folder that is itself a project opens that project on click; containers filter the library. Expansion state is remembered across root collapses and restarts. | MVP |
 | NAV-2 | Grid view with adjustable thumbnail size; stays smooth with 10,000+ items (virtualized). | MVP |
 | NAV-3 | Detailed list view with sortable metadata columns (title, creator, tags, file count, size, date). | MVP |
 | NAV-4 | Instant full-text search over title, description, tags and file names. | MVP |
 | NAV-5 | Attribute filters derived from the data: tags, creator, license, file type, date ranges, material. | MVP |
 | NAV-6 | Detail view for a project: metadata, file list with sizes and types, images, attachments, printing hints. | MVP |
+| NAV-6a | Context menus follow Explorer: right-clicking a selected card or row acts on the whole selection (labels carry the count; open, rename and reveal are single-only), right-clicking an unselected one selects it alone first. Project rows in the folder tree offer Open and Move to…. | MVP |
 | NAV-7 | Manual collections: create, rename, delete, add/remove projects, reorder. | MVP |
 | NAV-8 | Smart collections: build a query from the available filters and save it. | MVP |
 | NAV-9 | Project tabs: several projects open side by side; each tab keeps its own UI state. | Later |
@@ -61,12 +62,12 @@
 |---|---|---|
 | IMP-1 | Drop one or more archives or folders onto the app to open the staging area. The app proposes projects; the user reviews, adjusts and confirms. | MVP |
 | IMP-2 | Confirmed imports extract archives into new project directories inside a chosen root. The original archive is kept as an attachment by default; the dialog can instead move it to `_Originals`, leave it where it is, or send it to the Recycle Bin (Q7). The last choice is remembered. | MVP |
-| IMP-3 | Loose files can be routed to the `_Inbox` folder of the chosen root; the inbox has its own view with a promote-to-project action (Q6). | MVP |
+| IMP-3 | Loose files can be routed to the `_Inbox` folder of the chosen root; the inbox has its own view with a promote-to-project action, either one project from the selection or one project per file with editable names and a shared-prefix strip (Q6). | MVP |
 | IMP-4 | Files that appear in a root via the OS (not through the app) are picked up by sync; archives found this way are attachments and are not extracted. | MVP |
 | IMP-5 | Safe delete: deletions go to the OS trash after confirmation. | MVP |
 | IMP-6 | Drag a model or project out of the app into another application (slicer, Blender, file manager) as native files. Low priority (Q20). | Later |
 | IMP-7 | Organizational rules: default folder layouts (by creator, source platform or tag) applied by import and move flows. | Later |
-| IMP-8 | Maintenance tools to reorganize, rename and clean up projects according to the rules, never creating nested projects. | Later |
+| IMP-8 | Maintenance tools to reorganize, rename and clean up projects according to the rules, never creating nested projects. Done: projects move between folders of any root (context menu "Move to…" with a folder picker and optional new sub-folder, multi-selection, drag a card or a tree project row onto a tree folder row) with an Undo toast; destinations inside a project are refused. | Later (move: done) |
 
 ## 3.6 Application shell & productivity
 

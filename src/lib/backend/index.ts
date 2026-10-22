@@ -1,4 +1,4 @@
-import type { AppInfo, BatchReport, BatchUpdate, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata } from '@/lib/types';
+import type { AppInfo, BatchReport, BatchUpdate, MoveReport, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata } from '@/lib/types';
 
 export type Unlisten = () => void;
 
@@ -39,6 +39,8 @@ export interface Backend {
   setContainerDirs(names: string[]): Promise<string[]>;
   setFavorite(projectId: string, favorite: boolean): Promise<Project>;
   renameProject(projectId: string, newName: string): Promise<Project>;
+  /** Moves project folders into a folder of a root (created when missing); per-project failures. */
+  moveProjects(projectIds: string[], rootId: string, destRel: string): Promise<MoveReport>;
   deleteProject(projectId: string): Promise<void>;
   deleteFile(projectId: string, relPath: string): Promise<Project | null>;
   thumbQueue(limit?: number): Promise<ThumbJob[]>;
@@ -48,11 +50,15 @@ export interface Backend {
   thumbnailFailed(projectId: string, reason: string): Promise<void>;
   readThumbnail(key: string): Promise<ArrayBuffer>;
   clearThumbnails(): Promise<void>;
+  /** Drops one project's thumbnail (or recorded failure) so the queue renders it again. */
+  resetThumbnail(projectId: string): Promise<void>;
   pickImportFiles(): Promise<string[]>;
   analyzeImport(paths: string[]): Promise<ImportItem[]>;
   executeImport(request: ImportRequest): Promise<ImportReport>;
   listInbox(rootId: string): Promise<InboxFile[]>;
   promoteInbox(rootId: string, files: string[], name: string): Promise<Project>;
+  /** One project per file; failures come back per file instead of aborting the batch. */
+  promoteInboxEach(rootId: string, items: PromoteItem[]): Promise<PromoteReport>;
   deleteInboxFile(rootId: string, name: string): Promise<void>;
   getCollections(): Promise<Collection[]>;
   createCollection(name: string): Promise<Collection>;

@@ -443,6 +443,10 @@ pub struct FolderNode {
     pub name: String,
     pub rel_path: String,
     pub project_count: u32,
+    /// The folder is a project itself (not only a container of projects); the sidebar
+    /// draws it with a model icon instead of a folder.
+    #[serde(default)]
+    pub is_project: bool,
     pub children: Vec<FolderNode>,
 }
 

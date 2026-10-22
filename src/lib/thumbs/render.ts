@@ -5,6 +5,7 @@
 import * as THREE from 'three';
 import { srgbToLinear } from '@/lib/mesh/types';
 import type { ParsedMesh } from '@/lib/mesh/types';
+import { fitDistance, THUMB_FOV, VIEW_DIR } from '@/lib/thumbs/framing';
 
 export const THUMB_SIZE = 512;
 
@@ -23,7 +24,7 @@ async function encodePng(canvas: CanvasLike): Promise<ArrayBuffer> {
 export class ThumbRenderer {
   private renderer: THREE.WebGLRenderer;
   private scene = new THREE.Scene();
-  private camera = new THREE.PerspectiveCamera(32, 1, 0.1, 1000);
+  private camera = new THREE.PerspectiveCamera(THUMB_FOV, 1, 0.1, 1000);
   private material = new THREE.MeshStandardMaterial({ color: 0x0f8b8d, roughness: 0.55, metalness: 0.05, side: THREE.DoubleSide });
   private colored = new THREE.MeshStandardMaterial({ color: 0xffffff, vertexColors: true, roughness: 0.55, metalness: 0.05, side: THREE.DoubleSide });
   private mesh: THREE.Mesh | null = null;
@@ -49,19 +50,21 @@ export class ThumbRenderer {
     geom.setAttribute('position', new THREE.BufferAttribute(parsed.positions, 3));
     geom.setAttribute('normal', new THREE.BufferAttribute(parsed.normals, 3));
     if (parsed.colors) geom.setAttribute('color', new THREE.BufferAttribute(srgbToLinear(parsed.colors), 3));
-    geom.computeBoundingSphere();
-    const bs = geom.boundingSphere!;
-    if (!Number.isFinite(bs.radius) || bs.radius <= 0) { geom.dispose(); throw new Error('degenerate geometry'); }
+    geom.computeBoundingBox();
+    const box = geom.boundingBox!;
+    const radius = box.getSize(new THREE.Vector3()).length() / 2;
+    if (!Number.isFinite(radius) || radius <= 0) { geom.dispose(); throw new Error('degenerate geometry'); }
     const mesh = new THREE.Mesh(geom, parsed.colors ? this.colored : this.material);
-    mesh.position.sub(bs.center);
+    mesh.position.sub(box.getCenter(new THREE.Vector3()));
     this.scene.add(mesh);
     this.mesh = mesh;
-    const d = bs.radius * 3.1;
-    // Z-up models (3D printing): look from front-right, slightly above.
+    // Z-up models (3D printing): look from front-right, slightly above, far enough back that
+    // the whole bounding box is inside the frame.
+    const d = fitDistance(box, VIEW_DIR, THUMB_FOV, 1);
     this.camera.up.set(0, 0, 1);
-    this.camera.position.set(d * 0.62, -d * 0.66, d * 0.42);
-    this.camera.near = Math.max(bs.radius / 100, 0.01);
-    this.camera.far = bs.radius * 20;
+    this.camera.position.copy(VIEW_DIR).multiplyScalar(d);
+    this.camera.near = Math.max(radius / 100, 0.01);
+    this.camera.far = d + radius * 4;
     this.camera.lookAt(0, 0, 0);
     this.camera.updateProjectionMatrix();
     this.renderer.render(this.scene, this.camera);

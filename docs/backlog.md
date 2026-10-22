@@ -135,7 +135,8 @@ submission is outside the code: Partner Center identity values, screenshots
       staging dialog; zips and folders become projects, loose files go to the inbox,
       archive policy keep/_Originals/trash with the space each costs. zip and 7z are
       extracted; rar is reported and routed to the inbox.
-- [x] **Inbox** (IMP-3): `_Inbox` per root with its own view, promote-to-project, delete.
+- [x] **Inbox** (IMP-3): `_Inbox` per root with its own view, promote-to-project (one project
+      from the selection, or one per file with inline renaming and prefix stripping), delete.
 - [x] **Passive sync of OS drops; archives as attachments** (IMP-4): the watcher picks up
       files that appear on disk; archives inside projects stay opaque attachments.
 - [x] **Safe delete to trash** (IMP-5): whole project or single file, confirmation dialog,
@@ -155,7 +156,10 @@ submission is outside the code: Partner Center identity values, screenshots
       deleted, tagged/untagged and given a creator in one engine call with a per-project
       failure report.
 - [ ] **External enrichment** (META-7).
-- [ ] **Organizational rules & maintenance tools** (IMP-7, IMP-8).
+- [ ] **Organizational rules & maintenance tools** (IMP-7, IMP-8). Done so far: **move
+      projects between folders** (dialog with folder picker and new sub-folder, multi-select,
+      drag cards onto tree rows, Undo toast; collections, favorites, thumbnails and nested
+      projects follow; cross-volume moves copy and remove).
 
 ### Epic 8: Productivity
 - [ ] **Project tabs** (NAV-9).
@@ -166,7 +170,9 @@ submission is outside the code: Partner Center identity values, screenshots
 - [x] **In-app feedback** (APP-12): Settings card and "Report" action on error toasts open a
       prefilled GitHub issue form (`.github/ISSUE_TEMPLATE/`) with version, OS, WebView and
       library size; the log tail goes to the clipboard with user folders shortened.
-- [ ] **Custom thumbnails** (VIEW-4).
+- [ ] **Custom thumbnails** (VIEW-4). Done so far: "Re-render preview" per project (card menu,
+      inspector) drops the cached PNG and queues the project again; previews frame the
+      bounding box so wide or flat parts are no longer cut off.
 - [ ] **Frameless title bar** (APP-10), if confirmed.
 
 ### Epic 9: AI assistance (ADR-0003, first slice)

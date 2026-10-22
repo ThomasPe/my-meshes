@@ -304,7 +304,11 @@
   },
   "favorites": {
     "add": "Add to favorites",
-    "remove": "Remove from favorites"
+    "remove": "Remove from favorites",
+    "addN_one": "Add to favorites",
+    "addN_other": "Add {{count}} to favorites",
+    "removeN_one": "Remove from favorites",
+    "removeN_other": "Remove {{count}} from favorites"
   },
   "actions": {
     "rename": "Rename",
@@ -324,7 +328,30 @@
     "deleteManyTitle_one": "Move {{count}} project to the trash?",
     "deleteManyTitle_other": "Move {{count}} projects to the trash?",
     "deletedMany_one": "{{count}} project moved to trash",
-    "deletedMany_other": "{{count}} projects moved to trash"
+    "deletedMany_other": "{{count}} projects moved to trash",
+    "rerenderThumb": "Re-render preview",
+    "rerenderQueued": "Rendering a new preview for “{{name}}”…",
+    "move": "Move to…",
+    "moveTitle_one": "Move “{{name}}”",
+    "moveTitle_other": "Move {{count}} projects",
+    "moveBody": "The project folder moves to the chosen folder. Tags, favorites and collections follow it.",
+    "moveNewFolder": "New sub-folder (optional)",
+    "moveNewFolderHint": "created inside the chosen folder",
+    "moveConfirm": "Move",
+    "moved_one": "{{count}} project moved to {{dest}}",
+    "moved_other": "{{count}} projects moved to {{dest}}",
+    "movedBack_one": "{{count}} project moved back",
+    "movedBack_other": "{{count}} projects moved back",
+    "moveNoop": "Already in that folder.",
+    "moveFailedSome_one": "{{count}} project could not be moved",
+    "moveFailedSome_other": "{{count}} projects could not be moved",
+    "undo": "Undo",
+    "moveN_one": "Move to…",
+    "moveN_other": "Move {{count}} projects to…",
+    "rerenderN_one": "Re-render preview",
+    "rerenderN_other": "Re-render {{count}} previews",
+    "deleteN_one": "Delete",
+    "deleteN_other": "Delete {{count}} projects"
   },
   "import": {
     "title": "Import",
@@ -374,11 +401,25 @@
     "makeProject_other": "Make project ({{count}})",
     "makeProjectShort": "Make project",
     "empty": "The inbox is empty",
-    "emptyHint": "Drop single model files onto the app or choose “Inbox” in the import dialog; they land here until you turn them into projects.",
+    "emptyHint": "Drop single model files onto the app or use \"Import…\" in the toolbar; loose files land here until you turn them into projects.",
     "promoteTitle_one": "Turn {{count}} file into a project",
     "promoteTitle_other": "Turn {{count}} files into a project",
     "promoteBody": "A new project folder is created directly below the library root and the files move there.",
-    "promoted": "Project “{{name}}” created"
+    "promoted": "Project “{{name}}” created",
+    "makeEach": "Make {{count}} separate projects",
+    "moreOptions": "More ways to create projects",
+    "promoteEachTitle": "One project per file",
+    "promoteEachBody": "Each file gets its own project folder directly below the library root. Adjust the names before creating them.",
+    "stripPrefix": "Remove the shared prefix “{{prefix}}”",
+    "fileColumn": "File",
+    "nameColumn": "Project folder",
+    "createMany_one": "Create {{count}} project",
+    "createMany_other": "Create {{count}} projects",
+    "promotedMany_one": "{{count}} project created",
+    "promotedMany_other": "{{count}} projects created",
+    "promoteFailedSome_one": "{{count}} file could not be turned into a project",
+    "promoteFailedSome_other": "{{count}} files could not be turned into projects",
+    "duplicateName": "This name is used twice"
   },
   "collections": {
     "title": "Collections",
@@ -404,7 +445,11 @@
     "smartSaved": "Smart collection “{{name}}” saved",
     "smartHint": "Smart collection: a saved search",
     "addedMany_one": "{{count}} project added to “{{name}}”",
-    "addedMany_other": "{{count}} projects added to “{{name}}”"
+    "addedMany_other": "{{count}} projects added to “{{name}}”",
+    "addNTo_one": "Add to collection",
+    "addNTo_other": "Add {{count}} to collection",
+    "removeNFrom_one": "Remove from this collection",
+    "removeNFrom_other": "Remove {{count}} from this collection"
   },
   "notify": {
     "scanTitle": "Library updated",

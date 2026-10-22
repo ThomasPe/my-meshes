@@ -1,5 +1,5 @@
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, useMemo } from 'react';
 import { ProjectCard } from '@/features/library/ProjectCard';
 import type { ProjectActions } from '@/features/library/ProjectMenu';
 import type { ProjectSummary } from '@/lib/types';
@@ -20,6 +20,9 @@ const GAP = 18;
 const META_HEIGHT = 112;
 
 /** Virtualized by row: TanStack Virtual measures rows, each row renders `columns` cards. */
+/** Drag payload of project ids, read by the folder tree. */
+export const PROJECTS_MIME = 'application/x-meshkeep-projects';
+
 export function ProjectGrid({ projects, tile, selected, onSelect, onOpen, onTag, actions, onReorder }: Props) {
   const parentRef = useRef<HTMLDivElement>(null);
   const [dragId, setDragId] = useState<string | null>(null);
@@ -33,6 +36,7 @@ export function ProjectGrid({ projects, tile, selected, onSelect, onOpen, onTag,
     onReorder(ids);
     setDragId(null); setOverId(null);
   };
+  const selection = useMemo(() => projects.filter((p) => selected.has(p.id)), [projects, selected]);
   const [width, setWidth] = useState(0);
   useEffect(() => {
     const el = parentRef.current;
@@ -58,13 +62,20 @@ export function ProjectGrid({ projects, tile, selected, onSelect, onOpen, onTag,
         {virt.getVirtualItems().map((row) => (
           <div key={row.key} data-index={row.index} ref={virt.measureElement} className="absolute left-0 top-0 grid w-full" style={{ transform: `translateY(${row.start}px)`, gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`, gap: GAP, paddingBottom: GAP }}>
             {projects.slice(row.index * columns, row.index * columns + columns).map((p) => (
-              <div key={p.id} draggable={!!onReorder} data-testid={onReorder ? 'reorder-handle' : undefined} className={overId === p.id && dragId !== p.id ? 'rounded-2xl outline outline-2 outline-primary' : undefined}
-                onDragStart={(e) => { if (!onReorder) return; setDragId(p.id); e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', p.id); }}
+              <div key={p.id} draggable data-testid={onReorder ? 'reorder-handle' : 'drag-handle'} className={overId === p.id && dragId !== p.id ? 'rounded-2xl outline outline-2 outline-primary' : undefined}
+                onDragStart={(e) => {
+                  // a card drags its whole selection to a folder in the tree; inside a collection it also reorders
+                  const ids = selected.has(p.id) ? projects.filter((x) => selected.has(x.id)).map((x) => x.id) : [p.id];
+                  e.dataTransfer.effectAllowed = 'move';
+                  e.dataTransfer.setData(PROJECTS_MIME, JSON.stringify(ids));
+                  e.dataTransfer.setData('text/plain', p.id);
+                  if (onReorder) setDragId(p.id);
+                }}
                 onDragOver={(e) => { if (!onReorder || !dragId) return; e.preventDefault(); if (overId !== p.id) setOverId(p.id); }}
                 onDragLeave={() => { if (overId === p.id) setOverId(null); }}
                 onDrop={(e) => { if (!onReorder) return; e.preventDefault(); drop(p.id); }}
                 onDragEnd={() => { setDragId(null); setOverId(null); }}>
-                <ProjectCard project={p} selected={selected.has(p.id)} onSelect={(e) => onSelect(p.id, e)} onOpen={() => onOpen(p.id)} onTag={onTag} actions={actions} />
+                <ProjectCard project={p} selected={selected.has(p.id)} selection={selection} onSelect={(e) => onSelect(p.id, e)} onOpen={() => onOpen(p.id)} onTag={onTag} actions={actions} />
               </div>
             ))}
           </div>
