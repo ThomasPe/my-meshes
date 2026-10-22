@@ -770,6 +770,17 @@ test('tree: a project row offers "Move to…" in its context menu', async ({ pag
   await expect(page.locator('[data-tree-row][data-label="Decor"]')).toContainText('3');
 });
 
+test('move: dragging a project row in the tree onto a folder row moves it', async ({ page }) => {
+  await page.locator('[data-tree-row][data-label="Desk"]').getByRole('button', { name: 'expand' }).click();
+  const stand = page.locator('[data-tree-row][data-label="Phone Stand"]');
+  await stand.dragTo(page.locator('[data-tree-row][data-label="Tabletop"]'));
+  await expect(page.getByText('1 project moved to Tabletop')).toBeVisible();
+  await expect(page.locator('[data-tree-row][data-label="Tabletop"]')).toContainText('2');
+  await expect(page.locator('[data-tree-row][data-label="Desk"]')).toContainText('1');
+  // container rows are not draggable
+  expect(await page.locator('[data-tree-row][data-label="Desk"]').getAttribute('draggable')).not.toBe('true');
+});
+
 test('move: dragging a card onto a tree folder moves it there', async ({ page }) => {
   const card = page.getByTestId('project-card').filter({ hasText: 'Low-Poly Benchy' });
   const target = page.locator('[data-tree-row][data-label="Tabletop"]');

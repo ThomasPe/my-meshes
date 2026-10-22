@@ -67,7 +67,7 @@
 | IMP-5 | Safe delete: deletions go to the OS trash after confirmation. | MVP |
 | IMP-6 | Drag a model or project out of the app into another application (slicer, Blender, file manager) as native files. Low priority (Q20). | Later |
 | IMP-7 | Organizational rules: default folder layouts (by creator, source platform or tag) applied by import and move flows. | Later |
-| IMP-8 | Maintenance tools to reorganize, rename and clean up projects according to the rules, never creating nested projects. Done: projects move between folders of any root (context menu "Move to…" with a folder picker and optional new sub-folder, multi-selection, drag onto a tree row) with an Undo toast; destinations inside a project are refused. | Later (move: done) |
+| IMP-8 | Maintenance tools to reorganize, rename and clean up projects according to the rules, never creating nested projects. Done: projects move between folders of any root (context menu "Move to…" with a folder picker and optional new sub-folder, multi-selection, drag a card or a tree project row onto a tree folder row) with an Undo toast; destinations inside a project are refused. | Later (move: done) |
 
 ## 3.6 Application shell & productivity
 
