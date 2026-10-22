@@ -47,8 +47,8 @@ jobs:
     timeout-minutes: 60
     defaults: { run: { shell: bash } }
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with: { node-version: 22, cache: npm }
       - uses: dtolnay/rust-toolchain@stable
       - uses: Swatinem/rust-cache@v2
@@ -90,7 +90,7 @@ jobs:
           VERSION: ${{ steps.ver.outputs.version }}
         run: bash .github/scripts/dev-channel-publish.sh
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v5
         with:
           name: meshkeep-${{ steps.ver.outputs.version }}-dev-${{ matrix.target }}
           path: |
