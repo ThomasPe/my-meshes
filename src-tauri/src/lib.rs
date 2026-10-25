@@ -2,6 +2,7 @@
 //! the shell can do (dialogs, revealing files, events to the webview, test mode).
 
 mod commands;
+mod keys;
 mod state;
 
 use state::{AppState, RuntimeConfig};
@@ -47,11 +48,16 @@ pub fn run() {
         .setup(move |app| {
             let data_dir = config.resolve_data_dir(app.handle())?;
             log::info!("data dir: {} (test mode: {})", data_dir.display(), config.test_mode);
-            let engine = meshkeep_engine::Engine::open(&data_dir)?;
+            let mut engine = meshkeep_engine::Engine::open(&data_dir)?;
+            if let Some(mode) = config.ai_mock {
+                log::info!("AI provider replaced by the mock ({mode:?})");
+                engine.set_ai_provider(Some(std::sync::Arc::new(meshkeep_engine::ai::MockProvider::new(mode))));
+            }
             let state = AppState {
                 engine: Mutex::new(engine),
                 watchers: Mutex::new(Default::default()),
                 watch_tx,
+                ai_keys: keys::AiKeyStore::new(config.test_mode),
                 config: config.clone(),
                 data_dir,
             };
@@ -125,6 +131,11 @@ pub fn run() {
             commands::list_smart_collection,
             commands::check_update,
             commands::install_update,
+            commands::get_ai_settings,
+            commands::set_ai_settings,
+            commands::set_ai_key,
+            commands::test_ai,
+            commands::suggest_metadata,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Meshkeep");

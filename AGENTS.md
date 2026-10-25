@@ -8,7 +8,8 @@ are binding. This file is the operating manual.
 - **Shell:** Tauri 2 (`src-tauri/`), Rust 2021. Commands are thin wrappers over the engine.
 - **Engine:** `crates/engine` (`meshkeep-engine`), shell-agnostic. Scanner, sidecars, SQLite
   index with FTS5, watcher, hashing, 3MF inspection, thumbnail cache bookkeeping, favorites
-  (`collections.json`), rename and trash-delete. No Tauri imports allowed here.
+  (`collections.json`), rename and trash-delete, AI metadata suggestions (`ai.rs`: provider
+  trait, Anthropic client over reqwest, mock, response cache). No Tauri imports allowed here.
 - **Frontend:** React 19 + TypeScript + Vite 7, Tailwind CSS 4, shadcn-style components in
   `src/components/ui` (copied source, Radix primitives), TanStack Query + Virtual, zustand,
   i18next, Three.js. Visual direction D "Gallery" (ADR-0002); tokens in `src/styles/globals.css`.
@@ -32,8 +33,9 @@ npm run tauri:build:store && ./msix/build-msix.ps1 && ./msix/sideload-test.ps1  
 Build flavors are cargo features on `src-tauri`: none (dev), `e2e` (WebDriver plugins +
 test seams), `updater` (private builds; `tauri.updater.conf.json` = stable channel,
 `tauri.updater.dev.conf.json` = dev channel), `store` (Microsoft Store, never with the
-updater). Every push to `main` or a working branch publishes a self-updating dev build
-to the `dev` pre-release (`dev-channel.yml`, newest push wins); `docs/store/README.md` has the whole pipeline.
+updater). Every push to `main` or a working branch publishes self-updating dev builds for
+Windows and macOS (unsigned, Apple Silicon) to the `dev` pre-release (`dev-channel.yml`,
+one feed per platform, newest push wins); `docs/store/README.md` has the whole pipeline.
 
 ## Rules that are not negotiable (from the spec)
 
@@ -59,6 +61,12 @@ to the `dev` pre-release (`dev-channel.yml`, newest push wins); `docs/store/READ
 10. **Thumbnails are a cache, never library content.** PNGs live in `<data dir>/thumbs/`,
    keyed per project + source file, invalidated by source size/mtime (see
    `docs/spec/02-domain-model.md`). The frontend reads them through `read_thumbnail` only.
+11. **AI assistance is opt-in and never writes** (ADR-0003). No request leaves the machine
+   without a key; the key lives in the OS credential store (`src-tauri/src/keys.rs`), never in
+   `settings.json`, logs or the feedback excerpt. Only the thumbnail PNG, file names and sizes,
+   README/license text and the current sidecar are sent, never model geometry. The engine
+   validates the JSON answer; the user ticks fields in a dialog and the result goes through
+   the normal sidecar save with its stamp. Answers are a cache (`<data dir>/ai-cache/`).
 
 ## Definition of done for a backlog item
 
@@ -78,12 +86,15 @@ behaviour: engine unit test > UI test in browser mode > real-app E2E.
 `--test-mode` or `MESHKEEP_TEST_MODE=1` isolates app data (`MESHKEEP_DATA_DIR` or a temp
 dir), seeds and scans `MESHKEEP_FIXTURE_ROOT` if set, and lets `MESHKEEP_PICK_FOLDER`
 answer the native folder picker and `MESHKEEP_PICK_FILES` (`;`-separated) the import
-picker. `fixtures/import` holds a bundle zip and a loose STL for import tests.
+picker. `MESHKEEP_AI_MOCK` (`ok`, `unauthorized`, `rate_limited`, `invalid`, `unavailable`) swaps the
+hosted AI client for canned answers; the key gate stays, and the key is held in memory for the
+process. `fixtures/import` holds a bundle zip and a loose STL for import tests.
 `fixtures/library` is the deterministic sample library:
 tiny ASCII STLs, an OBJ, a PrusaSlicer-style 3MF with an embedded preview, one proper
 sidecar, one malformed sidecar, one nested sidecar, an attachment, ignored files.
 Browser mode (`npm run dev`, Playwright) uses the mock backend, which synthesizes STL, OBJ,
-3MF and image bytes so parsers, viewer and the thumbnail pipeline run for real there too.
+3MF and image bytes so parsers, viewer and the thumbnail pipeline run for real there too;
+`?ai=unauthorized|rate_limited|invalid|unavailable` makes its AI calls fail that way.
 
 ## Conventions
 
@@ -109,6 +120,7 @@ Browser mode (`npm run dev`, Playwright) uses the mock backend, which synthesize
 | Spec, backlog, ADRs, mockups, click dummy | `docs/` |
 | Engine | `crates/engine/src/{scan,sidecar,index,watch,roots,collections,settings,import,threemf,thumbs,engine}.rs` |
 | Import staging, inbox, collections UI | `src/features/import/`, `src/features/library/{InboxView,CollectionDialogs}.tsx` |
+| AI assistance | `crates/engine/src/ai.rs`, `src-tauri/src/keys.rs`, `src/features/library/SuggestDialog.tsx`, `AiCard` in `src/features/settings/SettingsPage.tsx` |
 | MSIX packaging, Store docs | `msix/`, `docs/store/` |
 | Shell commands and events | `src-tauri/src/{commands,state}.rs` |
 | Backend facade (Tauri vs mock) | `src/lib/backend/` |

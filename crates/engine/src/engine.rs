@@ -1,6 +1,7 @@
 //! The facade the application shell talks to. One instance per app; not thread-safe by
 //! itself (wrap in a mutex in the shell), but every operation is short except `scan_root`.
 
+use crate::ai::{self, AiProvider, AiSettings, AiTestReport, MetadataSuggestion, PreparedSuggestion, SharedProvider};
 use crate::collections::{Collection, CollectionsStore, SmartCollection};
 use crate::error::{EngineError, Result};
 use crate::hash;
@@ -18,7 +19,7 @@ use crate::watch::{RootWatcher, WatchEvent};
 use crate::{threemf, thumbs};
 use serde::{Deserialize, Serialize};
 use std::path::{Component, Path, PathBuf};
-use std::sync::mpsc;
+use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
 use time::OffsetDateTime;
 
@@ -167,6 +168,8 @@ pub struct Engine {
     settings: SettingsStore,
     scan_opts: ScanOptions,
     deleter: Deleter,
+    /// Replaces the hosted AI client (tests, `MESHKEEP_AI_MOCK`); the key gate stays.
+    ai_override: Option<SharedProvider>,
 }
 
 impl Engine {
@@ -188,6 +191,7 @@ impl Engine {
             settings,
             scan_opts,
             deleter: trash_deleter(),
+            ai_override: None,
         })
     }
 
@@ -236,6 +240,65 @@ impl Engine {
         self.settings.update(|s| s.container_dirs = clean.clone())?;
         self.scan_opts.container_dirs = clean;
         Ok(())
+    }
+
+    // ---- AI assistance (ADR-0003) -------------------------------------------------------
+
+    pub fn ai_settings(&self) -> &AiSettings {
+        &self.settings.get().ai
+    }
+
+    pub fn set_ai_settings(&mut self, settings: AiSettings) -> Result<AiSettings> {
+        let clean = settings.normalized()?;
+        self.settings.update(|s| s.ai = clean.clone())?;
+        Ok(clean)
+    }
+
+    /// Installs a provider used instead of the hosted client. Calls still require a key.
+    pub fn set_ai_provider(&mut self, provider: Option<SharedProvider>) {
+        self.ai_override = provider;
+    }
+
+    /// The provider for one call. `AiDisabled` without a key, whatever provider is installed:
+    /// that is the "no key, no network" rule (spec 04-quality) in one place.
+    pub fn ai_provider(&self, api_key: Option<&str>) -> Result<SharedProvider> {
+        let key = api_key.map(str::trim).filter(|k| !k.is_empty()).ok_or(EngineError::AiDisabled)?;
+        if let Some(p) = &self.ai_override {
+            return Ok(p.clone());
+        }
+        Ok(Arc::new(ai::AnthropicProvider::new(self.ai_settings(), key)?))
+    }
+
+    /// Collects the inputs for a suggestion (thumbnail, file list, README text, sidecar, tag
+    /// vocabulary) and looks the answer up in the cache. Fast; runs under the engine lock.
+    pub fn ai_prepare_suggestion(&self, project_id: &str) -> Result<PreparedSuggestion> {
+        let p = self.online_project(project_id)?;
+        let dir = self.project_dir(&p)?;
+        let thumb = p.thumb.as_deref().and_then(|k| self.thumbnail_path(k).ok());
+        let vocab = self.index.tag_counts(None)?;
+        ai::prepare(&self.data_dir, &p, &dir, thumb.as_deref(), &vocab, &self.ai_settings().model)
+    }
+
+    /// Prepare, call, validate and cache in one go. The shell splits this so the network
+    /// call runs outside the engine lock.
+    pub fn ai_suggest_metadata(&self, project_id: &str, api_key: Option<&str>) -> Result<MetadataSuggestion> {
+        let provider = self.ai_provider(api_key)?;
+        let prepared = self.ai_prepare_suggestion(project_id)?;
+        ai::run_suggestion(prepared, provider.as_ref())
+    }
+
+    /// One tiny request to prove the key, endpoint and model work together.
+    pub fn ai_test_connection(&self, api_key: Option<&str>) -> Result<AiTestReport> {
+        let provider = self.ai_provider(api_key)?;
+        Self::ai_run_test(provider.as_ref())
+    }
+
+    pub fn ai_run_test(provider: &dyn AiProvider) -> Result<AiTestReport> {
+        let answer = provider.complete(&ai::test_request())?;
+        if answer.json.get("ok").and_then(|v| v.as_bool()) != Some(true) {
+            return Err(EngineError::AiInvalidResponse(format!("unexpected answer: {}", answer.json)));
+        }
+        Ok(AiTestReport { model: answer.model })
     }
 
     // ---- roots -------------------------------------------------------------------------

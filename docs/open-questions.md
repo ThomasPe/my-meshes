@@ -28,6 +28,9 @@ file keeps the record of what was decided and when.
 | Q21 | Rust in the stack? | Yes, Tauri 2 (2026-10-17). | `decisions/0001-tech-stack.md` |
 | Q22 | Rescan granularity | Whole-root rescan on watcher events is acceptable for now; project-granular rescan is a later optimization (2026-10-18). | `spec/04-quality.md` Performance |
 | Q23 | Rust to TypeScript types | Hand-mirrored for now; switch to `tauri-specta` with the next API extension (2026-10-18). | `AGENTS.md` Conventions |
+| Q24 | AI tag vocabulary | **Open**: suggestions may introduce new tags; the dialog marks new ones visibly and the user unticks what they do not want (2026-10-22). | `decisions/0003-ai-integration.md` |
+| Q25 | Rejected AI suggestions | **Forgotten**: no per-project memory of rejections; the response cache keyed by input hash avoids repeat cost (2026-10-22). | `decisions/0003-ai-integration.md` |
+| Q26 | Local AI provider | **Later**: the first slice ships the hosted client only, but the settings model carries a base URL from the start so a local OpenAI-compatible server is a configuration, not a new client (2026-10-22). | `decisions/0003-ai-integration.md` |
 
 ## Open
 

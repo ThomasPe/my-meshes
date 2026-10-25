@@ -1,4 +1,4 @@
-import type { AppInfo, BatchReport, BatchUpdate, DuplicateReport, HashProgress, MoveReport, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata } from '@/lib/types';
+import type { AppInfo, BatchReport, BatchUpdate, DuplicateReport, HashProgress, MoveReport, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata, AiSettings, AiSettingsView, AiTestReport, MetadataSuggestion } from '@/lib/types';
 
 export type Unlisten = () => void;
 
@@ -82,6 +82,15 @@ export interface Backend {
   /** Native file drops (paths). Resolves to a no-op unlistener where unsupported (browser). */
   checkUpdate(): Promise<UpdateInfo>;
   installUpdate(): Promise<void>;
+  // AI assistance (ADR-0003): opt-in, key in the OS credential store, suggestions only.
+  getAiSettings(): Promise<AiSettingsView>;
+  setAiSettings(settings: AiSettings): Promise<AiSettingsView>;
+  /** Stores or (with null / empty) removes the key; resolves to whether a key is stored now. */
+  setAiKey(key: string | null): Promise<boolean>;
+  /** One tiny request to prove key, endpoint and model work together. */
+  testAi(): Promise<AiTestReport>;
+  /** Builds a metadata suggestion for one project; nothing is written. */
+  suggestMetadata(projectId: string): Promise<MetadataSuggestion>;
   onFileDrop(cb: (e: { type: 'enter' | 'drop' | 'leave'; paths: string[] }) => void): Promise<Unlisten>;
   onScanProgress(cb: (p: ScanProgress) => void): Promise<Unlisten>;
   onLibraryChanged(cb: (e: LibraryChanged) => void): Promise<Unlisten>;
