@@ -59,6 +59,19 @@ pub fn classify(names: &[String]) -> ThreeMfInfo {
     ThreeMfInfo { slicer, thumbnail_entry }
 }
 
+/// Reads the first `max` bytes of an entry (the model XML can be huge; its metadata sits at
+/// the top). Missing entry -> error.
+pub fn read_entry_head(path: &Path, entry: &str, max: usize) -> Result<Vec<u8>> {
+    let mut archive = open(path)?;
+    let file = archive.by_name(entry).map_err(|e| crate::error::EngineError::Io {
+        path: path.to_path_buf(),
+        source: std::io::Error::new(std::io::ErrorKind::NotFound, format!("{entry}: {e}")),
+    })?;
+    let mut out = Vec::new();
+    file.take(max as u64).read_to_end(&mut out).map_err(io_err(path))?;
+    Ok(out)
+}
+
 /// Reads one entry (the embedded preview) into memory. Capped at 8 MiB.
 pub fn read_entry(path: &Path, entry: &str) -> Result<Vec<u8>> {
     let mut archive = open(path)?;

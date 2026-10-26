@@ -110,7 +110,7 @@ test('feedback: the dialog opens a prefilled GitHub issue with version and syste
   expect(url.searchParams.get('title')).toBe('[Bug] Viewer stays on reading');
   expect(url.searchParams.get('description')).toBe('Opened a 3MF, nothing happens.');
   expect(url.searchParams.get('environment')).toContain('Meshkeep 0.1.0-mock (stable channel)');
-  expect(url.searchParams.get('environment')).toContain('Library: 74 projects');
+  expect(url.searchParams.get('environment')).toContain('Library: 77 projects');
   // the idea form carries no log field and no bug label
   await page.getByTestId('send-feedback').click();
   await page.getByTestId('feedback-kind').getByRole('radio', { name: 'Idea' }).click();
@@ -823,6 +823,33 @@ test('duplicates: groups projects by shared model content, keeping one trashes t
   await expect(page.getByText('1 project moved to trash')).toBeVisible();
   await expect(page.getByTestId('duplicate-group')).toHaveCount(1, { timeout: 10_000 });
   await expect(page.getByTestId('duplicates-count')).toHaveText('1');
+});
+
+test('creator suggestions: groups projects without a creator, applies to all, dismisses one', async ({ page }) => {
+  await page.getByTestId('filter-creators').click();
+  await expect(page.getByTestId('creators')).toBeVisible();
+  const group = page.getByTestId('creator-group').filter({ has: page.locator('h3', { hasText: 'Cinderwing3D' }) });
+  await expect(group).toHaveCount(1);
+  await expect(group.getByTestId('creator-project')).toHaveCount(3);
+  await expect(group.getByTestId('creator-project').filter({ hasText: 'Baby Jellyfish' })).toContainText('from the model page link');
+  // one is dismissed and leaves the group; the other two get the creator in one call
+  await group.getByTestId('creator-project').filter({ hasText: 'Cinder Snake' }).getByTestId('creator-dismiss').click();
+  await expect(group.getByTestId('creator-project')).toHaveCount(2);
+  await group.getByTestId('creator-apply-all').click();
+  await expect(page.getByText('Creator “Cinderwing3D” set on 2 projects')).toBeVisible();
+  await expect(page.getByTestId('creator-group').filter({ has: page.locator('h3', { hasText: 'Cinderwing3D' }) })).toHaveCount(0);
+  // the dismissed project shows no creator chip in the inspector, but keeps its link hint
+  await page.getByTestId('filter-all').click();
+  await page.getByTestId('search').fill('Cinder Snake');
+  await page.getByTestId('project-card').filter({ hasText: 'Cinder Snake' }).click();
+  await expect(page.getByTestId('hint-chips')).toHaveCount(0);
+  await page.getByTestId('search').fill('Jellyfish');
+  await page.getByTestId('project-card').filter({ hasText: 'Baby Jellyfish' }).click();
+  await expect(page.getByTestId('inspector')).toContainText('Cinderwing3D');
+  await expect(page.getByTestId('hint-license')).toContainText('CC-BY-NC-SA-4.0');
+  await page.getByTestId('hint-source_url').getByTestId('hint-apply').click();
+  await expect(page.getByText('saved to project.yaml')).toBeVisible();
+  await expect(page.getByTestId('inspector')).toContainText('printables.com/@Cinderwing3D');
 });
 
 test('folder tree: arrow keys navigate and select like Explorer', async ({ page }) => {

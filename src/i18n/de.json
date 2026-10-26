@@ -86,7 +86,8 @@
     "more": "+{{count}} weitere",
     "less": "weniger",
     "showProjects": "Projekte anzeigen",
-    "duplicates": "Duplikate"
+    "duplicates": "Duplikate",
+    "creatorSuggestions": "Creator-Vorschläge"
   },
   "inspector": {
     "open": "Öffnen",
@@ -570,5 +571,30 @@
     "contains_one": "enthält {{names}}",
     "contains_other": "enthält {{count}} andere: {{names}}",
     "containedIn": "enthalten in {{names}}"
+  },
+  "creators": {
+    "hint": "Projekte ohne Designer, gruppiert nach dem, was ihre Dateien nahelegen: Slicer-Metadaten, Download-Verknüpfungen, Readme-Dateien, Dateinamen-Präfixe und der Ordnername. Geschrieben wird erst beim Übernehmen.",
+    "refresh": "Aktualisieren",
+    "none": "Nichts vorzuschlagen",
+    "noneHint": "{{without}} Projekte ohne Designer tragen keinen brauchbaren Hinweis; {{dismissed}} Vorschläge wurden verworfen.",
+    "summary": "{{groups}} Designer für {{projects}} Projekte vorgeschlagen · {{without}} Projekte ohne Hinweis",
+    "confidence": "{{percent}}% sicher",
+    "applyAll": "Für alle {{count}} übernehmen",
+    "apply": "Übernehmen",
+    "dismiss": "Nicht dieses",
+    "dismissHint": "Diesen Designer für dieses Projekt nicht mehr vorschlagen",
+    "applied_one": "Designer „{{creator}}“ bei {{count}} Projekt gesetzt",
+    "applied_other": "Designer „{{creator}}“ bei {{count}} Projekten gesetzt",
+    "appliedOne": "„{{value}}“ in project.yaml gespeichert",
+    "source": {
+      "three_mf": "aus 3MF-Metadaten",
+      "shortcut": "aus einer Download-Verknüpfung",
+      "readme": "aus einer Readme",
+      "source_url": "aus dem Link zur Modellseite",
+      "file_names": "aus den Dateinamen",
+      "folder_name": "aus dem Ordnernamen",
+      "library": "Dateinamen-Präfix in mehreren Projekten der Bibliothek",
+      "known_creator": "bekannter Designer am Anfang des Dateinamens"
+    }
   }
 }

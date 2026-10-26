@@ -86,7 +86,8 @@
     "more": "+{{count}} more",
     "less": "less",
     "showProjects": "Show projects",
-    "duplicates": "Duplicates"
+    "duplicates": "Duplicates",
+    "creatorSuggestions": "Creator suggestions"
   },
   "inspector": {
     "open": "Open",
@@ -570,5 +571,30 @@
     "contains_one": "contains {{names}}",
     "contains_other": "contains {{count}} others: {{names}}",
     "containedIn": "contained in {{names}}"
+  },
+  "creators": {
+    "hint": "Projects without a creator, grouped by what their files suggest: slicer metadata, download shortcuts, readme files, file-name prefixes and the folder name. Nothing is written until you apply it.",
+    "refresh": "Refresh",
+    "none": "Nothing to suggest",
+    "noneHint": "{{without}} projects without a creator carry no usable hint; {{dismissed}} suggestions were dismissed.",
+    "summary": "{{groups}} creators proposed for {{projects}} projects · {{without}} projects without a hint",
+    "confidence": "{{percent}}% sure",
+    "applyAll": "Apply to all {{count}}",
+    "apply": "Apply",
+    "dismiss": "Not this one",
+    "dismissHint": "Do not suggest this creator for this project again",
+    "applied_one": "Creator “{{creator}}” set on {{count}} project",
+    "applied_other": "Creator “{{creator}}” set on {{count}} projects",
+    "appliedOne": "“{{value}}” saved to project.yaml",
+    "source": {
+      "three_mf": "from 3MF metadata",
+      "shortcut": "from a download shortcut",
+      "readme": "from a readme",
+      "source_url": "from the model page link",
+      "file_names": "from the file names",
+      "folder_name": "from the folder name",
+      "library": "file-name prefix shared across the library",
+      "known_creator": "known creator at the head of the file name"
+    }
   }
 }

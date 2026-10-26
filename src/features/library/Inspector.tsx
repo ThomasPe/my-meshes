@@ -10,6 +10,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import type { ProjectActions } from '@/features/library/ProjectMenu';
 import { SuggestDialog } from '@/features/library/SuggestDialog';
 import { TagEditor } from '@/features/library/TagEditor';
+import { HintChips } from '@/features/library/HintChips';
 import { Thumb } from '@/features/library/Thumb';
 import { reportError } from '@/lib/errors';
 import { formatBytes, formatDate, initials } from '@/lib/format';
@@ -141,6 +142,7 @@ export function Inspector({ selectedIds, visible, tagCounts, facets, filterTitle
           <dt className="text-muted-foreground">{t('inspector.added')}</dt><dd className="font-semibold">{formatDate(p.added, i18n.language)}</dd>
           <dt className="text-muted-foreground">{t('inspector.sidecar')}</dt><dd className="min-w-0">{sidecarBadge}</dd>
         </dl>
+        <HintChips project={p} />
         <Section title={t('inspector.tags')}>
           <TagEditor tags={p.tags} onChange={saveTags} disabled={p.offline || update.isPending} />
         </Section>

@@ -1,4 +1,4 @@
-import type { AppInfo, BatchReport, BatchUpdate, DuplicateReport, HashProgress, MoveReport, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata, AiSettings, AiSettingsView, AiTestReport, MetadataSuggestion } from '@/lib/types';
+import type { AppInfo, BatchReport, BatchUpdate, CreatorSuggestions, DuplicateReport, Hints, HashProgress, MoveReport, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata, AiSettings, AiSettingsView, AiTestReport, MetadataSuggestion } from '@/lib/types';
 
 export type Unlisten = () => void;
 
@@ -22,6 +22,11 @@ export interface Backend {
   notify(title: string, body: string): Promise<boolean>;
   folderTree(rootId: string): Promise<FolderNode[]>;
   libraryStats(rootId?: string | null): Promise<LibraryStats>;
+  /** Local creator/license/link hints for one project (META-7 stage 1), best first. */
+  projectHints(projectId: string): Promise<Hints>;
+  /** Projects without a creator, grouped by the creator the hints propose. */
+  creatorSuggestions(): Promise<CreatorSuggestions>;
+  dismissCreatorHint(projectId: string, value: string): Promise<void>;
   /** Groups projects that share model files by content (LIB-8); hashes only size-collision candidates. */
   findDuplicates(): Promise<DuplicateReport>;
   onDuplicateProgress(cb: (p: HashProgress) => void): Promise<Unlisten>;

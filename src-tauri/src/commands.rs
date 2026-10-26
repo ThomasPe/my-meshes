@@ -1,12 +1,15 @@
 use crate::state::{self, AppState};
 use meshkeep_engine::ai::{AiSettings, AiTestReport, MetadataSuggestion};
 use meshkeep_engine::collections::{Collection, SmartCollection};
+use meshkeep_engine::hints::Hints;
 use meshkeep_engine::import::{ImportItem, ImportReport, ImportRequest, InboxFile};
 use meshkeep_engine::model::{
     Facets, FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, ScanReport, SyncMode, TagCount, ThumbJob, ThumbLocation,
     ThumbStats,
 };
-use meshkeep_engine::{BatchReport, BatchUpdate, DuplicateReport, EngineError, MoveReport, PromoteItem, PromoteReport, UpdateMetadata};
+use meshkeep_engine::{
+    BatchReport, BatchUpdate, CreatorSuggestions, DuplicateReport, EngineError, MoveReport, PromoteItem, PromoteReport, UpdateMetadata,
+};
 use serde::Serialize;
 use std::path::PathBuf;
 use std::time::{Duration, Instant};
@@ -443,6 +446,28 @@ pub fn set_favorite(app: AppHandle, state: State<AppState>, project_id: String, 
     let project = { state.engine.lock().unwrap().set_favorite(&project_id, favorite)? };
     let _ = app.emit("project://changed", serde_json::json!({ "projectId": project.id }));
     Ok(project)
+}
+
+#[tauri::command]
+pub fn project_hints(state: State<AppState>, project_id: String) -> CmdResult<Hints> {
+    Ok(state.engine.lock().unwrap().project_hints(&project_id)?)
+}
+
+#[tauri::command]
+pub async fn creator_suggestions(app: AppHandle) -> CmdResult<CreatorSuggestions> {
+    let handle = app.clone();
+    let out = tauri::async_runtime::spawn_blocking(move || handle.state::<AppState>().engine.lock().unwrap().creator_suggestions())
+        .await
+        .map_err(|e| AppError {
+            code: "shell",
+            message: e.to_string(),
+        })??;
+    Ok(out)
+}
+
+#[tauri::command]
+pub fn dismiss_creator_hint(state: State<AppState>, project_id: String, value: String) -> CmdResult<()> {
+    Ok(state.engine.lock().unwrap().dismiss_creator_hint(&project_id, &value)?)
 }
 
 #[tauri::command]

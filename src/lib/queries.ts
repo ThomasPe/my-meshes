@@ -42,6 +42,8 @@ export const useContainerDirs = () => useQuery({ queryKey: keys.containers, quer
 
 export function invalidateLibrary(qc: QueryClient) {
   qc.invalidateQueries({ queryKey: ['projects'] });
+  qc.invalidateQueries({ queryKey: ['creatorSuggestions'] });
+  qc.invalidateQueries({ queryKey: ['hints'] });
   // a rescan can change a project's sidecar state and stamp (edited or removed outside the app)
   qc.invalidateQueries({ queryKey: ['project'] });
   qc.invalidateQueries({ queryKey: ['smartProjects'] });
@@ -197,6 +199,9 @@ export const useReorderCollection = () => useCollectionMutation((b, a: { id: str
 export const useCreateSmartCollection = () => useCollectionMutation((b, a: { name: string; query: ListQuery }) => b.createSmartCollection(a.name, a.query));
 export const useRenameSmartCollection = () => useCollectionMutation((b, a: { id: string; name: string }) => b.updateSmartCollection(a.id, a.name));
 export const useDeleteSmartCollection = () => useCollectionMutation((b, id: string) => b.deleteSmartCollection(id));
+
+export const useProjectHints = (id: string | null, enabled = true) => useQuery({ queryKey: ['hints', id ?? ''], queryFn: async () => (await getBackend()).projectHints(id!), enabled: !!id && enabled, staleTime: 60_000 });
+export const useCreatorSuggestions = (enabled: boolean) => useQuery({ queryKey: ['creatorSuggestions'], queryFn: async () => (await getBackend()).creatorSuggestions(), enabled, staleTime: 30_000 });
 
 export function useMoveProjects() {
   const qc = useQueryClient();

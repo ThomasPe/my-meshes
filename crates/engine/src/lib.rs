@@ -11,6 +11,7 @@ pub mod ai;
 pub mod collections;
 pub mod error;
 pub mod hash;
+pub mod hints;
 pub mod import;
 pub mod index;
 pub mod model;
@@ -24,7 +25,7 @@ pub mod watch;
 
 mod engine;
 pub use engine::{
-    BatchReport, BatchUpdate, Deleter, DuplicateGroup, DuplicateKind, DuplicateMember, DuplicateReport, Engine, HashProgress, MoveReport,
-    PromoteFailure, PromoteItem, PromoteReport, ScanProgress, UpdateMetadata,
+    BatchReport, BatchUpdate, CreatorSuggestion, CreatorSuggestions, Deleter, DuplicateGroup, DuplicateKind, DuplicateMember,
+    DuplicateReport, Engine, HashProgress, MoveReport, PromoteFailure, PromoteItem, PromoteReport, ScanProgress, UpdateMetadata,
 };
 pub use error::{EngineError, Result};

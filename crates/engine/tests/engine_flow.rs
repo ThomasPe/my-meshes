@@ -672,3 +672,65 @@ fn duplicate_detection_by_content() {
     assert_eq!(report.hashed, 0);
     assert_eq!(report.groups[0].members.len(), 2);
 }
+
+#[test]
+fn creator_suggestions_from_file_names_and_metadata() {
+    use meshkeep_engine::hints::HintSource;
+    let data = tempfile::tempdir().unwrap();
+    let lib = tempfile::tempdir().unwrap();
+    let write = |p: &str, bytes: &[u8]| {
+        let path = lib.path().join(p);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, bytes).unwrap();
+    };
+    // three single-file projects share a file-name prefix; one carries a Printables shortcut;
+    // one has a creator already; one has nothing to go on
+    write("Dragons/Baby Rose/Cinderwing3D Baby Rose -23.stl", b"solid a");
+    write("Dragons/Cinder Snake/Cinderwing3D Cinder Snake.stl", b"solid b");
+    write("Dragons/Jellyfish/Cinderwing3D Baby Jellyfish.stl", b"solid c");
+    write(
+        "Dragons/Jellyfish/Baby Jellyfish.url",
+        b"[InternetShortcut]\r\nURL=https://www.printables.com/@Cinderwing3D_1104478/models\r\n",
+    );
+    write("Other/Known/thing.stl", b"solid d");
+    write("Other/Known/project.yaml", b"metadata:\n  title: Known\n  creator: Someone\n");
+    write("Other/Mystery/mystery.stl", b"solid e");
+    let mut engine = Engine::open(data.path()).unwrap();
+    let root = engine.add_root(lib.path(), SyncMode::Manual).unwrap();
+    engine.scan_root(&root.id, |_| {}).unwrap();
+
+    let s = engine.creator_suggestions().unwrap();
+    assert_eq!(s.groups.len(), 1, "{:?}", s.groups.iter().map(|g| &g.creator).collect::<Vec<_>>());
+    let g = &s.groups[0];
+    assert_eq!(g.creator, "Cinderwing3D");
+    assert_eq!(g.projects.len(), 3);
+    assert_eq!(s.without_hint, 1, "Mystery has nothing to go on; Known already has a creator");
+    let jelly = g.projects.iter().find(|p| p.project.rel_path == "Dragons/Jellyfish").unwrap();
+    assert_eq!(jelly.source, HintSource::SourceUrl, "the shortcut beats the file-name prefix");
+    let rose = g.projects.iter().find(|p| p.project.rel_path == "Dragons/Baby Rose").unwrap();
+    assert_eq!(rose.source, HintSource::Library);
+
+    // per-project hints carry the link too; dismissing removes the creator hint everywhere
+    let jelly_id = format!("{}:Dragons/Jellyfish", root.id);
+    let h = engine.project_hints(&jelly_id).unwrap();
+    assert_eq!(h.source_url[0].value, "https://www.printables.com/@Cinderwing3D_1104478/models");
+    engine.dismiss_creator_hint(&jelly_id, "Cinderwing3D").unwrap();
+    assert!(engine.project_hints(&jelly_id).unwrap().creator.is_empty());
+    let s = engine.creator_suggestions().unwrap();
+    assert_eq!(s.groups[0].projects.len(), 2);
+    assert_eq!(s.dismissed, 1);
+    // once the creator is set, the project leaves the list
+    engine
+        .update_metadata(
+            &jelly_id,
+            UpdateMetadata {
+                creator: Some("Cinderwing3D".into()),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+    // Cinderwing3D is a known creator now: the two remaining files name it at their head
+    let s = engine.creator_suggestions().unwrap();
+    assert_eq!(s.groups[0].projects.len(), 2);
+    assert_eq!(s.groups[0].projects[0].source, HintSource::KnownCreator);
+}

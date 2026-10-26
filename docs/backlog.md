@@ -157,7 +157,10 @@ submission is outside the code: Partner Center identity values, screenshots
 - [x] **Batch editing** (META-6): multi-selection can be favorited, added to a collection,
       deleted, tagged/untagged and given a creator in one engine call with a per-project
       failure report.
-- [ ] **External enrichment** (META-7).
+- [ ] **External enrichment** (META-7). Stage 1 done: local hints (`hints.rs`) for creator,
+      license and source link from 3MF metadata, shortcuts, readmes, file names, folder names
+      and known creators; inspector chips and the "Creator suggestions" view with apply-all
+      and dismiss. Stage 2 (fetch the model page) waits on the privacy wording for the Store.
 - [ ] **Organizational rules & maintenance tools** (IMP-7, IMP-8). Done so far: **move
       projects between folders** (dialog with folder picker and new sub-folder, multi-select,
       drag cards onto tree rows, Undo toast; collections, favorites, thumbnails and nested

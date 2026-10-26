@@ -1,4 +1,4 @@
-import { Box, ChevronDown, ChevronRight, Clock, Copy, Eye, Folder, FolderInput, FolderHeart, FolderOpen, HardDrive, Inbox, LayoutGrid, Pencil, Plus, RefreshCw, Settings, Sparkles, Star, Tag, Trash2 } from 'lucide-react';
+import { Box, ChevronDown, ChevronRight, Clock, Copy, Eye, UserSearch, Folder, FolderInput, FolderHeart, FolderOpen, HardDrive, Inbox, LayoutGrid, Pencil, Plus, RefreshCw, Settings, Sparkles, Star, Tag, Trash2 } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuTrigger } from '@/components/ui/context-menu';
@@ -141,6 +141,9 @@ export function Sidebar({ onRescan }: { onRescan?: (rootId: string) => void } = 
           </button>
           <button type="button" data-testid="filter-favorites" className={cn(itemClass, filter.kind === 'favorites' && activeClass)} onClick={() => setFilter({ kind: 'favorites' })}>
             <Star />{t('library.favorites')}<span className="ml-auto text-xs tabular text-muted-foreground" data-testid="favorites-count">{stats.data?.favorites ?? ''}</span>
+          </button>
+          <button type="button" data-testid="filter-creators" className={cn(itemClass, filter.kind === 'creators' && activeClass)} onClick={() => setFilter({ kind: 'creators' })}>
+            <UserSearch />{t('library.creatorSuggestions')}
           </button>
           <button type="button" data-testid="filter-duplicates" className={cn(itemClass, filter.kind === 'duplicates' && activeClass)} onClick={() => setFilter({ kind: 'duplicates' })}>
             <Copy />{t('library.duplicates')}<span className="ml-auto text-xs tabular text-muted-foreground" data-testid="duplicates-count">{dupReport ? dupReport.groups.length : ''}</span>

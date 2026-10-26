@@ -137,6 +137,13 @@ export interface BatchUpdate {
   license?: string;
 }
 
+export type HintSource = 'three_mf' | 'shortcut' | 'readme' | 'source_url' | 'file_names' | 'folder_name' | 'library' | 'known_creator';
+export interface Hint { value: string; source: HintSource; confidence: number }
+export interface Hints { creator: Hint[]; license: Hint[]; source_url: Hint[] }
+export interface SuggestedProject extends ProjectSummary { source: HintSource; confidence: number }
+export interface CreatorSuggestion { creator: string; confidence: number; projects: SuggestedProject[] }
+export interface CreatorSuggestions { groups: CreatorSuggestion[]; without_hint: number; dismissed: number }
+
 export interface HashProgress { done: number; total: number }
 export type DuplicateKind = 'identical' | 'overlap';
 export interface DuplicateMember extends ProjectSummary { shared_files: number; model_files: number; covers: string[] }

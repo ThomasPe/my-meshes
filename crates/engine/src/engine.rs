@@ -5,11 +5,12 @@ use crate::ai::{self, AiProvider, AiSettings, AiTestReport, MetadataSuggestion, 
 use crate::collections::{Collection, CollectionsStore, SmartCollection};
 use crate::error::{EngineError, Result};
 use crate::hash;
+use crate::hints;
 use crate::import::{self, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile};
 use crate::index::{Index, ThumbSourceState};
 use crate::model::{
-    Facets, FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, RootStatus, ScanReport, ScanSummary, Sidecar, SidecarStamp,
-    SyncMode, TagCount, ThumbJob, ThumbLocation, ThumbSource, ThumbStats,
+    Facets, FileKind, FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, RootStatus, ScanReport, ScanSummary, Sidecar,
+    SidecarStamp, SyncMode, TagCount, ThumbJob, ThumbLocation, ThumbSource, ThumbStats,
 };
 use crate::roots::RootsStore;
 use crate::scan::{self, IgnoreMatcher, ScanOptions};
@@ -18,6 +19,7 @@ use crate::sidecar;
 use crate::watch::{RootWatcher, WatchEvent};
 use crate::{threemf, thumbs};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::{Component, Path, PathBuf};
 use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
@@ -71,6 +73,33 @@ pub struct BatchFailure {
 pub struct BatchReport {
     pub updated: u32,
     pub failed: Vec<BatchFailure>,
+}
+
+/// One project that a creator suggestion covers (META-7 stage 1).
+#[derive(Debug, Clone, Serialize)]
+pub struct SuggestedProject {
+    #[serde(flatten)]
+    pub project: ProjectSummary,
+    pub source: hints::HintSource,
+    pub confidence: u8,
+}
+
+/// Projects without a creator, grouped by the creator the local heuristics propose.
+#[derive(Debug, Clone, Serialize)]
+pub struct CreatorSuggestion {
+    pub creator: String,
+    /// Best confidence among the group's projects.
+    pub confidence: u8,
+    pub projects: Vec<SuggestedProject>,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct CreatorSuggestions {
+    pub groups: Vec<CreatorSuggestion>,
+    /// Projects without a creator for which nothing could be proposed.
+    pub without_hint: u32,
+    /// Projects whose only hint the user dismissed.
+    pub dismissed: u32,
 }
 
 /// Progress of the hashing step of duplicate detection.
@@ -959,6 +988,132 @@ impl Engine {
         self.index.rename_file_hashes(project_id, &new_id)?;
         self.index.remove_project(project_id)?;
         self.reindex_dir(&current.root_id, &new_dir)
+    }
+
+    // ---- metadata hints (META-7, stage 1) ------------------------------------------------
+
+    fn known_creators(&self) -> Result<Vec<String>> {
+        Ok(self.index.facets(None)?.creators.into_iter().map(|c| c.value).collect())
+    }
+
+    /// Creator, license and source-link hints for one project, best first. Read-only.
+    pub fn project_hints(&self, project_id: &str) -> Result<hints::Hints> {
+        let p = self.online_project(project_id)?;
+        let dir = self.project_dir(&p)?;
+        let mut h = hints::detect(&dir, &p.files, &self.known_creators()?);
+        if let Some(d) = self.settings.get().dismissed_hints.get(project_id) {
+            h.creator.retain(|c| !d.iter().any(|x| hints::fold(x) == hints::fold(&c.value)));
+        }
+        Ok(h)
+    }
+
+    /// Every online project without a creator, grouped by the creator the hints propose.
+    /// Per-project hints are combined with a library-wide pass over file-name prefixes, so a
+    /// single "Cinderwing3D Baby Rose.stl" still finds its siblings.
+    pub fn creator_suggestions(&self) -> Result<CreatorSuggestions> {
+        let known = self.known_creators()?;
+        let dismissed = &self.settings.get().dismissed_hints;
+        let mut candidates: Vec<(ProjectSummary, Project)> = Vec::new();
+        for s in self.index.list(&ListQuery::default(), None)? {
+            if s.creator.is_some() || s.offline {
+                continue;
+            }
+            if let Some(p) = self.index.project(&s.id)? {
+                candidates.push((s, p));
+            }
+        }
+        let stems: Vec<(String, Vec<String>)> = candidates
+            .iter()
+            .map(|(s, p)| {
+                (
+                    s.id.clone(),
+                    p.files
+                        .iter()
+                        .filter(|f| f.kind == FileKind::Model)
+                        .map(|f| {
+                            let base = f.name.rsplit_once('.').map(|(b, _)| b).unwrap_or(&f.name);
+                            base.replace(['_', '-', '.'], " ").split_whitespace().collect::<Vec<_>>().join(" ")
+                        })
+                        .collect(),
+                )
+            })
+            .collect();
+        let library = hints::library_prefixes(&stems, 3);
+        let mut groups: BTreeMap<String, CreatorSuggestion> = BTreeMap::new();
+        let mut out = CreatorSuggestions::default();
+        for (summary, project) in candidates {
+            let dir = match self.project_dir(&project) {
+                Ok(d) => d,
+                Err(_) => continue,
+            };
+            let mut h = hints::detect(&dir, &project.files, &known);
+            if let Some((prefix, support)) = library.get(&summary.id) {
+                let conf = if *support >= 5 { 65 } else { 58 };
+                let value = known
+                    .iter()
+                    .find(|k| hints::fold(k) == hints::fold(prefix))
+                    .cloned()
+                    .unwrap_or_else(|| prefix.clone());
+                h.creator.push(hints::Hint {
+                    value,
+                    source: hints::HintSource::Library,
+                    confidence: conf,
+                });
+                h.creator.sort_by_key(|x| std::cmp::Reverse(x.confidence));
+            }
+            let dismissed_here = dismissed.get(&summary.id);
+            let had_any = !h.creator.is_empty();
+            if let Some(d) = dismissed_here {
+                h.creator.retain(|c| !d.iter().any(|x| hints::fold(x) == hints::fold(&c.value)));
+            }
+            let Some(best) = h.creator.first() else {
+                if had_any {
+                    out.dismissed += 1;
+                } else {
+                    out.without_hint += 1;
+                }
+                continue;
+            };
+            let key = hints::fold(&best.value);
+            let g = groups.entry(key).or_insert_with(|| CreatorSuggestion {
+                creator: best.value.clone(),
+                confidence: 0,
+                projects: Vec::new(),
+            });
+            g.confidence = g.confidence.max(best.confidence);
+            g.projects.push(SuggestedProject {
+                project: summary,
+                source: best.source,
+                confidence: best.confidence,
+            });
+        }
+        let mut list: Vec<CreatorSuggestion> = groups.into_values().collect();
+        for g in &mut list {
+            g.projects
+                .sort_by(|a, b| b.confidence.cmp(&a.confidence).then(a.project.rel_path.cmp(&b.project.rel_path)));
+        }
+        list.sort_by(|a, b| {
+            b.projects
+                .len()
+                .cmp(&a.projects.len())
+                .then(b.confidence.cmp(&a.confidence))
+                .then(a.creator.cmp(&b.creator))
+        });
+        out.groups = list;
+        Ok(out)
+    }
+
+    /// Remembers that a creator hint is wrong for this project; it is not offered again.
+    pub fn dismiss_creator_hint(&mut self, project_id: &str, value: &str) -> Result<()> {
+        let pid = project_id.to_string();
+        let v = value.trim().to_string();
+        self.settings.update(|s| {
+            let list = s.dismissed_hints.entry(pid).or_default();
+            if !list.iter().any(|x| x == &v) {
+                list.push(v);
+            }
+        })?;
+        Ok(())
     }
 
     /// Finds projects that share model files by content (LIB-8). Only files whose size

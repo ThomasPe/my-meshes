@@ -6,6 +6,7 @@ import type { ScanState } from '@/App';
 import { Button } from '@/components/ui/button';
 import { useImport } from '@/features/import/useImport';
 import { CollectionDialogs, useCollectionDialog } from '@/features/library/CollectionDialogs';
+import { CreatorSuggestionsView } from '@/features/library/CreatorSuggestionsView';
 import { DuplicatesView } from '@/features/library/DuplicatesView';
 import { InboxView } from '@/features/library/InboxView';
 import { Inspector } from '@/features/library/Inspector';
@@ -66,12 +67,13 @@ export function LibraryPage({ scanning, onScanEnd }: { scanning: ScanState; onSc
     sort: effectiveSort,
     limit: filter.kind === 'recent' ? 200 : null,
   }), [filter, tags, text, creator, license, material, fileType, effectiveSort, rootScoped, collectionId]);
-  const projects = useProjects(filter.kind === 'inbox' || filter.kind === 'duplicates' || smartId ? { ...query, limit: 0 } : query);
+  const special = filter.kind === 'inbox' || filter.kind === 'duplicates' || filter.kind === 'creators';
+  const projects = useProjects(special || smartId ? { ...query, limit: 0 } : query);
   const smartOverrides = useMemo<ListQuery>(() => ({ sort: sort === 'collection' ? 'modified' : sort, text: text || null }), [sort, text]);
   const smartProjects = useSmartProjects(smartId, smartOverrides);
   const tagCounts = useTagCounts(rootScoped ? filter.rootId : null);
   const facets = useFacets(rootScoped ? filter.rootId : null);
-  const list = useMemo(() => (smartId ? smartProjects.data ?? [] : filter.kind === 'inbox' || filter.kind === 'duplicates' ? [] : projects.data ?? []), [smartId, smartProjects.data, filter.kind, projects.data]);
+  const list = useMemo(() => (smartId ? smartProjects.data ?? [] : special ? [] : projects.data ?? []), [smartId, smartProjects.data, special, projects.data]);
   const pending = smartId ? smartProjects.isPending : projects.isPending;
   const selectedSet = useMemo(() => new Set(selected), [selected]);
 
@@ -91,6 +93,7 @@ export function LibraryPage({ scanning, onScanEnd }: { scanning: ScanState; onSc
     : filter.kind === 'recent' ? t('library.recent')
     : filter.kind === 'favorites' ? t('library.favorites')
     : filter.kind === 'duplicates' ? t('library.duplicates')
+    : filter.kind === 'creators' ? t('library.creatorSuggestions')
     : filter.kind === 'folder' ? filter.path.split('/').pop()!
     : filter.kind === 'inbox' ? `${t('inbox.title')} · ${rootName(filter.rootId)}`
     : filter.kind === 'collection' ? collections.data?.find((c) => c.id === filter.id)?.name ?? ''
@@ -115,8 +118,10 @@ export function LibraryPage({ scanning, onScanEnd }: { scanning: ScanState; onSc
       <CollectionDialogs onCreated={(id, addIds) => { if (addIds?.length) addTo.mutate({ id, projectIds: addIds }, { onError: reportError }); }} />
       <Panel id="main" minSize={360} className="min-w-0">
       <main className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]" onKeyDown={onKey}>
-        <Toolbar title={filterTitle} count={filter.kind === 'inbox' || filter.kind === 'duplicates' ? 0 : list.length} onRescan={activeRoot && filter.kind !== 'inbox' && filter.kind !== 'duplicates' ? () => void scan(activeRoot) : undefined} scanning={!!activeRoot && activeRoot in scanning} sortLocked={filter.kind === 'recent' || filter.kind === 'inbox' || filter.kind === 'duplicates'} onImport={() => void pickImport()} onSaveSmart={filtered && filter.kind !== 'inbox' && filter.kind !== 'duplicates' && filter.kind !== 'collection' && filter.kind !== 'smart' ? saveSmart : undefined} collectionSort={filter.kind === 'collection'} />
-        {filter.kind === 'duplicates' ? (
+        <Toolbar title={filterTitle} count={special ? 0 : list.length} onRescan={activeRoot && !special ? () => void scan(activeRoot) : undefined} scanning={!!activeRoot && activeRoot in scanning} sortLocked={filter.kind === 'recent' || special} onImport={() => void pickImport()} onSaveSmart={filtered && !special && filter.kind !== 'collection' && filter.kind !== 'smart' ? saveSmart : undefined} collectionSort={filter.kind === 'collection'} />
+        {filter.kind === 'creators' ? (
+          <CreatorSuggestionsView />
+        ) : filter.kind === 'duplicates' ? (
           <DuplicatesView actions={actions} />
         ) : filter.kind === 'inbox' ? (
           <InboxView rootId={filter.rootId} />

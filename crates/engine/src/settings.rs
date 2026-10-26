@@ -27,6 +27,9 @@ pub struct Settings {
     /// AI assistance (ADR-0003): provider, endpoint and model. Never the key.
     #[serde(default)]
     pub ai: AiSettings,
+    /// Creator hints the user dismissed, per project id (META-7 stage 1).
+    #[serde(default)]
+    pub dismissed_hints: BTreeMap<String, Vec<String>>,
     #[serde(flatten)]
     pub extra: BTreeMap<String, serde_json::Value>,
 }
@@ -49,6 +52,7 @@ impl Default for Settings {
             container_dirs: default_containers(),
             thumb_location: ThumbLocation::default(),
             ai: AiSettings::default(),
+            dismissed_hints: BTreeMap::new(),
             extra: BTreeMap::new(),
         }
     }
