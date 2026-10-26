@@ -323,7 +323,15 @@
     "aiTesting": "Teste…",
     "aiTestOk": "Verbunden. Modell: {{model}}",
     "aiTestFailed": "Verbindung fehlgeschlagen: {{message}}",
-    "aiSent": "Was diesen Rechner verlässt, wenn du einen Vorschlag anforderst: das Vorschaubild des Projekts, Dateinamen und -größen, README- und Lizenztext sowie die bereits erfassten Metadaten. Modelldateien nie. Antworten werden im App-Datenordner zwischengespeichert."
+    "aiSent": "Was diesen Rechner verlässt, wenn du einen Vorschlag anforderst: das Vorschaubild des Projekts, Dateinamen und -größen, README- und Lizenztext sowie die bereits erfassten Metadaten. Modelldateien nie. Antworten werden im App-Datenordner zwischengespeichert.",
+    "network": "Netzwerk",
+    "networkHint": "Optionale Funktionen, die andere Seiten kontaktieren. Alle sind aus, bis du sie einschaltest, und jede ist in der Datenschutzerklärung beschrieben.",
+    "fetchPages": "Modellseiten laden",
+    "fetchPagesOn": "Modellseiten werden auf Anfrage geladen",
+    "fetchPagesOff": "Modellseiten werden nicht geladen",
+    "fetchPagesHintOff": "Aus: Die App öffnet nie eine Modellseite. Einschalten, um Designer, Lizenz und Tags aus dem in einem Projekt hinterlegten Link zu übernehmen, auf Anfrage, Seite für Seite. Die Seite sieht dann deine IP-Adresse und diesen Link.",
+    "fetchPagesHintOn": "An: Auf Anfrage lädt die App die Modellseite aus dem Quell-Link eines Projekts und bietet das Gefundene als Vorschlag an. Die Seite sieht deine IP-Adresse und diesen Link; mehr wird nicht gesendet. Das Laden selbst kommt in einer späteren Version.",
+    "privacyPolicy": "Datenschutzerklärung"
   },
   "status": {
     "watching": "Beobachte {{path}}",

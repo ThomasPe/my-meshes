@@ -323,7 +323,15 @@
     "aiTesting": "Testing…",
     "aiTestOk": "Connected. Model: {{model}}",
     "aiTestFailed": "Connection failed: {{message}}",
-    "aiSent": "What leaves this computer when you ask for a suggestion: the project's preview image, file names and sizes, README and license text, and the metadata already recorded. Model files never do. Answers are cached in app data."
+    "aiSent": "What leaves this computer when you ask for a suggestion: the project's preview image, file names and sizes, README and license text, and the metadata already recorded. Model files never do. Answers are cached in app data.",
+    "network": "Network",
+    "networkHint": "Optional features that contact other sites. All of them are off until you turn them on, and each one is described in the privacy policy.",
+    "fetchPages": "Load model pages",
+    "fetchPagesOn": "Model pages will be loaded when you ask for it",
+    "fetchPagesOff": "Model pages are not loaded",
+    "fetchPagesHintOff": "Off: the app never opens a model page. Turn this on to fill creator, license and tags from the link stored in a project, on request, one page at a time. The site then sees your IP address and that link.",
+    "fetchPagesHintOn": "On: when you ask, the app loads the model page named in a project's source link and offers what it finds as suggestions. The site sees your IP address and that link; nothing else is sent. The loading itself arrives in a later version.",
+    "privacyPolicy": "Privacy policy"
   },
   "status": {
     "watching": "Watching {{path}}",

@@ -1,4 +1,4 @@
-import { Bell, Bug, Download, FolderOpen, HardDrive, Images, KeyRound, Loader2, Monitor, Moon, Plus, RefreshCw, Sparkles, Sun, Trash2, X } from 'lucide-react';
+import { Bell, Bug, Download, FolderOpen, Globe, HardDrive, Images, KeyRound, Loader2, Monitor, Moon, Plus, RefreshCw, Sparkles, Sun, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -16,7 +16,7 @@ import { LANGUAGES, setLanguage, type Language } from '@/i18n';
 import { getBackend } from '@/lib/backend';
 import { reportError } from '@/lib/errors';
 import { formatDate, formatDuration } from '@/lib/format';
-import { invalidateLibrary, keys, useAiSettings, useAppInfo, useContainerDirs, useIgnorePatterns, useRoots, useSetAiKey, useSetAiSettings, useSetThumbLocation, useThumbLocation, useThumbStats } from '@/lib/queries';
+import { invalidateLibrary, keys, useAiSettings, useNetworkSettings, useSetNetworkSettings, useAppInfo, useContainerDirs, useIgnorePatterns, useRoots, useSetAiKey, useSetAiSettings, useSetThumbLocation, useThumbLocation, useThumbStats } from '@/lib/queries';
 import { kickThumbQueue, useThumbs } from '@/lib/thumbs/queue';
 import { dropThumbnailCache } from '@/lib/thumbs/useThumbnail';
 import { applyTheme, loadNotifications, loadTheme, saveNotifications, type Theme } from '@/lib/store';
@@ -134,6 +134,8 @@ export function SettingsPage({ scanning, onScanEnd }: { scanning: ScanState; onS
 
         <AiCard />
 
+        <NetworkCard />
+
         <Card title={t('settings.appearance')}>
           <Row label={t('settings.theme')}>
             <ToggleGroup type="single" value={theme} onValueChange={(v) => { if (v) { applyTheme(v as Theme); setTheme(v as Theme); } }}>
@@ -189,6 +191,23 @@ export function SettingsPage({ scanning, onScanEnd }: { scanning: ScanState; onS
  * AI assistance (ADR-0003, Epic 9): endpoint and model go to settings.json, the key to the OS
  * credential store, and the card says in plain words what a suggestion sends.
  */
+/** Opt-in network features (META-7 stage 2). Off by default; each one is named in the privacy policy. */
+function NetworkCard() {
+  const { t, i18n } = useTranslation();
+  const net = useNetworkSettings();
+  const set = useSetNetworkSettings();
+  const on = net.data?.fetch_model_pages ?? false;
+  const privacyUrl = i18n.language.startsWith('de') ? 'https://meshkeep.app/de/datenschutz/' : 'https://meshkeep.app/privacy/';
+  return (
+    <Card title={t('settings.network')} hint={t('settings.networkHint')}>
+      <Row label={t('settings.fetchPages')}>
+        <label className="flex items-center gap-2 text-sm text-muted-foreground"><Globe className="size-4" /><Switch checked={on} disabled={!net.data || set.isPending} onCheckedChange={(v) => set.mutate({ ...(net.data ?? { fetch_model_pages: false }), fetch_model_pages: v }, { onSuccess: (s) => toast.success(s.fetch_model_pages ? t('settings.fetchPagesOn') : t('settings.fetchPagesOff')), onError: reportError })} data-testid="fetch-pages-toggle" aria-label={t('settings.fetchPages')} /></label>
+      </Row>
+      <p className="mt-2 text-xs font-semibold text-muted-foreground" data-testid="fetch-pages-status" data-state={on ? 'on' : 'off'}>{on ? t('settings.fetchPagesHintOn') : t('settings.fetchPagesHintOff')} <button type="button" className="text-primary underline-offset-2 hover:underline" onClick={() => getBackend().then((b) => b.openUrl(privacyUrl)).catch(reportError)}>{t('settings.privacyPolicy')}</button></p>
+    </Card>
+  );
+}
+
 function AiCard() {
   const { t } = useTranslation();
   const ai = useAiSettings();

@@ -30,8 +30,21 @@ pub struct Settings {
     /// Creator hints the user dismissed, per project id (META-7 stage 1).
     #[serde(default)]
     pub dismissed_hints: BTreeMap<String, Vec<String>>,
+    /// Network use the user opted into (META-7 stage 2). Everything here defaults to off.
+    #[serde(default)]
+    pub network: NetworkSettings,
     #[serde(flatten)]
     pub extra: BTreeMap<String, serde_json::Value>,
+}
+
+/// Opt-in network features. The privacy policy (site/privacy) lists each one; a new field
+/// here needs a new paragraph there before it ships.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+pub struct NetworkSettings {
+    /// Load the model page named in a project's source link to fill creator, license and
+    /// tags. Sends that URL to its site; nothing else. Off by default.
+    #[serde(default)]
+    pub fetch_model_pages: bool,
 }
 
 fn schema_v1() -> u32 {
@@ -53,6 +66,7 @@ impl Default for Settings {
             thumb_location: ThumbLocation::default(),
             ai: AiSettings::default(),
             dismissed_hints: BTreeMap::new(),
+            network: NetworkSettings::default(),
             extra: BTreeMap::new(),
         }
     }
@@ -119,5 +133,9 @@ mod tests {
         let text = fs::read_to_string(&path).unwrap();
         assert!(text.contains("futureKey"));
         assert!(text.contains("\"project\""));
+        // network features are off until the user turns them on, and the choice survives
+        assert!(!again.get().network.fetch_model_pages);
+        again.update(|s| s.network.fetch_model_pages = true).unwrap();
+        assert!(SettingsStore::open(t.path()).unwrap().get().network.fetch_model_pages);
     }
 }

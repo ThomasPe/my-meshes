@@ -108,6 +108,7 @@ export function createMockBackend(): Backend {
   let thumbLocation: ThumbLocation = 'app_data';
   // AI assistance: endpoint and model in "settings", the key only as a flag (never readable back).
   // `?ai=unauthorized|rate_limited|invalid|unavailable` makes every call fail that way, like MESHKEEP_AI_MOCK.
+  const network = { fetch_model_pages: false };
   const aiSettings: AiSettingsView = { provider: 'anthropic', base_url: null, model: 'claude-haiku-5-5', hasKey: false };
   const aiFailure = new URLSearchParams(location.search).get('ai');
   const aiCache = new Map<string, MetadataSuggestion>();
@@ -529,6 +530,8 @@ export function createMockBackend(): Backend {
     onCollectionsChanged: (cb) => sub(listeners.coll, cb),
     onInboxChanged: (cb) => sub(listeners.inbox, cb),
     async onWatchError() { return () => {}; },
+    async getNetworkSettings() { return { ...network }; },
+    async setNetworkSettings(s) { network.fetch_model_pages = !!s.fetch_model_pages; return { ...network }; },
     async getAiSettings() { return { ...aiSettings }; },
     async setAiSettings(s) {
       const base = (s.base_url ?? '').trim().replace(/\/+$/, '');

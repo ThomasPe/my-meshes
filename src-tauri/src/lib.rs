@@ -100,6 +100,8 @@ pub fn run() {
             commands::rename_project,
             commands::move_projects,
             commands::find_duplicates,
+            commands::get_network_settings,
+            commands::set_network_settings,
             commands::project_hints,
             commands::creator_suggestions,
             commands::dismiss_creator_hint,

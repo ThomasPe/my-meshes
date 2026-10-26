@@ -136,6 +136,20 @@ test('the sidebar stays on the project page; picking a folder there returns to t
   await expect(page.getByTestId('panel-sidebar')).toHaveCount(0);
 });
 
+test('settings: the model-page switch is off by default and its state is explained', async ({ page }) => {
+  await page.getByTestId('nav-settings').click();
+  const status = page.getByTestId('fetch-pages-status');
+  await expect(status).toHaveAttribute('data-state', 'off');
+  await expect(status).toContainText('never opens a model page');
+  await page.getByTestId('fetch-pages-toggle').click();
+  await expect(page.getByText('Model pages will be loaded when you ask for it')).toBeVisible();
+  await expect(status).toHaveAttribute('data-state', 'on');
+  await expect(status).toContainText('sees your IP address');
+  await page.getByTestId('nav-library').click();
+  await page.getByTestId('nav-settings').click();
+  await expect(page.getByTestId('fetch-pages-status')).toHaveAttribute('data-state', 'on');
+});
+
 test('settings lists roots and switches language', async ({ page }) => {
   await page.getByTestId('nav-settings').click();
   await expect(page.getByTestId('root-row')).toHaveCount(2);

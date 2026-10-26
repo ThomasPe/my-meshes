@@ -1,4 +1,4 @@
-import type { AppInfo, BatchReport, BatchUpdate, CreatorSuggestions, DuplicateReport, Hints, HashProgress, MoveReport, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata, AiSettings, AiSettingsView, AiTestReport, MetadataSuggestion } from '@/lib/types';
+import type { AppInfo, BatchReport, BatchUpdate, CreatorSuggestions, DuplicateReport, Hints, NetworkSettings, HashProgress, MoveReport, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata, AiSettings, AiSettingsView, AiTestReport, MetadataSuggestion } from '@/lib/types';
 
 export type Unlisten = () => void;
 
@@ -88,6 +88,8 @@ export interface Backend {
   checkUpdate(): Promise<UpdateInfo>;
   installUpdate(): Promise<void>;
   // AI assistance (ADR-0003): opt-in, key in the OS credential store, suggestions only.
+  getNetworkSettings(): Promise<NetworkSettings>;
+  setNetworkSettings(settings: NetworkSettings): Promise<NetworkSettings>;
   getAiSettings(): Promise<AiSettingsView>;
   setAiSettings(settings: AiSettings): Promise<AiSettingsView>;
   /** Stores or (with null / empty) removes the key; resolves to whether a key is stored now. */

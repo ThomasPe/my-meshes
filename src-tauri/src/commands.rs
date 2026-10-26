@@ -7,6 +7,7 @@ use meshkeep_engine::model::{
     Facets, FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, ScanReport, SyncMode, TagCount, ThumbJob, ThumbLocation,
     ThumbStats,
 };
+use meshkeep_engine::settings::NetworkSettings;
 use meshkeep_engine::{
     BatchReport, BatchUpdate, CreatorSuggestions, DuplicateReport, EngineError, MoveReport, PromoteItem, PromoteReport, UpdateMetadata,
 };
@@ -916,6 +917,16 @@ fn key_err(e: String) -> AppError {
         code: "keyring",
         message: e,
     }
+}
+
+#[tauri::command]
+pub fn get_network_settings(state: State<AppState>) -> NetworkSettings {
+    state.engine.lock().unwrap().network_settings()
+}
+
+#[tauri::command]
+pub fn set_network_settings(state: State<AppState>, settings: NetworkSettings) -> CmdResult<NetworkSettings> {
+    Ok(state.engine.lock().unwrap().set_network_settings(settings)?)
 }
 
 #[tauri::command]

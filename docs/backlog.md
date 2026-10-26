@@ -160,7 +160,9 @@ submission is outside the code: Partner Center identity values, screenshots
 - [ ] **External enrichment** (META-7). Stage 1 done: local hints (`hints.rs`) for creator,
       license and source link from 3MF metadata, shortcuts, readmes, file names, folder names
       and known creators; inspector chips and the "Creator suggestions" view with apply-all
-      and dismiss. Stage 2 (fetch the model page) waits on the privacy wording for the Store.
+      and dismiss. Stage 2 (fetch the model page): the opt-in setting, the settings card and the privacy
+      wording (EN/DE, also covering the AI assistance that had been missing there) are in
+      place; the fetch and the per-site extractors are next.
 - [ ] **Organizational rules & maintenance tools** (IMP-7, IMP-8). Done so far: **move
       projects between folders** (dialog with folder picker and new sub-folder, multi-select,
       drag cards onto tree rows, Undo toast; collections, favorites, thumbnails and nested

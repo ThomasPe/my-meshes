@@ -76,6 +76,8 @@ export function createTauriBackend(): Backend {
     deleteSmartCollection: (id) => invoke('delete_smart_collection', { id }),
     listSmartCollection: (id, overrides) => invoke('list_smart_collection', { id, overrides: overrides ?? null }),
     onImportProgress: (cb) => listen<ImportProgress>('import://progress', (e) => cb(e.payload)),
+    getNetworkSettings: () => invoke('get_network_settings'),
+    setNetworkSettings: (settings) => invoke('set_network_settings', { settings }),
     projectHints: (projectId) => invoke('project_hints', { projectId }),
     creatorSuggestions: () => invoke('creator_suggestions'),
     dismissCreatorHint: (projectId, value) => invoke('dismiss_creator_hint', { projectId, value }),

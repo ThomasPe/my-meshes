@@ -14,7 +14,7 @@ use crate::model::{
 };
 use crate::roots::RootsStore;
 use crate::scan::{self, IgnoreMatcher, ScanOptions};
-use crate::settings::{Settings, SettingsStore};
+use crate::settings::{NetworkSettings, Settings, SettingsStore};
 use crate::sidecar;
 use crate::watch::{RootWatcher, WatchEvent};
 use crate::{threemf, thumbs};
@@ -269,6 +269,17 @@ impl Engine {
         self.settings.update(|s| s.container_dirs = clean.clone())?;
         self.scan_opts.container_dirs = clean;
         Ok(())
+    }
+
+    // ---- opt-in network features (META-7 stage 2) ---------------------------------------
+
+    pub fn network_settings(&self) -> NetworkSettings {
+        self.settings.get().network
+    }
+
+    pub fn set_network_settings(&mut self, network: NetworkSettings) -> Result<NetworkSettings> {
+        self.settings.update(|s| s.network = network)?;
+        Ok(network)
     }
 
     // ---- AI assistance (ADR-0003) -------------------------------------------------------

@@ -299,6 +299,9 @@ export interface AppError {
 export type AiProviderKind = 'anthropic';
 
 /** The `ai` block of settings.json: endpoint and model, never the key. */
+/** Opt-in network features (META-7 stage 2); each one is listed in the privacy policy. */
+export interface NetworkSettings { fetch_model_pages: boolean }
+
 export interface AiSettings {
   provider: AiProviderKind;
   base_url: string | null;

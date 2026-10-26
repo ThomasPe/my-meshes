@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import i18n from '@/i18n';
 import { getBackend } from '@/lib/backend';
 import { kickThumbQueue, useThumbs } from '@/lib/thumbs/queue';
-import type { AiSettings, BatchUpdate, ImportRequest, ListQuery, Project, ProjectSummary, ThumbLocation, UpdateMetadata, PromoteItem } from '@/lib/types';
+import type { AiSettings, BatchUpdate, ImportRequest, ListQuery, Project, ProjectSummary, ThumbLocation, UpdateMetadata, PromoteItem, NetworkSettings } from '@/lib/types';
 
 export const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 10_000, retry: false, refetchOnWindowFocus: false } } });
 
@@ -26,6 +26,7 @@ export const keys = {
   smartProjects: (id: string, q: ListQuery) => ['smartProjects', id, q] as const,
   inbox: (rootId: string) => ['inbox', rootId] as const,
   ai: ['ai'] as const,
+  network: ['network'] as const,
 };
 
 export const useAppInfo = () => useQuery({ queryKey: keys.appInfo, queryFn: async () => (await getBackend()).appInfo(), staleTime: Infinity });
@@ -243,6 +244,14 @@ export function useExecuteImport() {
 
 // ---- AI assistance (ADR-0003) ---------------------------------------------------------------
 
+export const useNetworkSettings = () => useQuery({ queryKey: keys.network, queryFn: async () => (await getBackend()).getNetworkSettings() });
+export function useSetNetworkSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (settings: NetworkSettings) => (await getBackend()).setNetworkSettings(settings),
+    onSuccess: (s) => qc.setQueryData(keys.network, s),
+  });
+}
 export const useAiSettings = () => useQuery({ queryKey: keys.ai, queryFn: async () => (await getBackend()).getAiSettings() });
 
 export function useSetAiSettings() {
