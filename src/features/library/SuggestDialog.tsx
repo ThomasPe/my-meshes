@@ -1,4 +1,4 @@
-import { Loader2, Settings as SettingsIcon, Sparkles } from 'lucide-react';
+import { Globe, Loader2, Settings as SettingsIcon, Sparkles } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -6,9 +6,9 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { reportError } from '@/lib/errors';
-import { keys, useSuggestMetadata, useUpdateMetadata } from '@/lib/queries';
+import { keys, useFetchModelPage, useSuggestMetadata, useUpdateMetadata } from '@/lib/queries';
 import { navigate } from '@/lib/router';
-import { isAppError, type MetadataSuggestion, type Project, type UpdateMetadata } from '@/lib/types';
+import { isAppError, type MetadataSuggestion, type PageSuggestion, type Project, type UpdateMetadata } from '@/lib/types';
 import { cn } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -20,15 +20,21 @@ const FIELDS: Field[] = ['title', 'creator', 'license', 'description', 'tags'];
  * to the current values with a checkbox per field, and writes the ticked fields through the
  * normal sidecar save with the stamp the project was read with. Nothing is written otherwise.
  */
-export function SuggestDialog({ project: p, open, onOpenChange }: { project: Project; open: boolean; onOpenChange: (o: boolean) => void }) {
+export function SuggestDialog({ project: p, open, onOpenChange, mode = 'ai' }: { project: Project; open: boolean; onOpenChange: (o: boolean) => void; mode?: 'ai' | 'page' }) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const suggest = useSuggestMetadata();
+  const ai = useSuggestMetadata();
+  const page = useFetchModelPage();
+  // the same dialog shows an AI answer or what the model's web page says (META-7 stage 2)
+  const suggest = mode === 'page' ? (page as unknown as typeof ai) : ai;
   const update = useUpdateMetadata();
   const [picked, setPicked] = useState<Record<Field, boolean>>({ title: true, creator: true, license: true, description: true, tags: true });
   const [conflict, setConflict] = useState<UpdateMetadata | null>(null);
-  const s = suggest.data;
-  const setup = suggest.isError && isAppError(suggest.error) && suggest.error.code === 'ai_disabled';
+  const s = suggest.data as (MetadataSuggestion | PageSuggestion) | undefined;
+  const pageInfo = mode === 'page' ? (s as PageSuggestion | undefined) : undefined;
+  const aiInfo = mode === 'ai' ? (s as MetadataSuggestion | undefined) : undefined;
+  const setup = suggest.isError && isAppError(suggest.error) && (suggest.error.code === 'ai_disabled' || suggest.error.code === 'page_fetch_disabled');
+  const k = (key: string) => (mode === 'page' ? t(`inspector.page.${key}`, { defaultValue: t(`inspector.${key}`) }) : t(`inspector.${key}`));
 
   useEffect(() => {
     if (open) { suggest.reset(); setConflict(null); suggest.mutate(p.id); }
@@ -69,17 +75,17 @@ export function SuggestDialog({ project: p, open, onOpenChange }: { project: Pro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-xl" data-testid="suggest-dialog">
+      <DialogContent className="max-w-xl" data-testid="suggest-dialog" data-mode={mode}>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2"><Sparkles className="size-4 text-primary" />{t('inspector.suggestTitle')}</DialogTitle>
-          <DialogDescription>{t('inspector.suggestBody')}</DialogDescription>
+          <DialogTitle className="flex items-center gap-2">{mode === 'page' ? <Globe className="size-4 text-primary" /> : <Sparkles className="size-4 text-primary" />}{k('suggestTitle')}</DialogTitle>
+          <DialogDescription>{k('suggestBody')}</DialogDescription>
         </DialogHeader>
 
-        {suggest.isPending && <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground" data-testid="suggest-loading"><Loader2 className="size-4 animate-spin" />{t('inspector.suggestLoading')}</div>}
+        {suggest.isPending && <div className="flex items-center gap-2 py-6 text-sm text-muted-foreground" data-testid="suggest-loading"><Loader2 className="size-4 animate-spin" />{k('suggestLoading')}</div>}
 
         {setup && (
           <div className="grid gap-3 rounded-[10px] bg-accent p-3 text-sm text-accent-foreground" data-testid="suggest-setup">
-            {t('inspector.suggestSetup')}
+            {k('suggestSetup')}
             <div><Button size="sm" variant="outline" onClick={() => { onOpenChange(false); navigate({ page: 'settings' }); }} data-testid="suggest-open-settings"><SettingsIcon />{t('inspector.suggestOpenSettings')}</Button></div>
           </div>
         )}
@@ -114,9 +120,11 @@ export function SuggestDialog({ project: p, open, onOpenChange }: { project: Pro
               ))}
             </ul>
             <div className="text-xs text-muted-foreground" data-testid="suggest-meta">
-              {t('inspector.suggestModel', { model: s.model })}{s.cached && <> · <span data-testid="suggest-cached">{t('inspector.suggestCached')}</span></>}
-              <br />
-              {t('inspector.suggestSent', { items: sentItems(s, t).join(', ') })}
+              {pageInfo ? (
+                <>{t('inspector.page.from', { site: pageInfo.site })} <a className="text-primary hover:underline" href={pageInfo.url} target="_blank" rel="noreferrer" title={pageInfo.url}>{pageInfo.url.replace(/^https?:\/\/(www\.)?/, '')}</a>{pageInfo.cached && <> · <span data-testid="suggest-cached">{t('inspector.suggestCached')}</span></>}</>
+              ) : aiInfo ? (
+                <>{t('inspector.suggestModel', { model: aiInfo.model })}{aiInfo.cached && <> · <span data-testid="suggest-cached">{t('inspector.suggestCached')}</span></>}<br />{t('inspector.suggestSent', { items: sentItems(aiInfo, t).join(', ') })}</>
+              ) : null}
             </div>
           </div>
         )}
@@ -130,7 +138,7 @@ export function SuggestDialog({ project: p, open, onOpenChange }: { project: Pro
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button disabled={!s || !anyPicked || update.isPending || p.offline} onClick={() => apply()} data-testid="suggest-apply">{update.isPending ? <Loader2 className="animate-spin" /> : <Sparkles />}{t('inspector.suggestApply')}</Button>
+          <Button disabled={!s || !anyPicked || update.isPending || p.offline} onClick={() => apply()} data-testid="suggest-apply">{update.isPending ? <Loader2 className="animate-spin" /> : mode === 'page' ? <Globe /> : <Sparkles />}{t('inspector.suggestApply')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

@@ -150,6 +150,38 @@ test('settings: the model-page switch is off by default and its state is explain
   await expect(page.getByTestId('fetch-pages-status')).toHaveAttribute('data-state', 'on');
 });
 
+test('model pages: off by default with a hint, on request the page feeds the dialog and the creator view', async ({ page }) => {
+  await page.getByTestId('search').fill('Jellyfish');
+  await page.getByTestId('project-card').filter({ hasText: 'Baby Jellyfish' }).click();
+  await page.getByTestId('inspector-fetch-page').click();
+  const dialog = page.getByTestId('suggest-dialog');
+  await expect(dialog).toHaveAttribute('data-mode', 'page');
+  await expect(dialog.getByTestId('suggest-setup')).toContainText('Loading model pages is off');
+  await dialog.getByTestId('suggest-open-settings').click();
+  await page.getByTestId('fetch-pages-toggle').click();
+  await expect(page.getByTestId('fetch-pages-status')).toHaveAttribute('data-state', 'on');
+  await page.getByTestId('nav-library').click();
+  await page.getByTestId('search').fill('Jellyfish');
+  await page.getByTestId('project-card').filter({ hasText: 'Baby Jellyfish' }).click();
+  await page.getByTestId('inspector-fetch-page').click();
+  await expect(dialog.getByTestId('suggest-meta')).toContainText('Read from printables.com');
+  await expect(dialog.getByTestId('suggest-field').filter({ hasText: 'Creator' })).toContainText('Cinderwing3D');
+  await expect(dialog.getByTestId('suggest-field').filter({ hasText: 'License' })).toContainText('CC-BY-NC-SA-4.0');
+  await expect(dialog.getByTestId('suggest-tag')).toHaveCount(3);
+  await expect(dialog.getByTestId('suggest-tag-new')).toHaveCount(2); // "dragon" exists in the library already
+  await dialog.getByTestId('suggest-pick-title').uncheck();
+  await dialog.getByTestId('suggest-apply').click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByTestId('inspector')).toContainText('Cinderwing3D');
+  await expect(page.getByTestId('inspector')).toContainText('CC-BY-NC-SA-4.0');
+  await expect(page.getByTestId('inspector-title')).toHaveText('Baby Jellyfish');
+  // the creator view can read every linked page at once; the vase copy links to Thingiverse
+  await page.getByTestId('filter-creators').click();
+  await page.getByTestId('creators-fetch-pages').click();
+  await expect(page.getByText(/Pages read: \d+ loaded/)).toBeVisible();
+  await expect(page.getByTestId('creator-group').filter({ has: page.locator('h3', { hasText: 'zackfreedman' }) })).toHaveCount(1);
+});
+
 test('settings lists roots and switches language', async ({ page }) => {
   await page.getByTestId('nav-settings').click();
   await expect(page.getByTestId('root-row')).toHaveCount(2);

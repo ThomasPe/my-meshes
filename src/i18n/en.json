@@ -155,6 +155,14 @@
       "license": "License",
       "description": "Description",
       "tags": "Tags"
+    },
+    "page": {
+      "suggest": "Read the model page",
+      "suggestTitle": "From the model page",
+      "suggestBody": "What the page linked as this project's source says. Tick what should be written to project.yaml.",
+      "suggestLoading": "Loading the page…",
+      "suggestSetup": "Loading model pages is off. Turn it on in Settings → Network; until then the app never opens a model page.",
+      "from": "Read from {{site}}:"
     }
   },
   "project": {
@@ -330,7 +338,7 @@
     "fetchPagesOn": "Model pages will be loaded when you ask for it",
     "fetchPagesOff": "Model pages are not loaded",
     "fetchPagesHintOff": "Off: the app never opens a model page. Turn this on to fill creator, license and tags from the link stored in a project, on request, one page at a time. The site then sees your IP address and that link.",
-    "fetchPagesHintOn": "On: when you ask, the app loads the model page named in a project's source link and offers what it finds as suggestions. The site sees your IP address and that link; nothing else is sent. The loading itself arrives in a later version.",
+    "fetchPagesHintOn": "On: when you ask, the app loads the model page named in a project's source link (or in a download shortcut next to the models) and offers what it finds as suggestions. The site sees your IP address and that link; nothing else is sent.",
     "privacyPolicy": "Privacy policy"
   },
   "status": {
@@ -361,7 +369,9 @@
     "ai_rate_limited": "The AI provider is rate-limiting requests. Try again in a moment.",
     "ai_invalid_response": "The AI answer could not be used: {{message}}",
     "ai_unavailable": "The AI provider could not be reached.",
-    "keyring": "The API key could not be stored in the system credential store: {{message}}"
+    "keyring": "The API key could not be stored in the system credential store: {{message}}",
+    "page_fetch_disabled": "Loading model pages is off. Turn it on in Settings → Network.",
+    "page_fetch": "The model page could not be loaded: {{message}}"
   },
   "common": {
     "cancel": "Cancel",
@@ -602,7 +612,14 @@
       "file_names": "from the file names",
       "folder_name": "from the folder name",
       "library": "file-name prefix shared across the library",
-      "known_creator": "known creator at the head of the file name"
-    }
+      "known_creator": "known creator at the head of the file name",
+      "model_page": "from the model page"
+    },
+    "fetchAll": "Read all model pages",
+    "fetchAllHint": "Loads the model page of every project without a creator that has a link, one page per second",
+    "fetching": "Loading {{done}} of {{total}}…",
+    "fetched": "Pages read: {{fetched}} loaded, {{cached}} from cache, {{noLink}} projects without a link",
+    "fetchFailed_one": "{{count}} page could not be loaded",
+    "fetchFailed_other": "{{count}} pages could not be loaded"
   }
 }

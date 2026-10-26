@@ -27,6 +27,8 @@ pub enum HintSource {
     Library,
     /// A creator the library already knows heads the file name ("Cinderwing3D Baby Rose").
     KnownCreator,
+    /// Read from the model's web page (stage 2, opt-in).
+    ModelPage,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -300,7 +302,8 @@ fn unescape(s: &str) -> String {
         .replace("&apos;", "'")
 }
 
-const MODEL_HOSTS: &[&str] = &[
+/// Platforms whose model pages the app understands (hints and stage-2 loading).
+pub const MODEL_HOSTS: &[&str] = &[
     "printables.com",
     "thingiverse.com",
     "makerworld.com",

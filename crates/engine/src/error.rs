@@ -46,6 +46,10 @@ pub enum EngineError {
     AiInvalidResponse(String),
     #[error("the AI provider could not be reached: {0}")]
     AiUnavailable(String),
+    #[error("loading model pages is off in settings")]
+    PageFetchDisabled,
+    #[error("the model page could not be loaded: {0}")]
+    PageFetch(String),
 }
 
 pub type Result<T> = std::result::Result<T, EngineError>;

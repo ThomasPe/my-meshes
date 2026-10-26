@@ -102,6 +102,8 @@ pub fn run() {
             commands::find_duplicates,
             commands::get_network_settings,
             commands::set_network_settings,
+            commands::fetch_model_page,
+            commands::fetch_model_pages,
             commands::project_hints,
             commands::creator_suggestions,
             commands::dismiss_creator_hint,

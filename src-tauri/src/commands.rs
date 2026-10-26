@@ -1,6 +1,7 @@
 use crate::state::{self, AppState};
 use meshkeep_engine::ai::{AiSettings, AiTestReport, MetadataSuggestion};
 use meshkeep_engine::collections::{Collection, SmartCollection};
+use meshkeep_engine::enrich::{EnrichReport, PageSuggestion};
 use meshkeep_engine::hints::Hints;
 use meshkeep_engine::import::{ImportItem, ImportReport, ImportRequest, InboxFile};
 use meshkeep_engine::model::{
@@ -48,6 +49,8 @@ impl From<EngineError> for AppError {
             EngineError::AiRateLimited(_) => "ai_rate_limited",
             EngineError::AiInvalidResponse(_) => "ai_invalid_response",
             EngineError::AiUnavailable(_) => "ai_unavailable",
+            EngineError::PageFetchDisabled => "page_fetch_disabled",
+            EngineError::PageFetch(_) => "page_fetch",
         };
         AppError {
             code,
@@ -447,6 +450,36 @@ pub fn set_favorite(app: AppHandle, state: State<AppState>, project_id: String, 
     let project = { state.engine.lock().unwrap().set_favorite(&project_id, favorite)? };
     let _ = app.emit("project://changed", serde_json::json!({ "projectId": project.id }));
     Ok(project)
+}
+
+#[tauri::command]
+pub async fn fetch_model_page(app: AppHandle, project_id: String) -> CmdResult<PageSuggestion> {
+    let handle = app.clone();
+    let out = tauri::async_runtime::spawn_blocking(move || handle.state::<AppState>().engine.lock().unwrap().fetch_model_page(&project_id))
+        .await
+        .map_err(|e| AppError {
+            code: "shell",
+            message: e.to_string(),
+        })??;
+    Ok(out)
+}
+
+#[tauri::command]
+pub async fn fetch_model_pages(app: AppHandle, project_ids: Vec<String>) -> CmdResult<EnrichReport> {
+    let handle = app.clone();
+    let out = tauri::async_runtime::spawn_blocking(move || {
+        let state = handle.state::<AppState>();
+        let mut engine = state.engine.lock().unwrap();
+        engine.fetch_model_pages(&project_ids, |p| {
+            let _ = handle.emit("enrich://progress", &p);
+        })
+    })
+    .await
+    .map_err(|e| AppError {
+        code: "shell",
+        message: e.to_string(),
+    })??;
+    Ok(out)
 }
 
 #[tauri::command]

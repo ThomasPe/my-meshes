@@ -1,4 +1,5 @@
-import { Check, RefreshCw, UserSearch, X } from 'lucide-react';
+import { Check, Globe, RefreshCw, UserSearch, X } from 'lucide-react';
+import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
@@ -6,7 +7,8 @@ import { Button } from '@/components/ui/button';
 import { Thumb } from '@/features/library/Thumb';
 import { getBackend } from '@/lib/backend';
 import { reportError } from '@/lib/errors';
-import { useBatchUpdate, useCreatorSuggestions } from '@/lib/queries';
+import { useBatchUpdate, useCreatorSuggestions, useFetchModelPages, useNetworkSettings, useProjects } from '@/lib/queries';
+import type { EnrichProgress } from '@/lib/types';
 import { navigate } from '@/lib/router';
 import { useUi } from '@/lib/store';
 import type { CreatorSuggestion } from '@/lib/types';
@@ -33,12 +35,33 @@ export function CreatorSuggestionsView() {
     },
     onError: reportError,
   });
+  // stage 2: warm the page cache for every project without a creator, then re-read the hints
+  const net = useNetworkSettings();
+  const all = useProjects({ root_id: null, path_prefix: null, tags: [], text: null, favorites: false, collection_id: null, creator: null, license: null, material: null, file_type: null, sort: 'modified', limit: null });
+  const pages = useFetchModelPages();
+  const [progress, setProgress] = useState<EnrichProgress | null>(null);
+  useEffect(() => {
+    let off: (() => void) | null = null;
+    let dead = false;
+    getBackend().then(async (b) => { const u = await b.onEnrichProgress((p) => setProgress(p)); if (dead) u(); else off = u; });
+    return () => { dead = true; off?.(); };
+  }, []);
+  const fetchAll = () => {
+    const ids = (all.data ?? []).filter((p) => !p.creator && !p.offline).map((p) => p.id);
+    setProgress({ done: 0, total: ids.length });
+    pages.mutate(ids, {
+      onSuccess: (r) => { toast.success(t('creators.fetched', { fetched: r.fetched, cached: r.cached, noLink: r.no_link })); if (r.failed.length) toast.warning(t('creators.fetchFailed', { count: r.failed.length }), { description: r.failed[0]!.message }); },
+      onError: reportError,
+      onSettled: () => setProgress(null),
+    });
+  };
   const dismiss = (id: string, value: string) => getBackend().then((b) => b.dismissCreatorHint(id, value)).then(() => { qc.invalidateQueries({ queryKey: ['creatorSuggestions'] }); qc.invalidateQueries({ queryKey: ['hints', id] }); }).catch(reportError);
   const data = q.data;
   return (
     <div className="h-full overflow-auto px-5 pb-6 pt-3" data-testid="creators">
       <div className="mb-3 flex flex-wrap items-center gap-2">
         <p className="mr-auto text-sm text-muted-foreground">{t('creators.hint')}</p>
+        {net.data?.fetch_model_pages && <Button size="sm" variant="outline" disabled={pages.isPending || !all.data} onClick={fetchAll} title={t('creators.fetchAllHint')} data-testid="creators-fetch-pages"><Globe className={cn(pages.isPending && 'animate-pulse')} />{progress ? t('creators.fetching', { done: progress.done, total: progress.total }) : t('creators.fetchAll')}</Button>}
         <Button size="sm" variant="outline" disabled={q.isFetching} onClick={() => void q.refetch()} data-testid="creators-refresh"><RefreshCw className={cn(q.isFetching && 'animate-spin')} />{t('creators.refresh')}</Button>
       </div>
       {data && data.groups.length === 0 && (

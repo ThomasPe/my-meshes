@@ -271,6 +271,16 @@ export function useSetAiKey() {
 }
 
 /** A suggestion is a read: nothing is written until the user applies it through `useUpdateMetadata`. */
+export function useFetchModelPage() {
+  return useMutation({ mutationFn: async (projectId: string) => (await getBackend()).fetchModelPage(projectId) });
+}
+export function useFetchModelPages() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (projectIds: string[]) => (await getBackend()).fetchModelPages(projectIds),
+    onSettled: () => { qc.invalidateQueries({ queryKey: ['creatorSuggestions'] }); qc.invalidateQueries({ queryKey: ['hints'] }); },
+  });
+}
 export function useSuggestMetadata() {
   return useMutation({ mutationFn: async (projectId: string) => (await getBackend()).suggestMetadata(projectId) });
 }

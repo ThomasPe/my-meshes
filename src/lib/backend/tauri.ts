@@ -3,7 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 import type { Backend } from './index';
-import type { HashProgress, ImportProgress, LibraryChanged, ScanProgress } from '@/lib/types';
+import type { EnrichProgress, HashProgress, ImportProgress, LibraryChanged, ScanProgress } from '@/lib/types';
 
 export function createTauriBackend(): Backend {
   return {
@@ -81,6 +81,9 @@ export function createTauriBackend(): Backend {
     projectHints: (projectId) => invoke('project_hints', { projectId }),
     creatorSuggestions: () => invoke('creator_suggestions'),
     dismissCreatorHint: (projectId, value) => invoke('dismiss_creator_hint', { projectId, value }),
+    fetchModelPage: (projectId) => invoke('fetch_model_page', { projectId }),
+    fetchModelPages: (projectIds) => invoke('fetch_model_pages', { projectIds }),
+    onEnrichProgress: (cb) => listen<EnrichProgress>('enrich://progress', (e) => cb(e.payload)),
     findDuplicates: () => invoke('find_duplicates'),
     onDuplicateProgress: (cb) => listen<HashProgress>('duplicates://progress', (e) => cb(e.payload)),
     onCollectionsChanged: (cb) => listen('collections://changed', () => cb()),

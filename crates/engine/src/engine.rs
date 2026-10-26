@@ -3,6 +3,7 @@
 
 use crate::ai::{self, AiProvider, AiSettings, AiTestReport, MetadataSuggestion, PreparedSuggestion, SharedProvider};
 use crate::collections::{Collection, CollectionsStore, SmartCollection};
+use crate::enrich;
 use crate::error::{EngineError, Result};
 use crate::hash;
 use crate::hints;
@@ -19,7 +20,7 @@ use crate::sidecar;
 use crate::watch::{RootWatcher, WatchEvent};
 use crate::{threemf, thumbs};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Component, Path, PathBuf};
 use std::sync::{mpsc, Arc};
 use std::time::{Duration, Instant};
@@ -199,7 +200,14 @@ pub struct Engine {
     deleter: Deleter,
     /// Replaces the hosted AI client (tests, `MESHKEEP_AI_MOCK`); the key gate stays.
     ai_override: Option<SharedProvider>,
+    /// Model pages read this session, by URL (META-7 stage 2); a page is loaded once.
+    page_cache: HashMap<String, enrich::Parsed>,
+    /// Replaces the HTTP fetch (tests): URL -> HTML.
+    page_override: Option<PageFetcher>,
 }
+
+/// A stand-in for the network, see `Engine::set_page_fetcher`.
+pub type PageFetcher = Box<dyn Fn(&str) -> Result<String> + Send>;
 
 impl Engine {
     pub fn open(data_dir: &Path) -> Result<Engine> {
@@ -221,6 +229,8 @@ impl Engine {
             scan_opts,
             deleter: trash_deleter(),
             ai_override: None,
+            page_cache: HashMap::new(),
+            page_override: None,
         })
     }
 
@@ -272,6 +282,151 @@ impl Engine {
     }
 
     // ---- opt-in network features (META-7 stage 2) ---------------------------------------
+
+    /// Tests hand in pages instead of the network.
+    pub fn set_page_fetcher(&mut self, f: PageFetcher) {
+        self.page_override = Some(f);
+    }
+
+    /// The page a project points at: its source link, else the best link hint.
+    pub fn model_page_url(&self, project_id: &str) -> Result<Option<String>> {
+        let p = self.online_project(project_id)?;
+        if let Some(u) = p.source_url.as_deref().filter(|u| enrich::host_allowed(u)) {
+            return Ok(Some(u.to_string()));
+        }
+        let dir = self.project_dir(&p)?;
+        Ok(hints::detect(&dir, &p.files, &[])
+            .source_url
+            .into_iter()
+            .map(|h| h.value)
+            .find(|u| enrich::host_allowed(u)))
+    }
+
+    fn load_page(&mut self, url: &str) -> Result<(enrich::Parsed, bool)> {
+        if let Some(p) = self.page_cache.get(url) {
+            return Ok((p.clone(), true));
+        }
+        let html = match &self.page_override {
+            Some(f) => f(url)?,
+            None => enrich::fetch_html(url)?,
+        };
+        let parsed = enrich::parse(url, &html);
+        self.page_cache.insert(url.to_string(), parsed.clone());
+        Ok((parsed, false))
+    }
+
+    fn page_suggestion(&self, url: &str, parsed: &enrich::Parsed, cached: bool) -> Result<enrich::PageSuggestion> {
+        let known: std::collections::HashSet<String> = self.index.tag_counts(None)?.into_iter().map(|t| t.tag).collect();
+        Ok(enrich::PageSuggestion {
+            title: parsed.title.clone(),
+            creator: parsed.creator.clone(),
+            license: parsed.license.clone(),
+            description: parsed.description.clone(),
+            new_tags: parsed.tags.iter().filter(|t| !known.contains(*t)).cloned().collect(),
+            tags: parsed.tags.clone(),
+            url: url.to_string(),
+            site: parsed.site.clone(),
+            cached,
+        })
+    }
+
+    /// Loads the model page of one project (opt-in) and returns what it says, as a suggestion.
+    pub fn fetch_model_page(&mut self, project_id: &str) -> Result<enrich::PageSuggestion> {
+        if !self.settings.get().network.fetch_model_pages {
+            return Err(EngineError::PageFetchDisabled);
+        }
+        let url = self
+            .model_page_url(project_id)?
+            .ok_or_else(|| EngineError::PageFetch("the project has no link to a supported model site".into()))?;
+        let (parsed, cached) = self.load_page(&url)?;
+        self.page_suggestion(&url, &parsed, cached)
+    }
+
+    /// Warms the page cache for many projects, one request per second; the creator
+    /// suggestions and the hints then show what the pages said.
+    pub fn fetch_model_pages(
+        &mut self,
+        project_ids: &[String],
+        mut progress: impl FnMut(enrich::EnrichProgress),
+    ) -> Result<enrich::EnrichReport> {
+        if !self.settings.get().network.fetch_model_pages {
+            return Err(EngineError::PageFetchDisabled);
+        }
+        let total = project_ids.len() as u32;
+        let mut report = enrich::EnrichReport::default();
+        let mut last_request: Option<std::time::Instant> = None;
+        for (i, id) in project_ids.iter().enumerate() {
+            progress(enrich::EnrichProgress { done: i as u32, total });
+            let url = match self.model_page_url(id) {
+                Ok(Some(u)) => u,
+                Ok(None) => {
+                    report.no_link += 1;
+                    continue;
+                }
+                Err(e) => {
+                    report.failed.push(BatchFailure {
+                        project_id: id.clone(),
+                        message: e.to_string(),
+                    });
+                    continue;
+                }
+            };
+            if self.page_cache.contains_key(&url) {
+                report.cached += 1;
+                continue;
+            }
+            if self.page_override.is_none() {
+                if let Some(t) = last_request {
+                    let since = t.elapsed();
+                    if since < std::time::Duration::from_secs(1) {
+                        std::thread::sleep(std::time::Duration::from_secs(1) - since);
+                    }
+                }
+                last_request = Some(std::time::Instant::now());
+            }
+            match self.load_page(&url) {
+                Ok(_) => report.fetched += 1,
+                Err(e) => report.failed.push(BatchFailure {
+                    project_id: id.clone(),
+                    message: e.to_string(),
+                }),
+            }
+        }
+        progress(enrich::EnrichProgress { done: total, total });
+        Ok(report)
+    }
+
+    /// What a cached page says about a project, folded into its hints.
+    fn page_hints(&self, project: &Project, h: &mut hints::Hints) {
+        let url = project
+            .source_url
+            .clone()
+            .filter(|u| enrich::host_allowed(u))
+            .or_else(|| h.source_url.iter().map(|x| x.value.clone()).find(|u| enrich::host_allowed(u)));
+        let Some(parsed) = url.as_deref().and_then(|u| self.page_cache.get(u)) else {
+            return;
+        };
+        if let Some(c) = &parsed.creator {
+            h.creator.insert(
+                0,
+                hints::Hint {
+                    value: c.clone(),
+                    source: hints::HintSource::ModelPage,
+                    confidence: 95,
+                },
+            );
+        }
+        if let Some(l) = &parsed.license {
+            h.license.insert(
+                0,
+                hints::Hint {
+                    value: l.clone(),
+                    source: hints::HintSource::ModelPage,
+                    confidence: 95,
+                },
+            );
+        }
+    }
 
     pub fn network_settings(&self) -> NetworkSettings {
         self.settings.get().network
@@ -1012,6 +1167,7 @@ impl Engine {
         let p = self.online_project(project_id)?;
         let dir = self.project_dir(&p)?;
         let mut h = hints::detect(&dir, &p.files, &self.known_creators()?);
+        self.page_hints(&p, &mut h);
         if let Some(d) = self.settings.get().dismissed_hints.get(project_id) {
             h.creator.retain(|c| !d.iter().any(|x| hints::fold(x) == hints::fold(&c.value)));
         }
@@ -1058,6 +1214,7 @@ impl Engine {
                 Err(_) => continue,
             };
             let mut h = hints::detect(&dir, &project.files, &known);
+            self.page_hints(&project, &mut h);
             if let Some((prefix, support)) = library.get(&summary.id) {
                 let conf = if *support >= 5 { 65 } else { 58 };
                 let value = known

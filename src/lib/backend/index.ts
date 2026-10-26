@@ -1,4 +1,4 @@
-import type { AppInfo, BatchReport, BatchUpdate, CreatorSuggestions, DuplicateReport, Hints, NetworkSettings, HashProgress, MoveReport, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata, AiSettings, AiSettingsView, AiTestReport, MetadataSuggestion } from '@/lib/types';
+import type { AppInfo, BatchReport, BatchUpdate, CreatorSuggestions, DuplicateReport, EnrichProgress, EnrichReport, Hints, NetworkSettings, PageSuggestion, HashProgress, MoveReport, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata, AiSettings, AiSettingsView, AiTestReport, MetadataSuggestion } from '@/lib/types';
 
 export type Unlisten = () => void;
 
@@ -27,6 +27,11 @@ export interface Backend {
   /** Projects without a creator, grouped by the creator the hints propose. */
   creatorSuggestions(): Promise<CreatorSuggestions>;
   dismissCreatorHint(projectId: string, value: string): Promise<void>;
+  /** Loads the project's model page (opt-in setting) and returns what it says; cached per session. */
+  fetchModelPage(projectId: string): Promise<PageSuggestion>;
+  /** Warms the page cache for many projects, one request per second; hints then include the pages. */
+  fetchModelPages(projectIds: string[]): Promise<EnrichReport>;
+  onEnrichProgress(cb: (p: EnrichProgress) => void): Promise<Unlisten>;
   /** Groups projects that share model files by content (LIB-8); hashes only size-collision candidates. */
   findDuplicates(): Promise<DuplicateReport>;
   onDuplicateProgress(cb: (p: HashProgress) => void): Promise<Unlisten>;

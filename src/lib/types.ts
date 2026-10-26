@@ -137,7 +137,11 @@ export interface BatchUpdate {
   license?: string;
 }
 
-export type HintSource = 'three_mf' | 'shortcut' | 'readme' | 'source_url' | 'file_names' | 'folder_name' | 'library' | 'known_creator';
+export type HintSource = 'three_mf' | 'shortcut' | 'readme' | 'source_url' | 'file_names' | 'folder_name' | 'library' | 'known_creator' | 'model_page';
+/** What a model's web page said, shaped like an AI suggestion (META-7 stage 2). */
+export interface PageSuggestion { title: string | null; creator: string | null; license: string | null; description: string | null; tags: string[]; new_tags: string[]; url: string; site: string; cached: boolean }
+export interface EnrichReport { fetched: number; cached: number; no_link: number; failed: Array<{ project_id: string; message: string }> }
+export interface EnrichProgress { done: number; total: number }
 export interface Hint { value: string; source: HintSource; confidence: number }
 export interface Hints { creator: Hint[]; license: Hint[]; source_url: Hint[] }
 export interface SuggestedProject extends ProjectSummary { source: HintSource; confidence: number }
@@ -290,7 +294,7 @@ export interface ThumbStats {
 }
 
 export interface AppError {
-  code: 'sidecar_conflict' | 'sidecar_invalid' | 'root_offline' | 'not_found' | 'root_exists' | 'not_a_directory' | 'invalid_pattern' | 'invalid_name' | 'already_exists' | 'not_allowed' | 'io' | 'index' | 'serde' | 'watch' | 'shell' | 'updater' | 'mock' | 'ai_disabled' | 'ai_unauthorized' | 'ai_rate_limited' | 'ai_invalid_response' | 'ai_unavailable' | 'keyring';
+  code: 'sidecar_conflict' | 'sidecar_invalid' | 'root_offline' | 'not_found' | 'root_exists' | 'not_a_directory' | 'invalid_pattern' | 'invalid_name' | 'already_exists' | 'not_allowed' | 'io' | 'index' | 'serde' | 'watch' | 'shell' | 'updater' | 'mock' | 'ai_disabled' | 'ai_unauthorized' | 'ai_rate_limited' | 'ai_invalid_response' | 'ai_unavailable' | 'keyring' | 'page_fetch_disabled' | 'page_fetch';
   message: string;
 }
 

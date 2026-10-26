@@ -155,6 +155,14 @@
       "license": "Lizenz",
       "description": "Beschreibung",
       "tags": "Tags"
+    },
+    "page": {
+      "suggest": "Modellseite lesen",
+      "suggestTitle": "Von der Modellseite",
+      "suggestBody": "Was die als Quelle verlinkte Seite über dieses Projekt sagt. Hake an, was in project.yaml geschrieben werden soll.",
+      "suggestLoading": "Seite wird geladen…",
+      "suggestSetup": "Modellseiten laden ist aus. Schalte es in Einstellungen → Netzwerk ein; bis dahin öffnet die App nie eine Modellseite.",
+      "from": "Gelesen von {{site}}:"
     }
   },
   "project": {
@@ -330,7 +338,7 @@
     "fetchPagesOn": "Modellseiten werden auf Anfrage geladen",
     "fetchPagesOff": "Modellseiten werden nicht geladen",
     "fetchPagesHintOff": "Aus: Die App öffnet nie eine Modellseite. Einschalten, um Designer, Lizenz und Tags aus dem in einem Projekt hinterlegten Link zu übernehmen, auf Anfrage, Seite für Seite. Die Seite sieht dann deine IP-Adresse und diesen Link.",
-    "fetchPagesHintOn": "An: Auf Anfrage lädt die App die Modellseite aus dem Quell-Link eines Projekts und bietet das Gefundene als Vorschlag an. Die Seite sieht deine IP-Adresse und diesen Link; mehr wird nicht gesendet. Das Laden selbst kommt in einer späteren Version.",
+    "fetchPagesHintOn": "An: Auf Anfrage lädt die App die Modellseite aus dem Quell-Link eines Projekts (oder aus einer Download-Verknüpfung neben den Modellen) und bietet das Gefundene als Vorschlag an. Die Seite sieht deine IP-Adresse und diesen Link; mehr wird nicht gesendet.",
     "privacyPolicy": "Datenschutzerklärung"
   },
   "status": {
@@ -361,7 +369,9 @@
     "ai_rate_limited": "Der KI-Anbieter drosselt gerade Anfragen. Versuche es gleich noch einmal.",
     "ai_invalid_response": "Die KI-Antwort war nicht verwendbar: {{message}}",
     "ai_unavailable": "Der KI-Anbieter ist nicht erreichbar.",
-    "keyring": "Der API-Schlüssel konnte nicht im Anmeldeinformationsspeicher des Systems abgelegt werden: {{message}}"
+    "keyring": "Der API-Schlüssel konnte nicht im Anmeldeinformationsspeicher des Systems abgelegt werden: {{message}}",
+    "page_fetch_disabled": "Modellseiten laden ist aus. Schalte es in Einstellungen → Netzwerk ein.",
+    "page_fetch": "Die Modellseite konnte nicht geladen werden: {{message}}"
   },
   "common": {
     "cancel": "Abbrechen",
@@ -602,7 +612,14 @@
       "file_names": "aus den Dateinamen",
       "folder_name": "aus dem Ordnernamen",
       "library": "Dateinamen-Präfix in mehreren Projekten der Bibliothek",
-      "known_creator": "bekannter Designer am Anfang des Dateinamens"
-    }
+      "known_creator": "bekannter Designer am Anfang des Dateinamens",
+      "model_page": "von der Modellseite"
+    },
+    "fetchAll": "Alle Modellseiten lesen",
+    "fetchAllHint": "Lädt die Modellseite jedes Projekts ohne Designer, das einen Link hat, eine Seite pro Sekunde",
+    "fetching": "Lade {{done}} von {{total}}…",
+    "fetched": "Seiten gelesen: {{fetched}} geladen, {{cached}} aus dem Cache, {{noLink}} Projekte ohne Link",
+    "fetchFailed_one": "{{count}} Seite konnte nicht geladen werden",
+    "fetchFailed_other": "{{count}} Seiten konnten nicht geladen werden"
   }
 }

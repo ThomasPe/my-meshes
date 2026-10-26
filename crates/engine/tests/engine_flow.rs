@@ -734,3 +734,77 @@ fn creator_suggestions_from_file_names_and_metadata() {
     assert_eq!(s.groups[0].projects.len(), 2);
     assert_eq!(s.groups[0].projects[0].source, HintSource::KnownCreator);
 }
+
+#[test]
+fn model_pages_are_opt_in_cached_and_feed_the_hints() {
+    use meshkeep_engine::hints::HintSource;
+    use meshkeep_engine::settings::NetworkSettings;
+    let data = tempfile::tempdir().unwrap();
+    let lib = tempfile::tempdir().unwrap();
+    let write = |p: &str, bytes: &[u8]| {
+        let path = lib.path().join(p);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, bytes).unwrap();
+    };
+    write("Rose/rose.stl", b"solid a");
+    write(
+        "Rose/Baby Rose.url",
+        b"[InternetShortcut]\r\nURL=https://www.printables.com/model/1234567-baby-rose-dragon\r\n",
+    );
+    write("Bins/bins.stl", b"solid b");
+    write(
+        "Bins/project.yaml",
+        b"metadata:\n  title: Bins\n  source_url: https://www.thingiverse.com/thing:5212158\n",
+    );
+    write("Lonely/x.stl", b"solid c");
+    let mut engine = Engine::open(data.path()).unwrap();
+    let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let seen = calls.clone();
+    engine.set_page_fetcher(Box::new(move |url| {
+        seen.lock().unwrap().push(url.to_string());
+        Ok(if url.contains("printables") {
+            include_str!("fixtures/pages/printables.html").to_string()
+        } else {
+            include_str!("fixtures/pages/thingiverse.html").to_string()
+        })
+    }));
+    let root = engine.add_root(lib.path(), SyncMode::Manual).unwrap();
+    engine.scan_root(&root.id, |_| {}).unwrap();
+    let rose = format!("{}:Rose", root.id);
+    let bins = format!("{}:Bins", root.id);
+    let lonely = format!("{}:Lonely", root.id);
+
+    // off by default: nothing is requested
+    assert!(matches!(engine.fetch_model_page(&rose), Err(EngineError::PageFetchDisabled)));
+    assert!(calls.lock().unwrap().is_empty());
+    engine.set_network_settings(NetworkSettings { fetch_model_pages: true }).unwrap();
+
+    // the shortcut's link is used when the sidecar has none; the page becomes a suggestion
+    let s = engine.fetch_model_page(&rose).unwrap();
+    assert_eq!(s.creator.as_deref(), Some("Cinderwing3D"));
+    assert_eq!(s.license.as_deref(), Some("CC-BY-NC-SA-4.0"));
+    assert_eq!(s.title.as_deref(), Some("Baby Rose Dragon"));
+    assert_eq!(s.new_tags.len(), 3, "no project carries these tags yet");
+    assert!(!s.cached);
+    assert!(engine.fetch_model_page(&rose).unwrap().cached, "second call comes from the cache");
+    assert_eq!(calls.lock().unwrap().len(), 1);
+    assert!(matches!(engine.fetch_model_page(&lonely), Err(EngineError::PageFetch(_))));
+
+    // the cached page now leads the hints and the creator suggestions
+    let h = engine.project_hints(&rose).unwrap();
+    assert_eq!(h.creator[0].source, HintSource::ModelPage);
+    assert_eq!(h.license[0].value, "CC-BY-NC-SA-4.0");
+
+    // batch: one request for Bins, Rose from the cache, Lonely has no link
+    let mut ticks = Vec::new();
+    let r = engine
+        .fetch_model_pages(&[rose.clone(), bins.clone(), lonely.clone()], |p| ticks.push(p))
+        .unwrap();
+    assert_eq!((r.fetched, r.cached, r.no_link, r.failed.len()), (1, 1, 1, 0));
+    assert_eq!(ticks.last().map(|p| (p.done, p.total)), Some((3, 3)));
+    assert_eq!(calls.lock().unwrap().len(), 2);
+    let cs = engine.creator_suggestions().unwrap();
+    let names: Vec<_> = cs.groups.iter().map(|g| g.creator.as_str()).collect();
+    assert!(names.contains(&"Cinderwing3D") && names.contains(&"zackfreedman"), "{names:?}");
+    assert!(cs.groups.iter().all(|g| g.projects[0].source == HintSource::ModelPage));
+}

@@ -2,7 +2,7 @@
 // the Tauri commands, including error codes, so UI tests exercise real flows.
 import type { Backend, Unlisten } from './index';
 import { generate3mf, generateObj, generateStl } from '@/lib/mesh/generate';
-import type { AppError, Collection, FacetCount, FileEntry, FileKind, ThumbLocation, FolderNode, ImportItem, ImportProgress, InboxFile, LibraryChanged, LibraryRoot, ListQuery, Project, ProjectSummary, ScanProgress, SidecarStamp, SmartCollection, TagCount, ThumbJob, UpdateMetadata, HashProgress, AiSettingsView, MetadataSuggestion, Hints, CreatorSuggestion } from '@/lib/types';
+import type { AppError, Collection, FacetCount, FileEntry, FileKind, ThumbLocation, FolderNode, ImportItem, ImportProgress, InboxFile, LibraryChanged, LibraryRoot, ListQuery, Project, ProjectSummary, ScanProgress, SidecarStamp, SmartCollection, TagCount, ThumbJob, UpdateMetadata, HashProgress, AiSettingsView, MetadataSuggestion, Hints, CreatorSuggestion, EnrichProgress } from '@/lib/types';
 
 const kindOf = (name: string): FileKind => {
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
@@ -98,7 +98,7 @@ export function createMockBackend(): Backend {
   projects.push(mk('r1', 'Projects/Dragons/Baby Rose', 'Baby Rose', { tags: ['dragon'], has_sidecar: false, files: [f('Cinderwing3D Baby Rose -23.stl', 43.4 * MB)], daysAgo: 300 }));
   projects.push(mk('r1', 'Projects/Dragons/Cinder Snake', 'Cinder Snake', { tags: ['dragon'], has_sidecar: false, files: [f('Cinderwing3D Cinder Snake.stl', 10.7 * MB)], daysAgo: 300 }));
   projects.push(mk('r1', 'Projects/Dragons/Baby Jellyfish', 'Baby Jellyfish', { tags: ['dragon'], has_sidecar: false, files: [f('Cinderwing3D Baby Jellyfish.stl', 38.3 * MB), f('Baby Jellyfish.url', 200)], daysAgo: 300 }));
-  projects.push(mk('r1', 'Projects/Misc/Twisted vase backup', 'Twisted vase backup', { tags: ['vase'], has_sidecar: false, files: [f('vase_twist.stl', 9.8 * MB)], daysAgo: 2 }));
+  projects.push(mk('r1', 'Projects/Misc/Twisted vase backup', 'Twisted vase backup', { tags: ['vase'], has_sidecar: false, source_url: 'https://www.thingiverse.com/thing:5212158', files: [f('vase_twist.stl', 9.8 * MB)], daysAgo: 2 }));
   projects.push(mk('r1', 'Projects/Calibration/Benchy Pack', 'Benchy Pack', { creator: 'CreativeTools', tags: ['benchmark'], files: [f('benchy_lowpoly.stl', 3.1 * MB), f('benchy_hull.stl', 2.5 * MB)], daysAgo: 4 }));
   for (let i = 1; i <= 60; i++) {
     projects.push(mk('r1', `Projects/Misc/Part ${String(i).padStart(2, '0')}`, `Misc Part ${i}`, { creator: i % 3 ? 'Various' : null, tags: i % 2 ? ['misc'] : ['misc', 'spare'], has_sidecar: i % 4 !== 0, files: [f(`part_${i}.stl`, (i % 7 + 1) * MB)], daysAgo: 130 + i }));
@@ -128,7 +128,9 @@ export function createMockBackend(): Backend {
   const thumbs = new Map<string, ArrayBuffer>(); // key -> png
   const failed = new Set<string>();
   const dismissedHints = new Map<string, string[]>();
-  const listeners = { dup: new Set<(p: HashProgress) => void>(), scan: new Set<(p: ScanProgress) => void>(), lib: new Set<(e: LibraryChanged) => void>(), proj: new Set<(e: { projectId: string }) => void>(), imp: new Set<(p: ImportProgress) => void>(), coll: new Set<() => void>(), inbox: new Set<(e: { rootId: string }) => void>() };
+  const pageCache = new Set<string>();
+  const pageHints = new Map<string, { creator: string | null; license: string | null }>();
+  const listeners = { enrich: new Set<(p: EnrichProgress) => void>(), dup: new Set<(p: HashProgress) => void>(), scan: new Set<(p: ScanProgress) => void>(), lib: new Set<(e: LibraryChanged) => void>(), proj: new Set<(e: { projectId: string }) => void>(), imp: new Set<(p: ImportProgress) => void>(), coll: new Set<() => void>(), inbox: new Set<(e: { rootId: string }) => void>() };
   const collections: Collection[] = [{ id: 'c_desk', name: 'Desk setup', projects: ['r1:Projects/Desk/Phone Stand', 'r1:Projects/Desk/Cable Clips'] }];
   const smart: SmartCollection[] = [{ id: 's_grid', name: 'Gridfinity PLA', query: { tags: ['gridfinity'], sort: 'title' } }];
   const inbox = new Map<string, InboxFile[]>([['r1', [{ name: 'quick_download.stl', kind: 'model', size: 2.2 * MB, modified: new Date(Date.now() - 864e5).toISOString() }, { name: 'reference.jpg', kind: 'image', size: 0.4 * MB, modified: new Date(Date.now() - 2 * 864e5).toISOString() }]]]);
@@ -260,6 +262,9 @@ export function createMockBackend(): Backend {
       const stems = p.files.filter((x) => x.kind === 'model').map((x) => x.name.replace(/\.[^.]+$/, ''));
       const first = stems[0]?.split(' ')[0];
       if (first && first.length >= 3 && /[a-z]/i.test(first) && !/^part$/i.test(first) && !h.creator.some((c) => c.value.toLowerCase() === first.toLowerCase())) h.creator.push({ value: first, source: 'library', confidence: 58 });
+      const page = pageHints.get(projectId);
+      if (page?.creator) h.creator.unshift({ value: page.creator, source: 'model_page', confidence: 95 });
+      if (page?.license) h.license.unshift({ value: page.license, source: 'model_page', confidence: 95 });
       const d = dismissedHints.get(projectId) ?? [];
       h.creator = h.creator.filter((c) => !d.includes(c.value.toLowerCase()));
       return h;
@@ -279,6 +284,32 @@ export function createMockBackend(): Backend {
       }
       return { groups: [...groups.values()].sort((a, b) => b.projects.length - a.projects.length), without_hint: without, dismissed };
     },
+    // model pages (stage 2): the jellyfish shortcut points at Printables, the vase has a Thingiverse link
+    async fetchModelPage(projectId) {
+      if (!network.fetch_model_pages) throw err('page_fetch_disabled', 'loading model pages is off in settings');
+      const p = find(projectId);
+      const url = p.source_url && /printables|thingiverse|makerworld|thangs|cults3d|myminifactory/.test(p.source_url) ? p.source_url : p.files.some((x) => x.name.endsWith('.url')) ? 'https://www.printables.com/@Cinderwing3D_1104478/models' : null;
+      if (!url) throw err('page_fetch', 'the project has no link to a supported model site');
+      await delay(120);
+      const cached = pageCache.has(url);
+      pageCache.add(url);
+      const page = url.includes('printables')
+        ? { title: 'Baby Jellyfish Dragon', creator: 'Cinderwing3D', license: 'CC-BY-NC-SA-4.0', description: 'An articulated print-in-place jellyfish dragon.', tags: ['dragon', 'articulated', 'print in place'], site: 'printables.com' }
+        : { title: p.title, creator: 'zackfreedman', license: 'CC-BY-4.0', description: 'Modular bins for the Gridfinity system.', tags: ['gridfinity', 'storage'], site: 'thingiverse.com' };
+      const known = new Set(projects.flatMap((x) => x.tags));
+      return { ...page, new_tags: page.tags.filter((t) => !known.has(t)), url, cached };
+    },
+    async fetchModelPages(ids) {
+      if (!network.fetch_model_pages) throw err('page_fetch_disabled', 'loading model pages is off in settings');
+      const report = { fetched: 0, cached: 0, no_link: 0, failed: [] as Array<{ project_id: string; message: string }> };
+      for (const [i, id] of ids.entries()) {
+        listeners.enrich.forEach((cb) => cb({ done: i, total: ids.length }));
+        try { const s = await this.fetchModelPage(id); if (s.cached) report.cached++; else report.fetched++; pageHints.set(id, s); } catch (e) { if ((e as { code?: string }).code === 'page_fetch') report.no_link++; else report.failed.push({ project_id: id, message: (e as { message: string }).message }); }
+      }
+      listeners.enrich.forEach((cb) => cb({ done: ids.length, total: ids.length }));
+      return report;
+    },
+    onEnrichProgress: (cb) => sub(listeners.enrich, cb),
     async dismissCreatorHint(projectId, value) { const l = dismissedHints.get(projectId) ?? []; l.push(value.toLowerCase()); dismissedHints.set(projectId, l); },
     async findDuplicates() {
       // "content" of a mock file is its name + size; progress ticks like the real hasher
