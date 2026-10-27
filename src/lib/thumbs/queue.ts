@@ -78,7 +78,7 @@ async function detectMode(): Promise<Mode> {
 function parseInWorker(buffer: ArrayBuffer, ext: string): Promise<import('@/lib/mesh').ParsedMesh> {
   return new Promise((res, rej) => {
     const w = new MeshWorker();
-    w.onmessage = (e) => { w.terminate(); e.data.ok ? res(e.data) : rej(new Error(e.data.error)); };
+    w.onmessage = (e) => { w.terminate(); if (e.data.ok) res(e.data); else rej(new Error(e.data.error)); };
     w.onerror = (e) => { w.terminate(); rej(e.error ?? new Error(e.message)); };
     w.postMessage({ buffer, ext }, [buffer]);
   });

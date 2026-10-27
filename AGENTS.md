@@ -24,7 +24,7 @@ npm ci                      # .npmrc sets legacy-peer-deps (npm 10 peer-resoluti
 npm run tauri:dev           # app with hot reload
 npm run dev                 # frontend only, browser mode with the mock backend (http://localhost:1420)
 cargo test                  # engine + shell crates
-npm run typecheck && npm test
+npm run typecheck && npm run lint && npm test
 npx vite build && npm run test:ui          # Playwright UI tests (needs `npx playwright install chromium` once)
 npm run tauri:build:e2e && npm run test:e2e   # real-app E2E (Windows/macOS/Linux+Xvfb)
 npm run tauri:build:store && ./msix/build-msix.ps1 && ./msix/sideload-test.ps1   # Windows: MSIX round trip
@@ -74,7 +74,7 @@ A feature is done when its acceptance criteria are verified by an automated test
 right level, and all of these pass locally:
 
 - `cargo fmt --all --check && cargo clippy -p meshkeep-engine --all-targets -- -D warnings && cargo test`
-- `npm run typecheck && npm test && npx vite build && npm run test:ui`
+- `npm run typecheck && npm run lint && npm test && npx vite build && npm run test:ui`
 - For anything touching the shell or disk behaviour: `npm run test:e2e` against a fresh
   e2e build (CI runs it on Windows; locally on Linux use `xvfb-run`).
 

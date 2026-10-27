@@ -22,7 +22,7 @@ function getRenderer(): ThumbRenderer {
   if (fatal) throw new Error(fatal);
   if (!renderer) {
     if (typeof OffscreenCanvas === 'undefined') { fatal = 'OffscreenCanvas is not available in this worker'; throw new Error(fatal); }
-    try { renderer = new ThumbRenderer(new OffscreenCanvas(THUMB_SIZE, THUMB_SIZE)); } catch (e) { fatal = 'WebGL unavailable in worker: ' + (e instanceof Error ? e.message : String(e)); throw new Error(fatal); }
+    try { renderer = new ThumbRenderer(new OffscreenCanvas(THUMB_SIZE, THUMB_SIZE)); } catch (e) { fatal = 'WebGL unavailable in worker: ' + (e instanceof Error ? e.message : String(e)); throw new Error(fatal, { cause: e }); }
   }
   return renderer;
 }

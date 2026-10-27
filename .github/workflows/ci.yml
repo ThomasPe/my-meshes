@@ -31,7 +31,7 @@ jobs:
       - run: cargo test -p meshkeep-engine
 
   frontend:
-    name: frontend · typecheck, unit, UI (browser mode)
+    name: frontend · typecheck, lint, unit, UI (browser mode)
     # pinned: ubuntu-latest moved to 26.04, which Playwright 1.56 has no Chromium build for
     # ("Playwright does not support chromium on ubuntu26.04-x64"); lift once Playwright does.
     runs-on: ubuntu-24.04
@@ -41,6 +41,7 @@ jobs:
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - run: npm run typecheck
+      - run: npm run lint
       - run: npm test
       - run: npx vite build
       - run: npx playwright install --with-deps chromium
