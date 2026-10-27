@@ -391,6 +391,15 @@ fn readme_creators(text: &str) -> Vec<String> {
 /// Maps license wording to the identifiers the app uses.
 pub fn normalize_license(text: &str) -> Option<String> {
     let f = fold(text);
+    // bare Creative Commons codes as MakerWorld stores them ("BY-NC-SA")
+    match f.as_str() {
+        "by" => return Some("CC-BY-4.0".into()),
+        "bysa" => return Some("CC-BY-SA-4.0".into()),
+        "bync" => return Some("CC-BY-NC-4.0".into()),
+        "byncsa" => return Some("CC-BY-NC-SA-4.0".into()),
+        "bynd" | "byncnd" => return None,
+        _ => {}
+    }
     let has = |s: &str| f.contains(&fold(s));
     if has("CC0") || has("public domain") {
         return Some("CC0-1.0".into());
@@ -480,6 +489,10 @@ mod tests {
         assert_eq!(normalize_license("Public Domain (CC0)").as_deref(), Some("CC0-1.0"));
         assert_eq!(normalize_license("Standard Digital File License").as_deref(), Some("Personal use"));
         assert_eq!(normalize_license("whatever").as_deref(), None);
+        assert_eq!(normalize_license("BY-NC-SA").as_deref(), Some("CC-BY-NC-SA-4.0"));
+        assert_eq!(normalize_license("BY").as_deref(), Some("CC-BY-4.0"));
+        assert_eq!(normalize_license("BY-ND").as_deref(), None);
+        assert_eq!(normalize_license("664b6b98/Terms of Use for Cinderwing3D.pdf").as_deref(), None);
     }
 
     #[test]

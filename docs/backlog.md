@@ -164,7 +164,8 @@ submission is outside the code: Partner Center identity values, screenshots
       wording (EN/DE, also covering the AI assistance that had been missing there) are in
       place; the fetch (`enrich.rs`: allow-listed hosts, 1 MiB cap, 15 s timeout, per-session
       cache, 1 req/s in batches) and the extractors (JSON-LD, OpenGraph, meta, CC links,
-      profile links; fixtures for Printables and Thingiverse) feed the suggestion dialog, the
+      profile links; Next.js page data for Thangs and MakerWorld; fixtures for all four) feed
+      the suggestion dialog, the
       inspector chips and the creator view. Real-page markup could not be verified from the
       build sandbox (bot checks); check against live pages on the dev channel.
 - [ ] **Organizational rules & maintenance tools** (IMP-7, IMP-8). Done so far: **move

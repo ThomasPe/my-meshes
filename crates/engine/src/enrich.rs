@@ -51,7 +51,9 @@ pub struct EnrichProgress {
     pub total: u32,
 }
 
-const MAX_BODY: u64 = 1 << 20;
+// Next.js pages carry their data in a script near the end of the body (a Thangs model page
+// is about 0.9 MB), so the cap has to leave room for it.
+const MAX_BODY: u64 = 4 << 20;
 const USER_AGENT: &str = concat!(
     "Mozilla/5.0 (compatible; Meshkeep/",
     env!("CARGO_PKG_VERSION"),
@@ -125,6 +127,14 @@ pub fn parse(url: &str, html: &str) -> Parsed {
             walk_ld(&v, &mut p);
         }
     }
+    // 1b. Next.js pages (Thangs, MakerWorld) embed their data as JSON
+    if let Some(v) = next_data(html) {
+        if site.ends_with("thangs.com") {
+            thangs_from_next(&v, &mut p);
+        } else if site.ends_with("makerworld.com") {
+            makerworld_from_next(&v, &mut p);
+        }
+    }
     // 2. OpenGraph / meta tags
     let og = |prop: &str| meta(html, "property", prop).or_else(|| meta(html, "name", prop));
     if p.title.is_none() {
@@ -157,7 +167,9 @@ pub fn parse(url: &str, html: &str) -> Parsed {
         p.creator = site_creator(&site, html, p.title.as_deref());
     }
     if let Some(t) = p.title.as_deref() {
-        // "Baby Rose by Cinderwing3D" (Thingiverse titles) -> title + creator
+        // "Classic Crystal Dragon - 3D model by Cinderwing3D on Thangs"
+        let t = t.strip_suffix(" on Thangs").unwrap_or(t).replace(" - 3D model by ", " by ");
+        // "Baby Rose by Cinderwing3D" (Thingiverse, Thangs, MakerWorld titles) -> title + creator
         if let Some(i) = t.rfind(" by ") {
             let (name, who) = (t[..i].trim(), t[i + 4..].trim());
             if plausible(who) && !name.is_empty() {
@@ -166,6 +178,8 @@ pub fn parse(url: &str, html: &str) -> Parsed {
                 }
                 p.title = Some(name.to_string());
             }
+        } else if t != p.title.as_deref().unwrap_or("") {
+            p.title = Some(t);
         }
     }
     p.title = p.title.map(|t| decode(t.trim())).filter(|t| !t.is_empty());
@@ -233,6 +247,104 @@ fn walk_ld(v: &serde_json::Value, p: &mut Parsed) {
             }
         }
         _ => {}
+    }
+}
+
+/// `<script id="__NEXT_DATA__" type="application/json">…</script>`.
+fn next_data(html: &str) -> Option<serde_json::Value> {
+    let i = html.find("id=\"__NEXT_DATA__\"")?;
+    let start = i + html[i..].find('>')? + 1;
+    let end = start + html[start..].find("</script>")?;
+    serde_json::from_str(html[start..end].trim()).ok()
+}
+
+fn str_at<'a>(v: &'a serde_json::Value, path: &[&str]) -> Option<&'a str> {
+    let mut cur = v;
+    for k in path {
+        cur = cur.get(*k)?;
+    }
+    cur.as_str()
+}
+
+fn tags_of(v: Option<&serde_json::Value>) -> Vec<String> {
+    match v {
+        Some(serde_json::Value::Array(a)) => a
+            .iter()
+            .filter_map(|x| {
+                x.as_str()
+                    .map(String::from)
+                    .or_else(|| x.get("name").and_then(|n| n.as_str()).map(String::from))
+            })
+            .collect(),
+        Some(serde_json::Value::String(s)) => split_tags(s),
+        _ => Vec::new(),
+    }
+}
+
+/// Thangs: `props.pageProps.initialState.model.data` (verified on a live page). The license
+/// field holds either a Creative Commons wording or the designer's own terms file; only the
+/// former maps to a license id.
+fn thangs_from_next(v: &serde_json::Value, p: &mut Parsed) {
+    let Some(data) = v.pointer("/props/pageProps/initialState/model/data") else {
+        return;
+    };
+    if p.title.is_none() {
+        p.title = str_at(data, &["name"]).map(String::from);
+    }
+    if p.description.is_none() {
+        p.description = str_at(data, &["description"]).map(String::from);
+    }
+    if p.creator.is_none() {
+        p.creator = str_at(data, &["owner", "username"]).map(String::from);
+    }
+    if p.license.is_none() {
+        p.license = str_at(data, &["license"]).and_then(hints::normalize_license);
+    }
+    if p.tags.is_empty() {
+        p.tags = tags_of(data.get("tags"));
+    }
+    if p.image.is_none() {
+        p.image = str_at(data, &["image"]).map(String::from);
+    }
+}
+
+/// MakerWorld: the design object carries `designCreator`, `title`, `summary`, `license`
+/// (bare codes such as "BY-NC-SA" or "Standard Digital File License") and `tags`. Its
+/// position inside the Next.js data is not fixed, so the first object with a `designCreator`
+/// is taken. Built from the documented structure; the live page could not be checked.
+fn makerworld_from_next(v: &serde_json::Value, p: &mut Parsed) {
+    fn find_design(v: &serde_json::Value) -> Option<&serde_json::Value> {
+        match v {
+            serde_json::Value::Object(o) => {
+                if o.contains_key("designCreator") && (o.contains_key("title") || o.contains_key("name")) {
+                    return Some(v);
+                }
+                o.values().find_map(find_design)
+            }
+            serde_json::Value::Array(a) => a.iter().find_map(find_design),
+            _ => None,
+        }
+    }
+    let Some(d) = find_design(v) else { return };
+    if p.title.is_none() {
+        p.title = str_at(d, &["title"]).or_else(|| str_at(d, &["name"])).map(String::from);
+    }
+    if p.description.is_none() {
+        p.description = str_at(d, &["summary"]).or_else(|| str_at(d, &["description"])).map(String::from);
+    }
+    if p.creator.is_none() {
+        p.creator = str_at(d, &["designCreator", "name"])
+            .or_else(|| str_at(d, &["designCreator", "username"]))
+            .map(String::from);
+    }
+    if p.license.is_none() {
+        p.license = str_at(d, &["license"]).and_then(hints::normalize_license);
+    }
+    if p.tags.is_empty() {
+        p.tags = tags_of(d.get("tags"));
+    }
+    if p.image.is_none() {
+        p.image = str_at(d, &["cover"]).or_else(|| str_at(d, &["coverUrl"])).map(String::from);
     }
 }
 
@@ -444,6 +556,41 @@ mod tests {
         assert_eq!(p.license.as_deref(), Some("CC-BY-4.0"));
         assert_eq!(p.tags, vec!["gridfinity", "storage", "organizer"]);
         assert_eq!(p.description.as_deref(), Some("Modular bins for the Gridfinity system."));
+    }
+
+    const THANGS: &str = include_str!("../tests/fixtures/pages/thangs.html");
+    const MAKERWORLD: &str = include_str!("../tests/fixtures/pages/makerworld.html");
+
+    #[test]
+    fn thangs_page_from_next_data() {
+        let p = parse(
+            "https://thangs.com/designer/Cinderwing3D/3d-model/Classic%20Crystal%20Dragon-1561367",
+            THANGS,
+        );
+        assert_eq!(p.title.as_deref(), Some("Classic Crystal Dragon"));
+        assert_eq!(p.creator.as_deref(), Some("Cinderwing3D"));
+        assert_eq!(p.license, None, "the designer's own terms file is not a license id");
+        assert_eq!(
+            p.tags[..3],
+            ["articulated".to_string(), "print-in-place".to_string(), "flexi".to_string()]
+        );
+        assert!(p.description.as_deref().unwrap().starts_with("Hi, I'm Tracy!"));
+        assert_eq!(p.site, "thangs.com");
+    }
+
+    #[test]
+    fn makerworld_page_from_next_data() {
+        let p = parse("https://makerworld.com/en/models/1052-gridfinity-bins", MAKERWORLD);
+        assert_eq!(p.title.as_deref(), Some("Gridfinity Bins"));
+        assert_eq!(p.creator.as_deref(), Some("Zack Freedman"));
+        assert_eq!(p.license.as_deref(), Some("CC-BY-NC-SA-4.0"), "bare MakerWorld code");
+        assert_eq!(p.tags, vec!["gridfinity", "storage"]);
+        assert_eq!(p.description.as_deref(), Some("Bins for the Gridfinity system."));
+        // a page without the Next.js data still yields title and creator from OpenGraph
+        let og = r#"<html><head><meta property="og:title" content="Cute Thing by Someone | MakerWorld: Download Free 3D Models"><meta property="og:description" content="x"></head></html>"#;
+        let p = parse("https://makerworld.com/en/models/2", og);
+        assert_eq!(p.title.as_deref(), Some("Cute Thing"));
+        assert_eq!(p.creator.as_deref(), Some("Someone"));
     }
 
     #[test]
