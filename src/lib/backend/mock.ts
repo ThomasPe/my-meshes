@@ -496,29 +496,45 @@ export function createMockBackend(): Backend {
         const base = source.split(/[\\/]/).pop() ?? source;
         const ext = base.split('.').pop()?.toLowerCase() ?? '';
         const name = base.replace(/\.[^.]+$/, '');
-        if (ext === 'zip') return { source, kind: 'archive', name, action: 'project', model_count: 2, file_count: 3, total_bytes: 4.2 * MB, strip_prefix: name, warnings: [] };
-        if (!ext) return { source, kind: 'folder', name, action: 'project', model_count: 3, file_count: 5, total_bytes: 9 * MB, strip_prefix: null, warnings: [] };
+        // a zip download carries a readme with the designer, license and model page
+        if (ext === 'zip') return { source, kind: 'archive', name, action: 'project', model_count: 2, file_count: 3, total_bytes: 4.2 * MB, strip_prefix: name, warnings: [], hints: { creator: 'PrintTools', license: 'CC-BY-4.0', source_url: 'https://www.printables.com/model/4242-cable-clip' } };
+        if (!ext) return { source, kind: 'folder', name, action: 'project', model_count: 3, file_count: 5, total_bytes: 9 * MB, strip_prefix: null, warnings: [], hints: { creator: null, license: null, source_url: null } };
         const model = ['stl', 'obj', '3mf'].includes(ext);
-        return { source, kind: 'file', name, action: 'inbox', model_count: model ? 1 : 0, file_count: 1, total_bytes: 1.1 * MB, strip_prefix: null, warnings: ext === '7z' ? ['.7z archives are not extracted yet; extract manually or keep it in the inbox'] : [] };
+        return { source, kind: 'file', name, action: 'inbox', model_count: model ? 1 : 0, file_count: 1, total_bytes: 1.1 * MB, strip_prefix: null, warnings: ext === '7z' ? ['.7z archives are not extracted yet; extract manually or keep it in the inbox'] : [], hints: { creator: null, license: null, source_url: null } };
       });
     },
     async executeImport(req) {
       const root = roots.find((r) => r.id === req.root_id);
       if (!root) throw err('not_found', req.root_id);
-      const report = { root_id: req.root_id, projects: [] as string[], inbox_files: 0, skipped: 0, errors: [] as string[] };
+      const report = { root_id: req.root_id, projects: [] as string[], inbox_files: 0, skipped: 0, errors: [] as string[], metadata_written: 0, pages_read: 0, warnings: [] as string[] };
       for (const it of req.items.filter((x) => x.action === 'project')) {
         if (!it.name.trim() || /[\\/:*?"<>|]/.test(it.name)) throw err('invalid_name', `invalid name: ${it.name}`);
         if (projects.some((p) => p.root_id === req.root_id && p.rel_path.toLowerCase() === it.name.trim().toLowerCase())) throw err('already_exists', `a file or folder named ${it.name} already exists`);
       }
       for (const [i, it] of req.items.entries()) {
         await delay(120);
-        listeners.imp.forEach((cb) => cb({ index: i, total: req.items.length, name: it.name }));
+        listeners.imp.forEach((cb) => cb({ index: i, total: req.items.length, name: it.name, phase: 'copy' }));
         if (it.action === 'skip') { report.skipped++; continue; }
         if (it.action === 'inbox') { const list = inbox.get(req.root_id) ?? []; list.unshift({ name: it.source.split(/[\\/]/).pop()!, kind: kindOf(it.source), size: 1.1 * MB, modified: new Date().toISOString() }); inbox.set(req.root_id, list); report.inbox_files++; continue; }
         const files = [f('part_a.stl', 2 * MB, 0), f('part_b.stl', 2.2 * MB, 0), f('README.md', 1024, 0)];
         if (req.archive_policy === 'keep' && it.source.endsWith('.zip')) files.push(f(it.source.split(/[\\/]/).pop()!, 4.2 * MB, 0));
         projects.unshift(mk(req.root_id, it.name.trim(), it.name.trim(), { files, daysAgo: 0, has_sidecar: false }));
         report.projects.push(it.name.trim());
+      }
+      // metadata step: hints from the (mock) readme, then the model page when asked and allowed
+      if (req.apply_hints || req.fetch_pages) {
+        if (req.fetch_pages && !network.fetch_model_pages) report.warnings.push('model pages were not read: loading model pages is off in settings');
+        for (const [i, rel] of report.projects.entries()) {
+          listeners.imp.forEach((cb) => cb({ index: i, total: report.projects.length, name: rel, phase: 'metadata' }));
+          const p = projects.find((x) => x.root_id === req.root_id && x.rel_path === rel)!;
+          const zipped = req.items.find((x) => x.name.trim() === rel)?.source.endsWith('.zip');
+          if (!zipped) continue;
+          await delay(60);
+          if (req.fetch_pages && network.fetch_model_pages) { p.title = 'Cable Clip Deluxe'; p.description = 'Snap-on cable clips.'; p.tags = ['cable', 'organizer']; report.pages_read++; }
+          if (req.apply_hints) { p.creator = 'PrintTools'; p.license = 'CC-BY-4.0'; p.source_url = 'https://www.printables.com/model/4242-cable-clip'; }
+          p.has_sidecar = true; p.sidecar = { state: 'ok' }; p.sidecar_stamp = { mtime_unix_nanos: String(Date.now() * 1e6), size: 240 };
+          report.metadata_written++;
+        }
       }
       listeners.lib.forEach((cb) => cb({ rootId: req.root_id, report: null, reason: 'import' }));
       return report;

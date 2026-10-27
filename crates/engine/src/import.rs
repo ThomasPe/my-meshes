@@ -52,6 +52,10 @@ pub struct ImportItem {
     /// For archives: a single top-level folder that will be stripped on extraction.
     pub strip_prefix: Option<String>,
     pub warnings: Vec<String>,
+    /// Creator, license and link guessed from names and small text files (META-7a); shown in
+    /// the staging dialog, written on request after extraction.
+    #[serde(default)]
+    pub hints: crate::hints::ItemHints,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
@@ -82,6 +86,12 @@ pub struct ImportRequest {
     pub items: Vec<ImportRequestItem>,
     #[serde(default)]
     pub archive_policy: ArchivePolicy,
+    /// Write creator, license and link found in the extracted files into the new project.yaml.
+    #[serde(default)]
+    pub apply_hints: bool,
+    /// Also read the model page of each new project with a link (needs the network setting).
+    #[serde(default)]
+    pub fetch_pages: bool,
 }
 
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
@@ -92,6 +102,15 @@ pub struct ImportReport {
     pub inbox_files: u32,
     pub skipped: u32,
     pub errors: Vec<String>,
+    /// New projects whose project.yaml received metadata from hints or pages.
+    #[serde(default)]
+    pub metadata_written: u32,
+    /// Model pages read for new projects.
+    #[serde(default)]
+    pub pages_read: u32,
+    /// Non-fatal notes from the metadata step (a page that did not answer, a sidecar that existed).
+    #[serde(default)]
+    pub warnings: Vec<String>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -99,6 +118,57 @@ pub struct ImportProgress {
     pub index: u32,
     pub total: u32,
     pub name: String,
+    /// "copy" while files move, "metadata" while hints and pages are applied.
+    #[serde(default = "phase_copy")]
+    pub phase: String,
+}
+
+fn phase_copy() -> String {
+    "copy".into()
+}
+
+/// Small text files worth reading for hints at staging time.
+fn is_hint_text(name: &str) -> bool {
+    let l = name.to_ascii_lowercase();
+    l.ends_with(".txt") || l.ends_with(".md") || l.ends_with(".url") || l.ends_with(".nfo") || l.ends_with(".webloc")
+}
+const HINT_TEXT_MAX: u64 = 64 << 10;
+
+fn folder_hint_inputs(dir: &Path) -> (Vec<String>, Vec<String>) {
+    let mut models = Vec::new();
+    let mut texts = Vec::new();
+    for entry in walkdir::WalkDir::new(dir).follow_links(false).max_depth(3).into_iter().flatten() {
+        if !entry.file_type().is_file() {
+            continue;
+        }
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if is_model(&name) {
+            models.push(name);
+        } else if is_hint_text(&name) && entry.metadata().map(|m| m.len() <= HINT_TEXT_MAX).unwrap_or(false) {
+            if let Ok(t) = std::fs::read(entry.path()) {
+                texts.push(String::from_utf8_lossy(&t).into_owned());
+            }
+        }
+    }
+    (models, texts)
+}
+
+fn zip_hint_texts(path: &Path, entries: &[(String, u64)]) -> Vec<String> {
+    let Ok(f) = File::open(path) else { return Vec::new() };
+    let Ok(mut archive) = zip::ZipArchive::new(f) else {
+        return Vec::new();
+    };
+    let mut texts = Vec::new();
+    for (name, size) in entries.iter().filter(|(n, s)| is_hint_text(n) && *s <= HINT_TEXT_MAX).take(8) {
+        let _ = size;
+        if let Ok(mut e) = archive.by_name(name) {
+            let mut buf = Vec::new();
+            if e.read_to_end(&mut buf).is_ok() {
+                texts.push(String::from_utf8_lossy(&buf).into_owned());
+            }
+        }
+    }
+    texts
 }
 
 fn ext_of(p: &Path) -> String {
@@ -310,10 +380,13 @@ pub fn analyze(paths: &[PathBuf]) -> Vec<ImportItem> {
             if models == 0 {
                 warnings.push("no model files inside".into());
             }
+            let (model_names, texts) = folder_hint_inputs(p);
+            let name = stem_name(p);
             items.push(ImportItem {
                 source: p.clone(),
                 kind: SourceKind::Folder,
-                name: stem_name(p),
+                hints: crate::hints::quick(&name, &model_names, &texts, &[]),
+                name,
                 action: if models > 0 { ImportAction::Project } else { ImportAction::Skip },
                 model_count: models,
                 file_count: files,
@@ -332,10 +405,14 @@ pub fn analyze(paths: &[PathBuf]) -> Vec<ImportItem> {
                     if models == 0 {
                         warnings.push("archive contains no model files".into());
                     }
+                    let name = stem_name(p);
+                    let model_names: Vec<String> = s.entries.iter().filter(|(n, _)| is_model(n)).map(|(n, _)| n.clone()).collect();
+                    let texts = if ext == "zip" { zip_hint_texts(p, &s.entries) } else { Vec::new() };
                     items.push(ImportItem {
                         source: p.clone(),
                         kind: SourceKind::Archive,
-                        name: stem_name(p),
+                        hints: crate::hints::quick(&name, &model_names, &texts, &[]),
+                        name,
                         action: if models > 0 { ImportAction::Project } else { ImportAction::Skip },
                         model_count: models,
                         file_count: s.entries.len() as u32,
@@ -354,6 +431,7 @@ pub fn analyze(paths: &[PathBuf]) -> Vec<ImportItem> {
                     total_bytes: 0,
                     strip_prefix: None,
                     warnings: vec![format!("cannot read archive: {e}")],
+                    hints: Default::default(),
                 }),
             }
             continue;
@@ -364,11 +442,14 @@ pub fn analyze(paths: &[PathBuf]) -> Vec<ImportItem> {
                 ".{ext} archives are not extracted yet; extract manually or keep it in the inbox"
             ));
         }
-        let model = is_model(p.file_name().and_then(|n| n.to_str()).unwrap_or(""));
+        let file_name = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_string();
+        let model = is_model(&file_name);
+        let name = stem_name(p);
         items.push(ImportItem {
             source: p.clone(),
             kind: SourceKind::File,
-            name: stem_name(p),
+            hints: crate::hints::quick(&name, &[file_name], &[], &[]),
+            name,
             action: ImportAction::Inbox,
             model_count: model as u32,
             file_count: 1,
@@ -502,6 +583,7 @@ pub fn execute(root: &Path, req: &ImportRequest, deleter: &Deleter, mut progress
             index: i as u32,
             total,
             name: item.name.clone(),
+            phase: phase_copy(),
         });
         let result: Result<()> = (|| {
             match item.action {
@@ -784,6 +866,8 @@ mod tests {
         let req = ImportRequest {
             root_id: "r".into(),
             archive_policy: ArchivePolicy::Trash,
+            apply_hints: false,
+            fetch_pages: false,
             items: vec![ImportRequestItem {
                 source: src.join("Seven.7z"),
                 action: ImportAction::Project,
@@ -816,6 +900,8 @@ mod tests {
         let req = |policy, items: Vec<(&str, ImportAction, &str)>| ImportRequest {
             root_id: "r".into(),
             archive_policy: policy,
+            apply_hints: false,
+            fetch_pages: false,
             items: items
                 .into_iter()
                 .map(|(s, a, n)| ImportRequestItem {

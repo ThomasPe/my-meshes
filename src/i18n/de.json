@@ -469,7 +469,14 @@
     "done": "{{projects}} Projekte importiert, {{inbox}} Dateien im Posteingang",
     "partial": "Import mit {{count}} Fehlern beendet",
     "dropHere": "Loslassen zum Importieren",
-    "dropHint": "Archive und Ordner werden zu Projekten, einzelne Dateien landen im Posteingang"
+    "dropHint": "Archive und Ordner werden zu Projekten, einzelne Dateien landen im Posteingang",
+    "applyHints": "Designer, Lizenz und Link aus den Dateien in die neue project.yaml schreiben",
+    "fetchPages": "Modellseite jedes neuen Projekts für Titel, Designer, Lizenz und Tags lesen",
+    "fetchPagesOff": "aus in Einstellungen → Netzwerk",
+    "progressMeta": "Metadaten {{index}}/{{total}} · {{name}}",
+    "doneMeta": "Metadaten für {{written}} Projekte geschrieben, {{pages}} Modellseiten gelesen",
+    "notes_one": "{{count}} Hinweis aus dem Import",
+    "notes_other": "{{count}} Hinweise aus dem Import"
   },
   "inbox": {
     "title": "Posteingang",

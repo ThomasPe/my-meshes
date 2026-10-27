@@ -245,12 +245,20 @@ export interface ImportItem {
   total_bytes: number;
   strip_prefix: string | null;
   warnings: string[];
+  /** Creator, license and link guessed from names and small text files (shown in staging). */
+  hints: ItemHints;
 }
+
+export interface ItemHints { creator: string | null; license: string | null; source_url: string | null }
 
 export interface ImportRequest {
   root_id: string;
   items: Array<{ source: string; action: ImportAction; name: string }>;
   archive_policy: ArchivePolicy;
+  /** Write hints from the extracted files into the new project.yaml files. */
+  apply_hints?: boolean;
+  /** Also read each new project's model page (needs the network setting). */
+  fetch_pages?: boolean;
 }
 
 export interface ImportReport {
@@ -259,12 +267,16 @@ export interface ImportReport {
   inbox_files: number;
   skipped: number;
   errors: string[];
+  metadata_written: number;
+  pages_read: number;
+  warnings: string[];
 }
 
 export interface ImportProgress {
   index: number;
   total: number;
   name: string;
+  phase: 'copy' | 'metadata';
 }
 
 export interface InboxFile {

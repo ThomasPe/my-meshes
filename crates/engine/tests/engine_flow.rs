@@ -336,6 +336,8 @@ fn import_inbox_and_collections_through_the_engine() {
             &ImportRequest {
                 root_id: root.id.clone(),
                 archive_policy: ArchivePolicy::Keep,
+                apply_hints: false,
+                fetch_pages: false,
                 items: items
                     .iter()
                     .map(|i| ImportRequestItem {
@@ -807,4 +809,113 @@ fn model_pages_are_opt_in_cached_and_feed_the_hints() {
     let names: Vec<_> = cs.groups.iter().map(|g| g.creator.as_str()).collect();
     assert!(names.contains(&"Cinderwing3D") && names.contains(&"zackfreedman"), "{names:?}");
     assert!(cs.groups.iter().all(|g| g.projects[0].source == HintSource::ModelPage));
+}
+
+#[test]
+fn import_writes_hints_and_page_metadata_into_new_projects() {
+    use meshkeep_engine::import::{ArchivePolicy, ImportRequest, ImportRequestItem};
+    use meshkeep_engine::settings::NetworkSettings;
+    let data = tempfile::tempdir().unwrap();
+    let lib = tempfile::tempdir().unwrap();
+    let drop = tempfile::tempdir().unwrap();
+    touch(&lib.path().join("Existing/part.stl"), 10);
+    // a download with a readme naming the designer, license and model page
+    touch(&drop.path().join("Rose/Cinderwing3D Baby Rose.stl"), 10);
+    fs::write(
+        drop.path().join("Rose/README.txt"),
+        b"Designed by Cinderwing3D\nLicense: CC BY-NC-SA 4.0\nhttps://www.printables.com/model/1234567-baby-rose-dragon\n",
+    )
+    .unwrap();
+    // a folder that already carries a sidecar: left alone
+    touch(&drop.path().join("Bins/bins.stl"), 10);
+    fs::write(drop.path().join("Bins/README.md"), b"by Zack Freedman, CC0\n").unwrap();
+    fs::write(
+        drop.path().join("Bins/project.yaml"),
+        b"metadata:\n  title: Bins\n  creator: Someone Else\n",
+    )
+    .unwrap();
+    // nothing to find here
+    touch(&drop.path().join("Lonely/x.stl"), 10);
+
+    let mut engine = Engine::open(data.path()).unwrap();
+    let calls = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let seen = calls.clone();
+    engine.set_page_fetcher(Box::new(move |url| {
+        seen.lock().unwrap().push(url.to_string());
+        Ok(include_str!("fixtures/pages/printables.html").to_string())
+    }));
+    let root = engine.add_root(lib.path(), SyncMode::Manual).unwrap();
+    engine.scan_root(&root.id, |_| {}).unwrap();
+
+    // staging already shows the hints, without extracting anything
+    let items = engine.analyze_import(&[drop.path().join("Rose"), drop.path().join("Bins"), drop.path().join("Lonely")]);
+    let rose_item = items.iter().find(|i| i.name == "Rose").unwrap();
+    assert_eq!(rose_item.hints.creator.as_deref(), Some("Cinderwing3D"));
+    assert_eq!(rose_item.hints.license.as_deref(), Some("CC-BY-NC-SA-4.0"));
+    assert_eq!(
+        rose_item.hints.source_url.as_deref(),
+        Some("https://www.printables.com/model/1234567-baby-rose-dragon")
+    );
+    assert_eq!(
+        items.iter().find(|i| i.name == "Bins").unwrap().hints.license.as_deref(),
+        Some("CC0-1.0")
+    );
+    assert_eq!(items.iter().find(|i| i.name == "Lonely").unwrap().hints, Default::default());
+
+    let req = |apply_hints, fetch_pages| ImportRequest {
+        root_id: root.id.clone(),
+        archive_policy: ArchivePolicy::Keep,
+        apply_hints,
+        fetch_pages,
+        items: items
+            .iter()
+            .map(|i| ImportRequestItem {
+                source: i.source.clone(),
+                action: i.action,
+                name: i.name.clone(),
+            })
+            .collect(),
+    };
+
+    // pages asked for while the setting is off: hints are written, no request leaves, one note
+    let mut phases = Vec::new();
+    let report = engine.execute_import(&req(true, true), |p| phases.push(p.phase)).unwrap();
+    assert_eq!(report.projects.len(), 3);
+    assert_eq!(report.pages_read, 0);
+    assert_eq!(report.metadata_written, 1, "Rose only: Bins kept its sidecar, Lonely has nothing");
+    assert!(calls.lock().unwrap().is_empty());
+    assert!(
+        report.warnings.iter().any(|w| w.contains("off in settings")),
+        "{:?}",
+        report.warnings
+    );
+    assert!(report.warnings.iter().any(|w| w.starts_with("Bins:")), "{:?}", report.warnings);
+    assert!(phases.iter().any(|p| p == "copy") && phases.iter().any(|p| p == "metadata"));
+    let rose = engine.get_project(&format!("{}:Rose", root.id)).unwrap();
+    assert_eq!(rose.creator.as_deref(), Some("Cinderwing3D"));
+    assert_eq!(rose.license.as_deref(), Some("CC-BY-NC-SA-4.0"));
+    assert_eq!(
+        rose.source_url.as_deref(),
+        Some("https://www.printables.com/model/1234567-baby-rose-dragon")
+    );
+    assert_eq!(rose.title, "Rose", "no page: the folder name stays the title");
+    let bins = engine.get_project(&format!("{}:Bins", root.id)).unwrap();
+    assert_eq!(bins.creator.as_deref(), Some("Someone Else"));
+
+    // with the setting on, a second import of the same download reads the page
+    for n in ["Rose", "Bins", "Lonely"] {
+        fs::remove_dir_all(lib.path().join(n)).unwrap();
+    }
+    engine.scan_root(&root.id, |_| {}).unwrap();
+    engine.set_network_settings(NetworkSettings { fetch_model_pages: true }).unwrap();
+    let report = engine.execute_import(&req(true, true), |_| {}).unwrap();
+    assert_eq!(report.pages_read, 1);
+    assert_eq!(report.metadata_written, 1);
+    assert_eq!(calls.lock().unwrap().len(), 1);
+    let rose = engine.get_project(&format!("{}:Rose", root.id)).unwrap();
+    assert_eq!(rose.title, "Baby Rose Dragon");
+    assert_eq!(rose.creator.as_deref(), Some("Cinderwing3D"));
+    assert_eq!(rose.description.as_deref(), Some("An articulated print-in-place dragon."));
+    assert_eq!(rose.tags, vec!["articulated", "dragon", "print in place"]);
+    assert_eq!(rose.sidecar, SidecarState::Ok);
 }

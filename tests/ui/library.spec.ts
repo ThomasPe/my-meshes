@@ -323,6 +323,10 @@ test('import: picker opens the staging dialog, proposals are editable, confirm c
   await expect(rows.nth(0).getByTestId('import-name')).toHaveValue('Cable Clip');
   await expect(rows.nth(1)).toContainText('copied to _Inbox');
   await expect(rows.nth(2)).toContainText('not extracted yet');
+  // the zip's readme names the designer, license and model page; pages are off in settings
+  await expect(rows.nth(0).getByTestId('import-hint')).toContainText('PrintTools · CC-BY-4.0 · printables.com/model/4242-cable-clip');
+  await expect(page.getByTestId('import-apply-hints')).toBeChecked();
+  await expect(page.getByTestId('import-fetch-pages')).toBeDisabled();
   // collision with an existing project is reported inline, then fixed
   await rows.nth(0).getByTestId('import-name').fill('Projects/Desk/Cable Clips');
   await page.getByTestId('import-confirm').click();
@@ -331,8 +335,28 @@ test('import: picker opens the staging dialog, proposals are editable, confirm c
   await page.getByTestId('import-confirm').click();
   await expect(page.getByTestId('import-dialog')).toBeHidden();
   await expect(page.getByText('Imported 1 projects, 2 files to the inbox')).toBeVisible();
+  await expect(page.getByText('Metadata written for 1 projects, 0 model pages read')).toBeVisible();
   await expect(page.getByRole('heading', { name: 'Recent additions' })).toBeVisible();
   await expect(page.getByTestId('project-card').first()).toContainText('Cable Clip');
+  await expect(page.getByTestId('project-card').first().getByTestId('card-creator')).toContainText('PrintTools');
+});
+
+test('import: with model pages on, the page fills the new project', async ({ page }) => {
+  await page.getByTestId('nav-settings').click();
+  await page.getByTestId('fetch-pages-toggle').click();
+  await expect(page.getByTestId('fetch-pages-status')).toHaveAttribute('data-state', 'on');
+  await page.getByTestId('nav-library').click();
+  await page.getByTestId('import-open').click();
+  await expect(page.getByTestId('import-fetch-pages')).toBeEnabled();
+  await expect(page.getByTestId('import-fetch-pages')).toBeChecked();
+  await page.getByTestId('import-confirm').click();
+  await expect(page.getByText('Metadata written for 1 projects, 1 model pages read')).toBeVisible();
+  const card = page.getByTestId('project-card').first();
+  await expect(card).toContainText('Cable Clip Deluxe');
+  await expect(card.getByTestId('card-creator')).toContainText('PrintTools');
+  await card.click();
+  await expect(page.getByTestId('inspector')).toContainText('CC-BY-4.0');
+  await expect(page.getByTestId('inspector')).toContainText('printables.com/model/4242-cable-clip');
 });
 
 test('inbox: one project per file, with inline renaming and a shared-prefix strip', async ({ page }) => {

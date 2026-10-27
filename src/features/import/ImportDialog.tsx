@@ -1,4 +1,4 @@
-import { Archive, FileBox, Folder, Upload } from 'lucide-react';
+import { Archive, FileBox, Folder, Globe, Lightbulb, Upload } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useImport } from '@/features/import/useImport';
 import { reportError } from '@/lib/errors';
 import { formatBytes } from '@/lib/format';
-import { useExecuteImport, useRoots } from '@/lib/queries';
+import { useExecuteImport, useNetworkSettings, useRoots } from '@/lib/queries';
 import { navigate } from '@/lib/router';
 import { useUi } from '@/lib/store';
 import { isAppError, type ArchivePolicy, type ImportAction } from '@/lib/types';
@@ -26,6 +26,13 @@ export function ImportDialog() {
   const [policy, setPolicyState] = useState<ArchivePolicy>(() => { try { const p = localStorage.getItem('mm.import.policy'); return p === 'originals' || p === 'trash' || p === 'leave' ? p : 'keep'; } catch { return 'keep'; } });
   const setPolicy = (p: ArchivePolicy) => { setPolicyState(p); try { localStorage.setItem('mm.import.policy', p); } catch { /* ignore */ } };
   const [error, setError] = useState<string | null>(null);
+  // metadata options (META-7): hints from the files are free; pages need the network setting
+  const net = useNetworkSettings();
+  const [applyHints, setApplyHintsState] = useState(() => { try { return localStorage.getItem('mm.import.hints') !== 'off'; } catch { return true; } });
+  const [fetchPages, setFetchPagesState] = useState(() => { try { return localStorage.getItem('mm.import.pages') !== 'off'; } catch { return true; } });
+  const setApplyHints = (v: boolean) => { setApplyHintsState(v); try { localStorage.setItem('mm.import.hints', v ? 'on' : 'off'); } catch { /* ignore */ } };
+  const setFetchPages = (v: boolean) => { setFetchPagesState(v); try { localStorage.setItem('mm.import.pages', v ? 'on' : 'off'); } catch { /* ignore */ } };
+  const pagesAllowed = !!net.data?.fetch_model_pages;
   const run = useExecuteImport();
   const setFilter = useUi((s) => s.setFilter);
   useEffect(() => { if (!rootId && online[0]) setRootId(online[0].id); }, [online, rootId]);
@@ -38,11 +45,12 @@ export function ImportDialog() {
   const confirm = () => {
     if (!rootId) return;
     setError(null);
-    run.mutate({ root_id: rootId, archive_policy: policy, items: items.map((i) => ({ source: i.source, action: i.action, name: i.name })) }, {
+    run.mutate({ root_id: rootId, archive_policy: policy, apply_hints: applyHints, fetch_pages: pagesAllowed && fetchPages, items: items.map((i) => ({ source: i.source, action: i.action, name: i.name })) }, {
       onSuccess: (report) => {
         close();
         if (report.errors.length) toast.warning(t('import.partial', { count: report.errors.length }), { description: report.errors.join('\n') });
-        else toast.success(t('import.done', { projects: report.projects.length, inbox: report.inbox_files }));
+        else toast.success(t('import.done', { projects: report.projects.length, inbox: report.inbox_files }), { description: report.metadata_written || report.pages_read ? t('import.doneMeta', { written: report.metadata_written, pages: report.pages_read }) : undefined });
+        if (report.warnings.length) toast.info(t('import.notes', { count: report.warnings.length }), { description: report.warnings.slice(0, 3).join('\n') });
         if (report.projects.length > 0) { setFilter({ kind: 'recent' }); navigate({ page: 'library' }); }
         else if (report.inbox_files > 0) { setFilter({ kind: 'inbox', rootId }); navigate({ page: 'library' }); }
       },
@@ -78,7 +86,7 @@ export function ImportDialog() {
                           </SelectContent>
                         </Select>
                       </td>
-                      <td className="px-3 py-2">{it.action === 'project' ? <Input value={it.name} onChange={(e) => setItem(i, { name: e.target.value })} className="h-8" data-testid="import-name" /> : <span className="text-xs text-muted-foreground">{it.action === 'inbox' ? t('import.toInbox') : '—'}</span>}</td>
+                      <td className="px-3 py-2">{it.action === 'project' ? <><Input value={it.name} onChange={(e) => setItem(i, { name: e.target.value })} className="h-8" data-testid="import-name" />{(it.hints.creator || it.hints.license || it.hints.source_url) && <div className="mt-1 flex items-center gap-1 truncate text-[11px] text-muted-foreground" title={[it.hints.creator, it.hints.license, it.hints.source_url].filter(Boolean).join(' · ')} data-testid="import-hint"><Lightbulb className="size-3 shrink-0 text-primary" /><span className="truncate">{[it.hints.creator, it.hints.license, it.hints.source_url?.replace(/^https?:\/\/(www\.)?/, '')].filter(Boolean).join(' · ')}</span></div>}</> : <span className="text-xs text-muted-foreground">{it.action === 'inbox' ? t('import.toInbox') : '—'}</span>}</td>
                       <td className="whitespace-nowrap px-3 py-2 text-right text-xs text-muted-foreground tabular">{t('import.models', { count: it.model_count })} · {formatBytes(it.total_bytes, i18n.language)}</td>
                     </tr>
                   ))}
@@ -105,6 +113,10 @@ export function ImportDialog() {
                 </Select>
               </label>
             </div>
+            <div className="grid gap-1.5 rounded-xl bg-secondary/60 px-3 py-2 text-[13px]">
+              <label className="flex items-center gap-2"><input type="checkbox" className="size-4 accent-primary" checked={applyHints} onChange={(e) => setApplyHints(e.target.checked)} data-testid="import-apply-hints" /><Lightbulb className="size-3.5 text-primary" />{t('import.applyHints')}</label>
+              <label className={cn('flex items-center gap-2', !pagesAllowed && 'text-muted-foreground')} title={pagesAllowed ? undefined : t('import.fetchPagesOff')}><input type="checkbox" className="size-4 accent-primary" checked={pagesAllowed && fetchPages} disabled={!pagesAllowed} onChange={(e) => setFetchPages(e.target.checked)} data-testid="import-fetch-pages" /><Globe className="size-3.5" />{t('import.fetchPages')}{!pagesAllowed && <span className="text-xs">· {t('import.fetchPagesOff')}</span>}</label>
+            </div>
             {error && <p className="text-sm font-semibold text-destructive" data-testid="import-error">{error}</p>}
           </div>
         )}
@@ -113,7 +125,7 @@ export function ImportDialog() {
             <Badge variant="accent">{t('import.summary.projects', { count: counts.project })}</Badge>
             <Badge>{t('import.summary.inbox', { count: counts.inbox })}</Badge>
             {counts.skip > 0 && <Badge variant="outline">{t('import.summary.skip', { count: counts.skip })}</Badge>}
-            {progress && run.isPending && <span className="self-center">{t('import.progress', { index: progress.index + 1, total: progress.total, name: progress.name })}</span>}
+            {progress && run.isPending && <span className="self-center" data-testid="import-progress" data-phase={progress.phase}>{progress.phase === 'metadata' ? t('import.progressMeta', { index: progress.index + 1, total: progress.total, name: progress.name }) : t('import.progress', { index: progress.index + 1, total: progress.total, name: progress.name })}</span>}
           </span>
           <Button variant="outline" disabled={run.isPending} onClick={close}>{t('common.cancel')}</Button>
           <Button disabled={analyzing || nothing || !rootId || run.isPending || items.some((i) => i.action === 'project' && !i.name.trim())} onClick={confirm} data-testid="import-confirm"><Upload />{t('import.confirm')}</Button>

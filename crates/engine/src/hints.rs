@@ -98,7 +98,7 @@ pub fn detect(dir: &Path, files: &[FileEntry], known_creators: &[String]) -> Hin
                     for c in readme_creators(&text) {
                         push(&mut h.creator, c, HintSource::Readme, 70);
                     }
-                    if let Some(l) = normalize_license(&text) {
+                    if let Some(l) = text_license(&text) {
                         push(&mut h.license, l, HintSource::Readme, 65);
                     }
                 }
@@ -135,6 +135,62 @@ pub fn detect(dir: &Path, files: &[FileEntry], known_creators: &[String]) -> Hin
     h.license.sort_by_key(|x| std::cmp::Reverse(x.confidence));
     h.source_url.sort_by_key(|x| std::cmp::Reverse(x.confidence));
     h
+}
+
+/// Best creator, license and link for an import item, from names and small text files only
+/// (nothing is extracted yet at staging time).
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, serde::Deserialize)]
+pub struct ItemHints {
+    pub creator: Option<String>,
+    pub license: Option<String>,
+    pub source_url: Option<String>,
+}
+
+/// Hints without touching the disk: the item's folder or archive name, its model file names
+/// and the text of small readme/shortcut files found inside.
+pub fn quick(folder_name: &str, model_names: &[String], texts: &[String], known_creators: &[String]) -> ItemHints {
+    let mut h = Hints::default();
+    for text in texts {
+        for url in model_urls(text) {
+            push(&mut h.source_url, url, HintSource::Readme, 75);
+        }
+        for c in readme_creators(text) {
+            push(&mut h.creator, c, HintSource::Readme, 70);
+        }
+        if let Some(l) = text_license(text) {
+            push(&mut h.license, l, HintSource::Readme, 65);
+        }
+    }
+    let from_urls: Vec<String> = h.source_url.iter().filter_map(|u| creator_from_url(&u.value)).collect();
+    for c in from_urls {
+        push(&mut h.creator, c, HintSource::SourceUrl, 80);
+    }
+    let stems: Vec<String> = model_names.iter().map(|n| stem(n.rsplit('/').next().unwrap_or(n))).collect();
+    if let Some(p) = shared_prefix(&stems) {
+        push(&mut h.creator, p, HintSource::FileNames, 55);
+    }
+    for (c, conf) in folder_creators(folder_name) {
+        push(&mut h.creator, c, HintSource::FolderName, conf);
+    }
+    for k in known_creators {
+        let fk = fold(k);
+        if fk.len() >= 3
+            && stems.iter().any(|s| {
+                let fs = fold(s);
+                fs.len() > fk.len() && fs.starts_with(&fk)
+            })
+        {
+            push(&mut h.creator, k.clone(), HintSource::KnownCreator, 62);
+        }
+    }
+    settle(&mut h.creator, known_creators);
+    h.license.sort_by_key(|x| std::cmp::Reverse(x.confidence));
+    h.source_url.sort_by_key(|x| std::cmp::Reverse(x.confidence));
+    ItemHints {
+        creator: h.creator.first().map(|x| x.value.clone()),
+        license: h.license.first().map(|x| x.value.clone()),
+        source_url: h.source_url.first().map(|x| x.value.clone()),
+    }
 }
 
 /// Word-boundary prefixes of model-file stems that recur across many projects of a library
@@ -388,6 +444,11 @@ fn readme_creators(text: &str) -> Vec<String> {
     out
 }
 
+/// The first line of a readme that names a license.
+fn text_license(text: &str) -> Option<String> {
+    text.lines().take(400).find_map(normalize_license)
+}
+
 /// Maps license wording to the identifiers the app uses.
 pub fn normalize_license(text: &str) -> Option<String> {
     let f = fold(text);
@@ -405,9 +466,16 @@ pub fn normalize_license(text: &str) -> Option<String> {
         return Some("CC0-1.0".into());
     }
     if has("CC BY") || has("creative commons") || has("CC-BY") {
-        let nc = has("NC") || has("noncommercial") || has("non commercial");
-        let sa = has("SA") || has("sharealike") || has("share alike");
-        let nd = has("ND") || has("noderivatives") || has("no derivatives");
+        // the short codes must stand alone ("by-nc-sa"), else "and" or "Cinderwing" reads as ND
+        let tokens: Vec<String> = text
+            .split(|c: char| !c.is_alphanumeric())
+            .filter(|t| !t.is_empty())
+            .map(|t| t.to_ascii_lowercase())
+            .collect();
+        let code = |c: &str| tokens.iter().any(|t| t == c);
+        let nc = code("nc") || has("noncommercial");
+        let sa = code("sa") || has("sharealike");
+        let nd = code("nd") || has("noderivative") || has("no derivative");
         if nd {
             return None; // not in the app's list; leave it to the user
         }
@@ -478,6 +546,19 @@ mod tests {
     }
 
     #[test]
+    fn license_codes_must_stand_alone() {
+        assert_eq!(
+            normalize_license("CC BY-NC-SA 4.0, thanks for downloading and printing").as_deref(),
+            Some("CC-BY-NC-SA-4.0")
+        );
+        assert_eq!(normalize_license("Creative Commons BY-ND"), None);
+        assert_eq!(
+            text_license("Thanks for downloading!\nDesigned by Cinderwing3D\nLicense: CC BY-NC 4.0\n").as_deref(),
+            Some("CC-BY-NC-4.0")
+        );
+    }
+
+    #[test]
     fn licenses_normalize() {
         assert_eq!(
             normalize_license("Creative Commons - Attribution - Non-Commercial - Share Alike").as_deref(),
@@ -524,6 +605,26 @@ mod tests {
             model_urls("see https://www.printables.com/model/1-x, and https://example.com/no"),
             vec!["https://www.printables.com/model/1-x".to_string()]
         );
+    }
+
+    #[test]
+    fn quick_hints_from_names_and_texts() {
+        let texts = vec![
+            "Thanks for downloading!\nDesigned by Cinderwing3D\nhttps://www.printables.com/model/99-baby-rose\nLicense: CC BY-NC-SA 4.0"
+                .to_string(),
+        ];
+        let h = quick(
+            "baby-rose",
+            &["Cinderwing3D Baby Rose.stl".into(), "Cinderwing3D stand.stl".into()],
+            &texts,
+            &[],
+        );
+        assert_eq!(h.creator.as_deref(), Some("Cinderwing3D"));
+        assert_eq!(h.license.as_deref(), Some("CC-BY-NC-SA-4.0"));
+        assert_eq!(h.source_url.as_deref(), Some("https://www.printables.com/model/99-baby-rose"));
+        let h = quick("Gridfinity Bins by Zack Freedman", &["bin.stl".into()], &[], &[]);
+        assert_eq!(h.creator.as_deref(), Some("Zack Freedman"));
+        assert_eq!(quick("loose", &["part.stl".into()], &[], &[]), ItemHints::default());
     }
 
     #[test]

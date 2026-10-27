@@ -167,7 +167,9 @@ submission is outside the code: Partner Center identity values, screenshots
       profile links; Next.js page data for Thangs and MakerWorld; fixtures for all four) feed
       the suggestion dialog, the
       inspector chips and the creator view. Real-page markup could not be verified from the
-      build sandbox (bot checks); check against live pages on the dev channel.
+      build sandbox (bot checks); check against live pages on the dev channel. The import
+      dialog shows per-item hints and writes hints and, when allowed, page metadata into the
+      new project.yaml files (IMP-1a).
 - [ ] **Organizational rules & maintenance tools** (IMP-7, IMP-8). Done so far: **move
       projects between folders** (dialog with folder picker and new sub-folder, multi-select,
       drag cards onto tree rows, Undo toast; collections, favorites, thumbnails and nested

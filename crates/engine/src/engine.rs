@@ -808,11 +808,108 @@ impl Engine {
     }
 
     /// Runs a confirmed import into a root and rescans that root afterwards.
-    pub fn execute_import(&mut self, req: &ImportRequest, progress: impl FnMut(ImportProgress)) -> Result<ImportReport> {
+    pub fn execute_import(&mut self, req: &ImportRequest, mut progress: impl FnMut(ImportProgress)) -> Result<ImportReport> {
         let root = self.root(&req.root_id)?;
-        let report = import::execute(&root.path, req, &self.deleter, progress)?;
+        let mut report = import::execute(&root.path, req, &self.deleter, &mut progress)?;
         self.scan_root_as(&req.root_id, "import", |_| {})?;
+        if req.apply_hints || req.fetch_pages {
+            self.enrich_imported(&req.root_id, req, &mut report, &mut progress);
+        }
         Ok(report)
+    }
+
+    /// Fills the fresh project.yaml of every project an import created: from the hints the
+    /// extracted files carry and, on request and with the setting on, from the model page.
+    /// Nothing is overwritten: a project that already came with a sidecar is left alone.
+    fn enrich_imported(
+        &mut self,
+        root_id: &str,
+        req: &ImportRequest,
+        report: &mut ImportReport,
+        progress: &mut impl FnMut(ImportProgress),
+    ) {
+        let fetch = req.fetch_pages && self.settings.get().network.fetch_model_pages;
+        if req.fetch_pages && !fetch {
+            report
+                .warnings
+                .push("model pages were not read: loading model pages is off in settings".into());
+        }
+        let total = report.projects.len() as u32;
+        let mut last_request: Option<std::time::Instant> = None;
+        for (i, rel) in report.projects.clone().iter().enumerate() {
+            progress(ImportProgress {
+                index: i as u32,
+                total,
+                name: rel.clone(),
+                phase: "metadata".into(),
+            });
+            let id = Project::make_id(root_id, rel);
+            let h = match self.project_hints(&id) {
+                Ok(h) => h,
+                Err(e) => {
+                    report.warnings.push(format!("{rel}: {e}"));
+                    continue;
+                }
+            };
+            let mut upd = UpdateMetadata::default();
+            let mut page_url = None;
+            if fetch {
+                if let Ok(Some(url)) = self.model_page_url(&id) {
+                    if self.page_override.is_none() && !self.page_cache.contains_key(&url) {
+                        if let Some(t) = last_request {
+                            let since = t.elapsed();
+                            if since < std::time::Duration::from_secs(1) {
+                                std::thread::sleep(std::time::Duration::from_secs(1) - since);
+                            }
+                        }
+                        last_request = Some(std::time::Instant::now());
+                    }
+                    match self.load_page(&url) {
+                        Ok((parsed, _)) => {
+                            report.pages_read += 1;
+                            upd.title = parsed.title.clone();
+                            upd.creator = parsed.creator.clone();
+                            upd.license = parsed.license.clone();
+                            upd.description = parsed.description.clone();
+                            if !parsed.tags.is_empty() {
+                                upd.tags = Some(parsed.tags.clone());
+                            }
+                            page_url = Some(url);
+                        }
+                        Err(e) => report.warnings.push(format!("{rel}: {e}")),
+                    }
+                }
+            }
+            if req.apply_hints {
+                if upd.creator.is_none() {
+                    upd.creator = h.creator.first().filter(|x| x.confidence >= 55).map(|x| x.value.clone());
+                }
+                if upd.license.is_none() {
+                    upd.license = h.license.first().map(|x| x.value.clone());
+                }
+                if page_url.is_none() {
+                    page_url = h.source_url.first().map(|x| x.value.clone());
+                }
+            }
+            upd.source_url = page_url;
+            if upd.title.is_none()
+                && upd.creator.is_none()
+                && upd.license.is_none()
+                && upd.source_url.is_none()
+                && upd.description.is_none()
+                && upd.tags.is_none()
+            {
+                continue;
+            }
+            // a sidecar that arrived inside the archive wins; expected_stamp None means "none yet"
+            match self.update_metadata(&id, upd) {
+                Ok(_) => report.metadata_written += 1,
+                Err(EngineError::SidecarConflict) => report
+                    .warnings
+                    .push(format!("{rel}: project.yaml came with the files and was kept")),
+                Err(e) => report.warnings.push(format!("{rel}: {e}")),
+            }
+        }
     }
 
     pub fn list_inbox(&self, root_id: &str) -> Result<Vec<InboxFile>> {

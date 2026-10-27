@@ -469,7 +469,14 @@
     "done": "Imported {{projects}} projects, {{inbox}} files to the inbox",
     "partial": "Import finished with {{count}} errors",
     "dropHere": "Drop to import",
-    "dropHint": "Archives and folders become projects, single files go to the inbox"
+    "dropHint": "Archives and folders become projects, single files go to the inbox",
+    "applyHints": "Write creator, license and link found in the files into the new project.yaml",
+    "fetchPages": "Read each new project's model page for title, creator, license and tags",
+    "fetchPagesOff": "off in Settings → Network",
+    "progressMeta": "Metadata {{index}}/{{total}} · {{name}}",
+    "doneMeta": "Metadata written for {{written}} projects, {{pages}} model pages read",
+    "notes_one": "{{count}} note from the import",
+    "notes_other": "{{count}} notes from the import"
   },
   "inbox": {
     "title": "Inbox",
