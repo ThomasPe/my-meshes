@@ -11,6 +11,9 @@ import ThumbWorker from '@/workers/thumb-worker?worker';
 import MeshWorker from '@/workers/mesh-worker?worker';
 import type { ThumbWorkerResponse } from '@/workers/thumb-worker';
 
+/** Where "use this view as preview" saves its picture inside a project (engine `VIEW_PREVIEW_REL`). */
+export const VIEW_PREVIEW_REL = '.meshkeep/preview.png';
+
 export interface ThumbState {
   running: boolean;
   pending: number;

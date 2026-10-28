@@ -101,7 +101,7 @@ files:                                    # optional per-file annotations
     description: "Standard single bin"
     quantity: 4
 
-thumbnail: ".cache/preview.png"           # relative path; absent = auto-generated
+thumbnail: ".meshkeep/preview.png"        # relative path; absent = auto-generated
 ```
 
 Decided (Q4): the file name stays `project.yaml`; `schema` stays; the printing block is
@@ -160,8 +160,10 @@ reference along.
   people who want previews to travel with the project. `.cache` and `.meshkeep` inside a
   project are never indexed, whatever the ignore patterns say. Lookups try the app cache
   first, then the owning project, so switching the setting keeps existing previews.
-- A user-provided image ("set view as thumbnail", or an uploaded photo) replaces the
-  generated preview and is referenced from `project.yaml`.
+- A user-chosen image replaces the automatic choice and is referenced from `project.yaml`
+  (`thumbnail:`): any image of the project, or the viewer's current view, which the app
+  saves as `.meshkeep/preview.png` inside the project. That one file is the only thing
+  inside an app folder the scanner indexes, and only while the sidecar points at it.
 
 ## Index (cache database)
 

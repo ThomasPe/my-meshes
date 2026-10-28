@@ -652,6 +652,38 @@ pub async fn read_thumbnail(app: AppHandle, key: String) -> CmdResult<Response> 
     Ok(Response::new(bytes))
 }
 
+/// VIEW-4: one of the project's images becomes the preview; `None` goes back to automatic.
+#[tauri::command]
+pub fn set_thumbnail_image(app: AppHandle, state: State<AppState>, project_id: String, rel_path: Option<String>) -> CmdResult<Project> {
+    let p = state.engine.lock().unwrap().set_thumbnail_image(&project_id, rel_path.as_deref())?;
+    let _ = app.emit("project://changed", serde_json::json!({ "projectId": project_id }));
+    Ok(p)
+}
+
+/// VIEW-4: raw PNG bytes of the viewer's current view become the preview (header as in
+/// `store_thumbnail`).
+#[tauri::command]
+pub fn set_view_thumbnail(app: AppHandle, state: State<AppState>, request: Request<'_>) -> CmdResult<Project> {
+    let project_id = request
+        .headers()
+        .get("x-project-id")
+        .and_then(|v| v.to_str().ok())
+        .map(percent_decode)
+        .ok_or(AppError {
+            code: "shell",
+            message: "missing x-project-id header".into(),
+        })?;
+    let InvokeBody::Raw(png) = request.body() else {
+        return Err(AppError {
+            code: "shell",
+            message: "thumbnail body must be raw bytes".into(),
+        });
+    };
+    let p = state.engine.lock().unwrap().set_view_thumbnail(&project_id, png)?;
+    let _ = app.emit("project://changed", serde_json::json!({ "projectId": project_id }));
+    Ok(p)
+}
+
 #[tauri::command]
 pub fn reset_thumbnail(app: AppHandle, state: State<AppState>, project_id: String) -> CmdResult<()> {
     state.engine.lock().unwrap().reset_thumbnail(&project_id)?;

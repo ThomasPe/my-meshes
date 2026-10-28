@@ -919,3 +919,78 @@ fn import_writes_hints_and_page_metadata_into_new_projects() {
     assert_eq!(rose.tags, vec!["articulated", "dragon", "print in place"]);
     assert_eq!(rose.sidecar, SidecarState::Ok);
 }
+
+#[test]
+fn a_chosen_image_or_a_captured_view_becomes_the_preview() {
+    use meshkeep_engine::model::ThumbSource;
+    const TINY_PNG: &[u8] = &[
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00,
+        0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63,
+        0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60,
+        0x82,
+    ];
+    let data = tempfile::tempdir().unwrap();
+    let lib = tempfile::tempdir().unwrap();
+    touch(&lib.path().join("Vase/vase.stl"), 4000);
+    touch(&lib.path().join("Vase/photo.jpg"), 900);
+    touch(&lib.path().join("Vase/notes.txt"), 10);
+    // something else inside the app folder is never indexed
+    fs::create_dir_all(lib.path().join("Vase/.meshkeep")).unwrap();
+    fs::write(lib.path().join("Vase/.meshkeep/other.png"), TINY_PNG).unwrap();
+    let mut engine = Engine::open(data.path()).unwrap();
+    let root = engine.add_root(lib.path(), SyncMode::Manual).unwrap();
+    engine.scan_root(&root.id, |_| {}).unwrap();
+    let id = format!("{}:Vase", root.id);
+    let job = |engine: &Engine| engine.thumb_queue(10).unwrap().into_iter().find(|j| j.project_id == id).unwrap();
+    assert_eq!(job(&engine).source, ThumbSource::Render, "largest model renders by default");
+    assert!(!engine
+        .get_project(&id)
+        .unwrap()
+        .files
+        .iter()
+        .any(|f| f.rel_path.starts_with(".meshkeep/")));
+
+    // a photo of the project
+    assert!(matches!(
+        engine.set_thumbnail_image(&id, Some("notes.txt")),
+        Err(EngineError::NotAllowed(_))
+    ));
+    let p = engine.set_thumbnail_image(&id, Some("photo.jpg")).unwrap();
+    assert_eq!(p.thumbnail.as_deref(), Some("photo.jpg"));
+    assert_eq!(p.sidecar, SidecarState::Ok);
+    let j = job(&engine);
+    assert_eq!((j.rel_path.as_str(), j.source), ("photo.jpg", ThumbSource::Image));
+    let key = engine.store_thumbnail(&id, TINY_PNG).unwrap();
+    assert!(engine.get_project(&id).unwrap().thumb.is_some());
+
+    // a view captured in the viewer: saved inside the project, indexed only while referenced
+    assert!(matches!(
+        engine.set_view_thumbnail(&id, b"not a png"),
+        Err(EngineError::NotAllowed(_))
+    ));
+    let p = engine.set_view_thumbnail(&id, TINY_PNG).unwrap();
+    assert_eq!(p.thumbnail.as_deref(), Some(".meshkeep/preview.png"));
+    assert!(lib.path().join("Vase/.meshkeep/preview.png").is_file());
+    assert!(p
+        .files
+        .iter()
+        .any(|f| f.rel_path == ".meshkeep/preview.png" && f.kind == meshkeep_engine::model::FileKind::Image));
+    assert!(!p.files.iter().any(|f| f.rel_path == ".meshkeep/other.png"));
+    assert!(p.thumb.is_none(), "the photo's cached PNG was dropped");
+    assert!(engine.thumbnail_path(&key).is_err());
+    let j = job(&engine);
+    assert_eq!((j.rel_path.as_str(), j.source), (".meshkeep/preview.png", ThumbSource::Image));
+    assert!(engine.resolve_file(&id, ".meshkeep/preview.png").is_ok());
+    // a rescan keeps it
+    engine.scan_root(&root.id, |_| {}).unwrap();
+    assert_eq!(engine.get_project(&id).unwrap().thumbnail.as_deref(), Some(".meshkeep/preview.png"));
+
+    // back to automatic: the capture is deleted, the model renders again
+    let p = engine.set_thumbnail_image(&id, None).unwrap();
+    assert!(p.thumbnail.is_none());
+    assert!(!lib.path().join("Vase/.meshkeep/preview.png").exists());
+    assert!(lib.path().join("Vase/.meshkeep/other.png").exists(), "only our own file goes");
+    assert_eq!(job(&engine).source, ThumbSource::Render);
+    let text = fs::read_to_string(lib.path().join("Vase/project.yaml")).unwrap();
+    assert!(!text.contains("thumbnail"), "{text}");
+}

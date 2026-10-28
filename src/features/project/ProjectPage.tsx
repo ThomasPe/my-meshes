@@ -60,12 +60,12 @@ export function ProjectPage({ id }: { id: string }) {
           </TabsList>
           <TabsContent value="overview" className="mt-4">
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)]">
-              <Viewer projectId={p.id} files={p.files} offline={p.offline} />
+              <Viewer project={p} files={p.files} offline={p.offline} />
               <div className="rounded-2xl bg-card p-5 shadow-card"><MetadataForm project={p} onReload={() => void project.refetch()} /></div>
             </div>
           </TabsContent>
           <TabsContent value="files" className="mt-4"><FilesTable projectId={p.id} files={p.files} offline={p.offline} /></TabsContent>
-          <TabsContent value="images" className="mt-4"><ImageGallery projectId={p.id} files={p.files} offline={p.offline} /></TabsContent>
+          <TabsContent value="images" className="mt-4"><ImageGallery project={p} files={p.files} offline={p.offline} /></TabsContent>
         </Tabs>
       </div>
     </div>

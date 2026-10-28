@@ -511,6 +511,36 @@ test('image viewer: images tab shows tiles, lightbox navigates', async ({ page }
   await expect(page.getByText('1 of 1')).toBeVisible();
 });
 
+test('preview: a project image or the current view becomes the thumbnail, automatic again on request', async ({ page }) => {
+  await page.getByTestId('project-card').filter({ hasText: 'Gridfinity Baseplates' }).dblclick();
+  await page.getByTestId('tab-images').click();
+  const tile = page.getByTestId('image-tile').first();
+  await expect(tile.getByTestId('thumbnail-badge')).toHaveCount(0);
+  await tile.hover();
+  await tile.getByTestId('use-as-thumbnail').click();
+  await expect(page.getByText('Preview chosen; rendering it now…')).toBeVisible();
+  await expect(tile.getByTestId('thumbnail-badge')).toBeVisible();
+  await expect(page.getByTestId('image-gallery')).toContainText('Preview image: photo_desk.png');
+  expect(await page.evaluate(() => (window as unknown as { __mockThumbPicks?: Array<string | null> }).__mockThumbPicks)).toEqual(['photo_desk.png']);
+  await page.getByTestId('thumbnail-auto').click();
+  await expect(page.getByText('Preview is chosen automatically again')).toBeVisible();
+  await expect(tile.getByTestId('thumbnail-badge')).toHaveCount(0);
+  // the viewer's current view, saved inside the project and listed with the images
+  await page.getByRole('tab', { name: 'Overview' }).click();
+  await expect(page.getByTestId('viewer-triangles')).toBeVisible({ timeout: 30_000 });
+  await page.getByTestId('viewer-set-thumbnail').click();
+  await expect(page.getByText('Preview chosen; rendering it now…').last()).toBeVisible();
+  await page.getByTestId('tab-images').click();
+  await expect(page.getByTestId('image-tile')).toHaveCount(2);
+  const capture = page.getByTestId('image-tile').filter({ hasText: 'View from the viewer' });
+  await expect(capture.getByTestId('thumbnail-badge')).toBeVisible();
+  await expect(capture.locator('img')).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { __mockThumbPicks?: Array<string | null> }).__mockThumbPicks)).toEqual(['photo_desk.png', null, '.meshkeep/preview.png']);
+  // the card picks the new preview up once the queue rendered it
+  await page.getByTestId('back').click();
+  await expect(page.getByTestId('project-card').filter({ hasText: 'Gridfinity Baseplates' }).locator('img')).toBeVisible({ timeout: 20_000 });
+});
+
 test('settings shows the last scan summary and the sync problem per root', async ({ page }) => {
   await page.getByTestId('nav-settings').click();
   await expect(page.getByTestId('root-scan-summary').first()).toContainText('72 projects · 131 files');

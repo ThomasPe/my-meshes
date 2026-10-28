@@ -1,4 +1,4 @@
-import { RefreshCw, RotateCcw } from 'lucide-react';
+import { Camera, RefreshCw, RotateCcw } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import * as THREE from 'three';
@@ -7,22 +7,25 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getBackend } from '@/lib/backend';
 import { diag } from '@/lib/diag';
-import { isAppError, type FileEntry } from '@/lib/types';
+import { useChooseThumbnail } from '@/features/project/useChooseThumbnail';
+import { isAppError, type FileEntry, type Project } from '@/lib/types';
 import { parseModel, PREVIEWABLE } from '@/lib/mesh';
 import { srgbToLinear } from '@/lib/mesh/types';
 import MeshWorker from '@/workers/mesh-worker?worker';
 import type { MeshWorkerMessage } from '@/workers/mesh-worker';
 
 /** Three.js viewport for one model file. Loads bytes through the backend, parses in a worker, renders on demand. */
-export function Viewer({ projectId, files, offline }: { projectId: string; files: FileEntry[]; offline: boolean }) {
+export function Viewer({ project, files, offline }: { project: Project; files: FileEntry[]; offline: boolean }) {
   const { t } = useTranslation();
+  const projectId = project.id;
+  const choose = useChooseThumbnail(project);
   const models = files.filter((f) => f.kind === 'model');
   const [current, setCurrent] = useState(models[0]?.rel_path ?? '');
   const [status, setStatus] = useState<{ kind: 'idle' | 'loading' | 'ready' | 'error' | 'unsupported'; text?: string; triangles?: number; percent?: number; detail?: string }>({ kind: 'idle' });
   const [attempt, setAttempt] = useState(0);
   const [slow, setSlow] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const sceneRef = useRef<{ renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; controls: OrbitControls; mesh: THREE.Mesh | null; frame: () => void; setGrid: (size: number) => void; home: { target: THREE.Vector3; position: THREE.Vector3 }; dispose: () => void } | null>(null);
+  const sceneRef = useRef<{ renderer: THREE.WebGLRenderer; scene: THREE.Scene; camera: THREE.PerspectiveCamera; controls: OrbitControls; mesh: THREE.Mesh | null; frame: () => void; setGrid: (size: number) => void; capture: () => Promise<ArrayBuffer>; home: { target: THREE.Vector3; position: THREE.Vector3 }; dispose: () => void } | null>(null);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -80,7 +83,27 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
     controls.addEventListener('change', kick);
     const ro = new ResizeObserver(kick); ro.observe(canvas);
     kick();
-    const state = { renderer, scene, camera, controls, mesh: null as THREE.Mesh | null, frame: kick, setGrid, home: { target: new THREE.Vector3(), position: new THREE.Vector3(120, -140, 100) }, dispose: () => { ro.disconnect(); cancelAnimationFrame(raf); controls.dispose(); renderer.dispose(); } };
+    // VIEW-4: the current view as a square PNG. The plate is hidden and the canvas rendered
+    // at a square aspect (same vertical framing as on screen, sides cropped), read back in the
+    // same task so no preserveDrawingBuffer is needed, then everything is put back.
+    const capture = async (): Promise<ArrayBuffer> => {
+      const size = 768;
+      const w = canvas.clientWidth, h = canvas.clientHeight;
+      const ratio = renderer.getPixelRatio();
+      if (grid) grid.visible = false;
+      renderer.setPixelRatio(1);
+      renderer.setSize(size, size, false);
+      camera.aspect = 1; camera.updateProjectionMatrix();
+      renderer.render(scene, camera);
+      const blob = await new Promise<Blob>((res, rej) => canvas.toBlob((b) => (b ? res(b) : rej(new Error('toBlob returned null'))), 'image/png'));
+      if (grid) grid.visible = true;
+      renderer.setPixelRatio(ratio);
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h; camera.updateProjectionMatrix();
+      kick();
+      return blob.arrayBuffer();
+    };
+    const state = { renderer, scene, camera, controls, mesh: null as THREE.Mesh | null, frame: kick, setGrid, capture, home: { target: new THREE.Vector3(), position: new THREE.Vector3(120, -140, 100) }, dispose: () => { ro.disconnect(); cancelAnimationFrame(raf); controls.dispose(); renderer.dispose(); } };
     sceneRef.current = state;
     return () => { state.dispose(); sceneRef.current = null; };
   }, []);
@@ -242,6 +265,13 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
   }, [current, projectId, offline, attempt]);
 
   const reset = () => { const s = sceneRef.current; if (!s?.mesh) return; s.controls.target.copy(s.home.target); s.camera.position.copy(s.home.position); s.frame(); };
+  const [capturing, setCapturing] = useState(false);
+  const captureAsThumbnail = async () => {
+    const s = sceneRef.current;
+    if (!s?.mesh || capturing) return;
+    setCapturing(true);
+    try { await choose.useView(await s.capture()); } finally { setCapturing(false); }
+  };
 
   return (
     <div className="relative h-[440px] overflow-hidden rounded-2xl bg-background shadow-[inset_0_0_0_1px_var(--border)]" data-testid="viewer">
@@ -265,6 +295,7 @@ export function Viewer({ projectId, files, offline }: { projectId: string; files
         {models.length === 1 && <span className="max-w-[min(260px,60%)] truncate rounded-full bg-card px-3 py-1 shadow-card" title={models[0]!.name}>{models[0]!.name}</span>}
         {status.kind === 'ready' && <span data-testid="viewer-triangles">{t('project.triangles', { count: status.triangles ?? 0 })}</span>}
         <span className="ml-auto hidden sm:inline">{t('project.viewerHint')}</span>
+        <Button size="icon-sm" variant="outline" onClick={() => void captureAsThumbnail()} disabled={status.kind !== 'ready' || offline || capturing} title={t('project.setViewThumbnail')} aria-label={t('project.setViewThumbnail')} data-testid="viewer-set-thumbnail"><Camera /></Button>
         <Button size="icon-sm" variant="outline" onClick={reset} title="reset"><RotateCcw /></Button>
       </div>
     </div>

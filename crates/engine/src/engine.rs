@@ -190,6 +190,9 @@ fn trash_deleter() -> Deleter {
     Box::new(|p: &Path| trash::delete(p).map_err(|e| std::io::Error::other(e.to_string())))
 }
 
+/// Where "use this view as preview" saves its picture inside a project (VIEW-4).
+pub const VIEW_PREVIEW_REL: &str = ".meshkeep/preview.png";
+
 pub struct Engine {
     data_dir: PathBuf,
     roots: RootsStore,
@@ -1047,16 +1050,84 @@ impl Engine {
             .index
             .project(project_id)?
             .ok_or_else(|| EngineError::ProjectNotFound(project_id.to_string()))?;
-        if let Some(key) = self.index.thumb_key(project_id)? {
+        self.remove_thumb_files(&p)?;
+        self.index.clear_thumb(project_id)
+    }
+
+    /// Removes the cached PNG of a project from both locations (the index record stays).
+    fn remove_thumb_files(&self, p: &Project) -> Result<()> {
+        if let Some(key) = self.index.thumb_key(&p.id)? {
             let _ = std::fs::remove_file(thumbs::cache_dir(&self.data_dir).join(&key));
-            if let Ok(dir) = self.project_dir(&p) {
+            if let Ok(dir) = self.project_dir(p) {
                 let cache = thumbs::project_cache_dir(&dir);
                 let _ = std::fs::remove_file(cache.join(&key));
                 let _ = std::fs::remove_dir(&cache); // only when empty
                 let _ = std::fs::remove_dir(dir.join(".cache"));
             }
         }
-        self.index.clear_thumb(project_id)
+        Ok(())
+    }
+
+    /// VIEW-4: makes one of the project's images its preview (`thumbnail:` in project.yaml),
+    /// or goes back to the automatic choice with `None`. The cached PNG is dropped so the
+    /// queue produces the new one; a view capture is deleted when it is no longer referenced.
+    pub fn set_thumbnail_image(&mut self, project_id: &str, rel: Option<&str>) -> Result<Project> {
+        let current = self.online_project(project_id)?;
+        let rel = rel.map(|r| r.trim().trim_start_matches("./").to_string()).filter(|r| !r.is_empty());
+        if let Some(r) = &rel {
+            if !current.files.iter().any(|f| &f.rel_path == r && f.kind == FileKind::Image) {
+                return Err(EngineError::NotAllowed(format!("{r} is not an image of this project")));
+            }
+        }
+        let dir = self.project_dir(&current)?;
+        if rel.as_deref() != Some(VIEW_PREVIEW_REL) {
+            let capture = dir.join(VIEW_PREVIEW_REL);
+            if capture.is_file() {
+                std::fs::remove_file(&capture).map_err(|e| EngineError::Io { path: capture, source: e })?;
+                let _ = std::fs::remove_dir(dir.join(".meshkeep")); // only when empty
+            }
+        }
+        self.write_sidecar_thumbnail(&current, rel)
+    }
+
+    /// VIEW-4: stores a PNG the viewer captured as `.meshkeep/preview.png` inside the project
+    /// and points the sidecar at it. The file travels with the project; only this one file
+    /// inside the app folder is ever indexed.
+    pub fn set_view_thumbnail(&mut self, project_id: &str, png: &[u8]) -> Result<Project> {
+        if !png.starts_with(b"\x89PNG\r\n\x1a\n") {
+            return Err(EngineError::NotAllowed("the view capture is not a PNG".into()));
+        }
+        let current = self.online_project(project_id)?;
+        let dir = self.project_dir(&current)?;
+        let path = dir.join(VIEW_PREVIEW_REL);
+        let parent = path.parent().expect("preview path has a parent");
+        std::fs::create_dir_all(parent).map_err(|e| EngineError::Io {
+            path: parent.to_path_buf(),
+            source: e,
+        })?;
+        let tmp = parent.join(format!(".preview.{}.tmp", std::process::id()));
+        std::fs::write(&tmp, png).map_err(|e| EngineError::Io {
+            path: tmp.clone(),
+            source: e,
+        })?;
+        if let Err(e) = std::fs::rename(&tmp, &path) {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(EngineError::Io { path, source: e });
+        }
+        self.write_sidecar_thumbnail(&current, Some(VIEW_PREVIEW_REL.to_string()))
+    }
+
+    fn write_sidecar_thumbnail(&mut self, current: &Project, value: Option<String>) -> Result<Project> {
+        let dir = self.project_dir(current)?;
+        let (mut sc, stamp) = match sidecar::read(&dir)? {
+            Some((sc, stamp)) => (sc, Some(stamp)),
+            None => (Sidecar::default(), None),
+        };
+        sc.thumbnail = value;
+        sidecar::write(&dir, &sc, stamp)?;
+        self.remove_thumb_files(current)?;
+        self.index.clear_thumb(&current.id)?;
+        self.reindex_dir(&current.root_id, &dir)
     }
 
     /// Drops the whole cache (app data and project-side files of reachable projects);

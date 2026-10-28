@@ -216,7 +216,15 @@
       "pending": "Saving shortly…",
       "saving": "Saving…",
       "saved": "All changes saved"
-    }
+    },
+    "useAsThumbnail": "Use as preview",
+    "thumbnailCurrent": "Preview",
+    "thumbnailIs": "Preview image: {{name}}",
+    "chooseAutomatically": "Choose automatically",
+    "viewCapture": "View from the viewer",
+    "setViewThumbnail": "Use this view as preview",
+    "thumbnailSet": "Preview chosen; rendering it now…",
+    "thumbnailAuto": "Preview is chosen automatically again"
   },
   "settings": {
     "title": "Settings",

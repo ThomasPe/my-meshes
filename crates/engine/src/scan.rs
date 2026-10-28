@@ -276,6 +276,28 @@ pub fn read_project(root_id: &str, root: &Path, project_dir: &Path, ignore: &Ign
         }
         Err(e) => return Err(e),
     };
+    // The picture "use this view as preview" saves under `.meshkeep` is indexed only while the
+    // sidecar points at it, so it can be the thumbnail source like any other image (VIEW-4).
+    if let Some(rel) = sidecar.as_ref().and_then(|s| s.thumbnail.as_deref()) {
+        let rel = rel.trim().trim_start_matches("./");
+        let inside_app_dir = rel.starts_with(".meshkeep/") && !rel.contains("..") && !files.iter().any(|f| f.rel_path == rel);
+        if inside_app_dir && FileKind::from_extension(rel.rsplit('.').next().unwrap_or("")) == FileKind::Image {
+            if let Ok(meta) = std::fs::metadata(project_dir.join(rel)) {
+                if meta.is_file() {
+                    total += meta.len();
+                    files.push(FileEntry {
+                        rel_path: rel.to_string(),
+                        name: rel.rsplit('/').next().unwrap_or(rel).to_string(),
+                        kind: FileKind::Image,
+                        size: meta.len(),
+                        modified: modified_of(&meta),
+                        slicer: None,
+                        embedded_thumbnail: false,
+                    });
+                }
+            }
+        }
+    }
     let md = sidecar.as_ref().map(|s| s.metadata.clone()).unwrap_or_default();
     let pr = sidecar.as_ref().map(|s| s.printing.clone()).unwrap_or_default();
     let model_count = files.iter().filter(|f| f.kind == FileKind::Model).count() as u32;

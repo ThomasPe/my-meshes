@@ -65,6 +65,10 @@ export interface Backend {
   clearThumbnails(): Promise<void>;
   /** Drops one project's thumbnail (or recorded failure) so the queue renders it again. */
   resetThumbnail(projectId: string): Promise<void>;
+  /** VIEW-4: one of the project's images becomes the preview; `null` goes back to automatic. */
+  setThumbnailImage(projectId: string, relPath: string | null): Promise<Project>;
+  /** VIEW-4: a PNG captured in the viewer becomes the preview (saved inside the project). */
+  setViewThumbnail(projectId: string, png: ArrayBuffer): Promise<Project>;
   pickImportFiles(): Promise<string[]>;
   analyzeImport(paths: string[]): Promise<ImportItem[]>;
   executeImport(request: ImportRequest): Promise<ImportReport>;

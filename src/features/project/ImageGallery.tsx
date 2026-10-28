@@ -1,4 +1,4 @@
-import { ChevronLeft, ChevronRight, ExternalLink, Image as ImageIcon, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, ExternalLink, Image as ImageIcon, ImageUp, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
@@ -6,7 +6,10 @@ import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/compone
 import { getBackend } from '@/lib/backend';
 import { reportError } from '@/lib/errors';
 import { formatBytes } from '@/lib/format';
-import type { FileEntry } from '@/lib/types';
+import { Badge } from '@/components/ui/badge';
+import { useChooseThumbnail } from '@/features/project/useChooseThumbnail';
+import { VIEW_PREVIEW_REL } from '@/lib/thumbs/queue';
+import type { FileEntry, Project } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
 const urls = new Map<string, string>(); // `${projectId}/${rel}` -> object URL (session cache)
@@ -29,23 +32,30 @@ export function useProjectImage(projectId: string, rel: string | null, enabled =
   return url;
 }
 
-function Tile({ projectId, file, onOpen }: { projectId: string; file: FileEntry; onOpen: () => void }) {
-  const { i18n } = useTranslation();
+function Tile({ projectId, file, current, onOpen, onChoose }: { projectId: string; file: FileEntry; current: boolean; onOpen: () => void; onChoose: () => void }) {
+  const { t, i18n } = useTranslation();
   const url = useProjectImage(projectId, file.rel_path);
+  const captured = file.rel_path === VIEW_PREVIEW_REL;
   return (
-    <button type="button" onClick={onOpen} className="group grid gap-1.5 text-left" data-testid="image-tile">
-      <span className="relative block aspect-[4/3] overflow-hidden rounded-xl bg-secondary shadow-card">
+    <div className="group relative grid gap-1.5 text-left" data-testid="image-tile" data-current={current || undefined}>
+      <button type="button" onClick={onOpen} className="relative block aspect-[4/3] overflow-hidden rounded-xl bg-secondary shadow-card">
         {url ? <img src={url} alt={file.name} className="size-full object-cover transition-transform group-hover:scale-[1.03]" loading="lazy" /> : <ImageIcon className="absolute inset-0 m-auto size-8 text-muted-foreground" />}
-      </span>
-      <span className="truncate text-xs font-semibold">{file.name}</span>
+      </button>
+      {current
+        ? <Badge variant="accent" className="absolute left-2 top-2" data-testid="thumbnail-badge"><ImageUp />{t('project.thumbnailCurrent')}</Badge>
+        : <Button size="sm" variant="secondary" className="absolute left-2 top-2 opacity-0 shadow-card transition-opacity focus-visible:opacity-100 group-hover:opacity-100" onClick={onChoose} data-testid="use-as-thumbnail"><ImageUp />{t('project.useAsThumbnail')}</Button>}
+      <span className="truncate text-xs font-semibold">{captured ? t('project.viewCapture') : file.name}</span>
       <span className="text-[11px] text-muted-foreground tabular">{formatBytes(file.size, i18n.language)}</span>
-    </button>
+    </div>
   );
 }
 
-/** Built-in image viewer (VIEW-5): tile grid plus a lightbox with keyboard navigation. */
-export function ImageGallery({ projectId, files, offline }: { projectId: string; files: FileEntry[]; offline: boolean }) {
+/** Built-in image viewer (VIEW-5): tile grid plus a lightbox with keyboard navigation. The
+ * preview (VIEW-4) is chosen here: any image of the project, or back to the automatic choice. */
+export function ImageGallery({ project, files, offline }: { project: Project; files: FileEntry[]; offline: boolean }) {
   const { t } = useTranslation();
+  const projectId = project.id;
+  const choose = useChooseThumbnail(project);
   const images = files.filter((f) => f.kind === 'image');
   const [index, setIndex] = useState<number | null>(null);
   const current = index !== null ? images[index] ?? null : null;
@@ -64,8 +74,17 @@ export function ImageGallery({ projectId, files, offline }: { projectId: string;
   const openOs = (rel: string) => getBackend().then((b) => b.openProjectFile(projectId, rel)).catch(reportError);
   return (
     <>
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4 rounded-2xl bg-card p-4 shadow-card" data-testid="image-gallery">
-        {images.map((f, i) => <Tile key={f.rel_path} projectId={projectId} file={f} onOpen={() => setIndex(i)} />)}
+      <div className="grid gap-3 rounded-2xl bg-card p-4 shadow-card" data-testid="image-gallery">
+        {project.thumbnail && (
+          <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-muted-foreground">
+            <ImageUp className="size-3.5 text-primary" />
+            <span>{t('project.thumbnailIs', { name: project.thumbnail === VIEW_PREVIEW_REL ? t('project.viewCapture') : project.thumbnail })}</span>
+            <Button size="sm" variant="ghost" className="h-7" onClick={() => void choose.useImage(null)} data-testid="thumbnail-auto">{t('project.chooseAutomatically')}</Button>
+          </div>
+        )}
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(180px,1fr))] gap-4">
+          {images.map((f, i) => <Tile key={f.rel_path} projectId={projectId} file={f} current={project.thumbnail === f.rel_path} onOpen={() => setIndex(i)} onChoose={() => void choose.useImage(f.rel_path)} />)}
+        </div>
       </div>
       <Dialog open={index !== null} onOpenChange={(o) => !o && setIndex(null)}>
         <DialogContent className="max-w-[min(96vw,1400px)] border-0 bg-black/90 p-0 text-white shadow-none" data-testid="lightbox">

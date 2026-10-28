@@ -53,6 +53,8 @@ function mk(root_id: string, rel_path: string, title: string, o: Partial<MockPro
 
 /** Mirrors the engine's thumbnail source choice (thumbs.rs). */
 function thumbSourceOf(p: MockProject): ThumbJob | null {
+  const chosen = p.thumbnail ? p.files.find((x) => x.rel_path === p.thumbnail && x.kind === 'image') : null;
+  if (chosen) return { project_id: p.id, rel_path: chosen.rel_path, source: 'image' };
   const renderable = p.files.filter((x) => x.kind === 'model' && /\.(stl|obj|3mf)$/i.test(x.name)).sort((a, b) => b.size - a.size)[0];
   if (renderable) return { project_id: p.id, rel_path: renderable.rel_path, source: 'render' };
   const img = p.files.find((x) => x.kind === 'image');
@@ -127,6 +129,7 @@ export function createMockBackend(): Backend {
   };
   const thumbs = new Map<string, ArrayBuffer>(); // key -> png
   const failed = new Set<string>();
+  const captures = new Map<string, ArrayBuffer>(); // project id -> view capture (.meshkeep/preview.png)
   const dismissedHints = new Map<string, string[]>();
   const pageCache = new Set<string>();
   const pageHints = new Map<string, { creator: string | null; license: string | null }>();
@@ -365,6 +368,7 @@ export function createMockBackend(): Backend {
       if (ext === 'stl') return generateStl(tri, seed);
       if (ext === 'obj') return generateObj(tri, seed);
       if (ext === '3mf') return generate3mf();
+      if (relPath === '.meshkeep/preview.png' && captures.has(projectId)) return captures.get(projectId)!.slice(0);
       if (file.kind === 'image') return generateImage(seed);
       throw err('mock', 'no file contents in browser mode');
     },
@@ -617,6 +621,27 @@ export function createMockBackend(): Backend {
     async checkUpdate() { await delay(300); return { available: true, version: '0.2.0', notes: 'Mock release notes', date: null }; },
     async installUpdate() { await delay(300); },
     async onFileDrop() { return () => {}; },
+    async setThumbnailImage(projectId, relPath) {
+      await delay(60);
+      const p = find(projectId);
+      if (relPath && !p.files.some((x) => x.rel_path === relPath && x.kind === 'image')) throw err('not_allowed', `${relPath} is not an image of this project`);
+      if (relPath !== '.meshkeep/preview.png') { captures.delete(projectId); p.files = p.files.filter((x) => x.rel_path !== '.meshkeep/preview.png'); }
+      p.thumbnail = relPath;
+      if (p.thumb) thumbs.delete(p.thumb);
+      p.thumb = null; failed.delete(projectId);
+      p.has_sidecar = true; p.sidecar = { state: 'ok' }; p.sidecar_stamp = { mtime_unix_nanos: String(Date.now() * 1e6), size: 220 };
+      const w = window as unknown as { __mockThumbPicks?: Array<string | null> }; (w.__mockThumbPicks ??= []).push(relPath);
+      listeners.proj.forEach((cb) => cb({ projectId }));
+      return { ...p };
+    },
+    async setViewThumbnail(projectId, png) {
+      await delay(60);
+      const p = find(projectId);
+      if (new Uint8Array(png, 0, 4).join(',') !== '137,80,78,71') throw err('not_allowed', 'the view capture is not a PNG');
+      captures.set(projectId, png.slice(0));
+      if (!p.files.some((x) => x.rel_path === '.meshkeep/preview.png')) p.files.push({ rel_path: '.meshkeep/preview.png', name: 'preview.png', kind: 'image', size: png.byteLength, modified: new Date().toISOString(), slicer: null, embedded_thumbnail: false });
+      return this.setThumbnailImage(projectId, '.meshkeep/preview.png');
+    },
     async resetThumbnail(projectId) {
       const p = find(projectId);
       if (p.thumb) thumbs.delete(p.thumb);

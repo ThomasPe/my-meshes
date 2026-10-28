@@ -3,7 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 import type { Backend } from './index';
-import type { EnrichProgress, HashProgress, ImportProgress, LibraryChanged, ScanProgress } from '@/lib/types';
+import type { EnrichProgress, HashProgress, ImportProgress, LibraryChanged, Project, ScanProgress } from '@/lib/types';
 
 export function createTauriBackend(): Backend {
   return {
@@ -56,6 +56,8 @@ export function createTauriBackend(): Backend {
     readThumbnail: (key) => invoke<ArrayBuffer>('read_thumbnail', { key }),
     clearThumbnails: () => invoke('clear_thumbnails'),
     resetThumbnail: (projectId) => invoke('reset_thumbnail', { projectId }),
+    setThumbnailImage: (projectId, relPath) => invoke<Project>('set_thumbnail_image', { projectId, relPath }),
+    setViewThumbnail: (projectId, png) => invoke<Project>('set_view_thumbnail', new Uint8Array(png), { headers: { 'x-project-id': encodeURIComponent(projectId) } }),
     pickImportFiles: () => invoke('pick_import_files'),
     analyzeImport: (paths) => invoke('analyze_import', { paths }),
     executeImport: (request) => invoke('execute_import', { request }),

@@ -52,7 +52,7 @@
 | VIEW-1 | Interactive 3D preview for STL, OBJ and 3MF: orbit, pan, zoom, reset, standard views. Large files load progressively without freezing the UI. | MVP |
 | VIEW-2 | 3MF: load geometry and read embedded thumbnail and metadata; slicer 3MFs get a badge. STEP, PLY and AMF are indexed as models with a "preview later" notice (Q11). | MVP |
 | VIEW-3 | Thumbnail generation for every project in a background queue, stored per `02-domain-model.md`. The UI never blocks on it. | MVP |
-| VIEW-4 | Custom thumbnails: "set current view as thumbnail" and "use image file as thumbnail". | Later |
+| VIEW-4 | Custom thumbnails: "use this view as preview" in the viewer (saved as `.meshkeep/preview.png` inside the project) and "use as preview" on any image of the project; `thumbnail:` in project.yaml points at the file, "choose automatically" clears it. | Done |
 | VIEW-5 | Built-in image viewer for project images; documents open in the OS default app. | MVP |
 | VIEW-6 | Graceful degradation when GPU acceleration is unavailable: static placeholders instead of 3D views, with a visible notice. | MVP |
 | VIEW-7 | Basic transforms (scale, rotate) for visual checks and mesh analysis for printability (non-manifold edges, holes, inverted normals). | Later |

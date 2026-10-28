@@ -216,7 +216,15 @@
       "pending": "Wird gleich gespeichert…",
       "saving": "Speichert…",
       "saved": "Alle Änderungen gespeichert"
-    }
+    },
+    "useAsThumbnail": "Als Vorschau verwenden",
+    "thumbnailCurrent": "Vorschau",
+    "thumbnailIs": "Vorschaubild: {{name}}",
+    "chooseAutomatically": "Automatisch wählen",
+    "viewCapture": "Ansicht aus dem Viewer",
+    "setViewThumbnail": "Diese Ansicht als Vorschau verwenden",
+    "thumbnailSet": "Vorschau gewählt, wird jetzt gerendert…",
+    "thumbnailAuto": "Vorschau wird wieder automatisch gewählt"
   },
   "settings": {
     "title": "Einstellungen",
