@@ -1,4 +1,4 @@
-import { Bell, Bug, Download, FolderOpen, Globe, HardDrive, Images, KeyRound, Loader2, Monitor, Moon, Plus, RefreshCw, Sparkles, Sun, Trash2, X } from 'lucide-react';
+import { Bell, Bug, Copy, Download, Eye, EyeOff, FolderOpen, Globe, HardDrive, Images, KeyRound, Loader2, Monitor, Moon, PencilLine, Plug, Plus, RefreshCw, Sparkles, Sun, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -16,11 +16,11 @@ import { LANGUAGES, setLanguage, type Language } from '@/i18n';
 import { getBackend } from '@/lib/backend';
 import { reportError } from '@/lib/errors';
 import { formatDate, formatDuration } from '@/lib/format';
-import { invalidateLibrary, keys, useAiSettings, useNetworkSettings, useSetNetworkSettings, useAppInfo, useContainerDirs, useIgnorePatterns, useRoots, useSetAiKey, useSetAiSettings, useSetThumbLocation, useThumbLocation, useThumbStats } from '@/lib/queries';
+import { invalidateLibrary, keys, useAiSettings, useMcpSettings, useMcpStatus, useRegenerateMcpToken, useSetMcpSettings, useNetworkSettings, useSetNetworkSettings, useAppInfo, useContainerDirs, useIgnorePatterns, useRoots, useSetAiKey, useSetAiSettings, useSetThumbLocation, useThumbLocation, useThumbStats } from '@/lib/queries';
 import { kickThumbQueue, useThumbs } from '@/lib/thumbs/queue';
 import { dropThumbnailCache } from '@/lib/thumbs/useThumbnail';
 import { applyTheme, loadNotifications, loadTheme, saveNotifications, type Theme } from '@/lib/store';
-import { isAppError, type AiTestReport, type LibraryRoot, type SyncMode, type ThumbLocation, type UpdateInfo } from '@/lib/types';
+import { isAppError, type AiTestReport, type LibraryRoot, type McpSettings, type SyncMode, type ThumbLocation, type UpdateInfo } from '@/lib/types';
 import { useQueryClient } from '@tanstack/react-query';
 
 export function SettingsPage({ scanning, onScanEnd }: { scanning: ScanState; onScanEnd: (rootId: string) => void }) {
@@ -135,6 +135,8 @@ export function SettingsPage({ scanning, onScanEnd }: { scanning: ScanState; onS
         <AiCard />
 
         <NetworkCard />
+
+        <McpCard />
 
         <Card title={t('settings.appearance')}>
           <Row label={t('settings.theme')}>
@@ -261,6 +263,108 @@ function AiCard() {
         {test.state === 'failed' && <span className="text-warning">{t('settings.aiTestFailed', { message: test.error })}</span>}
       </div>
       <p className="rounded-[10px] bg-accent p-3 text-xs font-semibold text-accent-foreground" data-testid="ai-sent">{t('settings.aiSent')}</p>
+    </Card>
+  );
+}
+
+/**
+ * The local MCP server (ADR-0004): an AI agent on this machine (Claude Desktop, Claude Code)
+ * reads and, when allowed, writes the library through it. Everything stays on 127.0.0.1 and
+ * behind a token; the card writes the client configuration for the user.
+ */
+function McpCard() {
+  const { t } = useTranslation();
+  const mcp = useMcpSettings();
+  const status = useMcpStatus(!!mcp.data?.enabled);
+  const set = useSetMcpSettings();
+  const regen = useRegenerateMcpToken();
+  const [showToken, setShowToken] = useState(false);
+  const [port, setPort] = useState<string | null>(null);
+  const s = mcp.data;
+  const save = (next: Partial<McpSettings>, done?: string) => {
+    if (!s) return;
+    set.mutate({ ...s, ...next }, { onSuccess: () => { if (done) toast.success(done); }, onError: reportError });
+  };
+  const copy = async (text: string) => { try { await navigator.clipboard.writeText(text); toast.success(t('settings.mcpCopied')); } catch { toast.error(t('settings.mcpCopyFailed')); } };
+  const addFolder = async () => {
+    const b = await getBackend();
+    const path = await b.pickFolder();
+    if (!path || !s) return;
+    if (s.import_dirs.includes(path)) return;
+    save({ import_dirs: [...s.import_dirs, path] }, t('settings.mcpFolderAdded'));
+  };
+  const useDownloads = () => { const d = status.data?.downloadsDir; if (d && s && !s.import_dirs.includes(d)) save({ import_dirs: [...s.import_dirs, d] }, t('settings.mcpFolderAdded')); };
+  const curPort = port ?? String(s?.port ?? 7340);
+  const portDirty = !!s && curPort !== String(s.port);
+  const url = `http://127.0.0.1:${s?.port ?? 7340}/mcp`;
+  const token = s?.token ?? '';
+  const exe = status.data?.exePath ?? 'meshkeep';
+  const desktopConfig = JSON.stringify({ mcpServers: { meshkeep: { command: exe, args: ['--mcp', url, token] } } }, null, 2);
+  const codeCommand = `claude mcp add --transport http meshkeep ${url} --header "Authorization: Bearer ${token}"`;
+  const on = !!s?.enabled;
+  const stateText = !on ? t('settings.mcpOff') : status.data?.error ? t('settings.mcpError', { message: status.data.error }) : status.data?.running ? t('settings.mcpRunning', { port: status.data.port, requests: status.data.requests }) : t('settings.mcpStarting');
+  return (
+    <Card title={t('settings.mcp')} hint={t('settings.mcpHint')}>
+      <Row label={t('settings.mcpEnable')}>
+        <label className="flex items-center gap-2 text-sm text-muted-foreground"><Plug className="size-4" /><Switch checked={on} disabled={!s || set.isPending} onCheckedChange={(v) => save({ enabled: v }, v ? t('settings.mcpOn') : t('settings.mcpOffToast'))} data-testid="mcp-toggle" aria-label={t('settings.mcpEnable')} /></label>
+      </Row>
+      <p className="py-2 text-xs font-semibold text-muted-foreground" data-testid="mcp-state" data-state={!on ? 'off' : status.data?.error ? 'error' : status.data?.running ? 'running' : 'starting'}>{stateText}</p>
+      <Row label={t('settings.mcpWrites')}>
+        <div className="grid max-w-md justify-items-end gap-1">
+          <label className="flex items-center gap-2 text-sm text-muted-foreground"><PencilLine className="size-4" /><Switch checked={!!s?.allow_writes} disabled={!s || set.isPending} onCheckedChange={(v) => save({ allow_writes: v }, v ? t('settings.mcpWritesOn') : t('settings.mcpWritesOff'))} data-testid="mcp-writes" aria-label={t('settings.mcpWrites')} /></label>
+          <span className="text-right text-xs text-muted-foreground">{s?.allow_writes ? t('settings.mcpWritesHintOn') : t('settings.mcpWritesHintOff')}</span>
+        </div>
+      </Row>
+      <Row label={t('settings.mcpPort')}>
+        <div className="flex items-center gap-2">
+          <Input value={curPort} inputMode="numeric" className="h-8 w-24 font-mono text-xs" onChange={(e) => setPort(e.target.value.replace(/\D/g, ''))} data-testid="mcp-port" />
+          <Button size="sm" disabled={!portDirty || set.isPending} onClick={() => { const p = Number(curPort); if (p >= 1024 && p <= 65535) { set.mutate({ ...s!, port: p }, { onSuccess: () => { setPort(null); toast.success(t('settings.mcpPortSaved', { port: p })); }, onError: reportError }); } else toast.error(t('settings.mcpPortInvalid')); }} data-testid="mcp-port-save">{t('settings.aiSave')}</Button>
+        </div>
+      </Row>
+      <Row label={t('settings.mcpToken')}>
+        <div className="grid w-full max-w-md justify-items-end gap-1.5">
+          <div className="flex w-full items-center gap-2">
+            <Input readOnly value={token ? (showToken ? token : '•'.repeat(24)) : ''} placeholder={t('settings.mcpTokenNone')} className="h-8 font-mono text-xs" data-testid="mcp-token" data-shown={showToken || undefined} />
+            <Button size="icon-sm" variant="outline" disabled={!token} onClick={() => setShowToken((v) => !v)} title={showToken ? t('settings.mcpTokenHide') : t('settings.mcpTokenShow')} aria-label={showToken ? t('settings.mcpTokenHide') : t('settings.mcpTokenShow')} data-testid="mcp-token-show">{showToken ? <EyeOff /> : <Eye />}</Button>
+            <Button size="icon-sm" variant="outline" disabled={!token} onClick={() => void copy(token)} title={t('settings.mcpCopy')} aria-label={t('settings.mcpCopy')}><Copy /></Button>
+            <Button size="sm" variant="outline" disabled={!s || regen.isPending} onClick={() => regen.mutate(undefined, { onSuccess: () => toast.success(t('settings.mcpTokenNew')), onError: reportError })} data-testid="mcp-token-regen"><RefreshCw />{t('settings.mcpTokenRegen')}</Button>
+          </div>
+          <span className="text-right text-xs text-muted-foreground">{t('settings.mcpTokenHint')}</span>
+        </div>
+      </Row>
+      <Row label={t('settings.mcpFolders')}>
+        <div className="grid w-full max-w-md justify-items-end gap-1.5">
+          <ul className="grid w-full gap-1" data-testid="mcp-folders">
+            {(s?.import_dirs ?? []).map((d) => (
+              <li key={d} className="flex items-center gap-2 rounded-[10px] bg-secondary px-3 py-1.5 text-xs" data-testid="mcp-folder">
+                <FolderOpen className="size-3.5 shrink-0 text-muted-foreground" /><span className="min-w-0 flex-1 truncate font-mono" title={d}>{d}</span>
+                <button type="button" className="rounded p-0.5 text-muted-foreground hover:text-destructive" aria-label={t('settings.remove')} onClick={() => save({ import_dirs: s!.import_dirs.filter((x) => x !== d) }, t('settings.mcpFolderRemoved'))} data-testid="mcp-folder-remove"><X className="size-3.5" /></button>
+              </li>
+            ))}
+            {(s?.import_dirs ?? []).length === 0 && <li className="text-xs text-muted-foreground">{t('settings.mcpFoldersNone')}</li>}
+          </ul>
+          <div className="flex gap-2">
+            {status.data?.downloadsDir && !s?.import_dirs.includes(status.data.downloadsDir) && <Button size="sm" variant="outline" disabled={!s || set.isPending} onClick={useDownloads} data-testid="mcp-folder-downloads"><Download />{t('settings.mcpUseDownloads')}</Button>}
+            <Button size="sm" variant="outline" disabled={!s || set.isPending} onClick={() => void addFolder()} data-testid="mcp-folder-add"><Plus />{t('settings.addFolder')}</Button>
+          </div>
+          <span className="text-right text-xs text-muted-foreground">{t('settings.mcpFoldersHint')}</span>
+        </div>
+      </Row>
+      {on && token && (
+        <div className="grid gap-3 py-3" data-testid="mcp-snippets">
+          <p className="text-xs font-semibold text-muted-foreground">{t('settings.mcpConnectHint')}</p>
+          <div className="grid gap-1">
+            <div className="flex items-center justify-between gap-2"><b className="text-sm">{t('settings.mcpClaudeDesktop')}</b><Button size="sm" variant="ghost" onClick={() => void copy(desktopConfig)} data-testid="mcp-copy-desktop"><Copy />{t('settings.mcpCopy')}</Button></div>
+            <pre className="overflow-x-auto rounded-[10px] bg-secondary p-3 font-mono text-[11px] leading-relaxed" data-testid="mcp-snippet-desktop">{desktopConfig}</pre>
+            <span className="text-xs text-muted-foreground">{t('settings.mcpClaudeDesktopHint')}</span>
+          </div>
+          <div className="grid gap-1">
+            <div className="flex items-center justify-between gap-2"><b className="text-sm">{t('settings.mcpClaudeCode')}</b><Button size="sm" variant="ghost" onClick={() => void copy(codeCommand)} data-testid="mcp-copy-code"><Copy />{t('settings.mcpCopy')}</Button></div>
+            <pre className="overflow-x-auto rounded-[10px] bg-secondary p-3 font-mono text-[11px] leading-relaxed" data-testid="mcp-snippet-code">{codeCommand}</pre>
+          </div>
+        </div>
+      )}
+      <p className="rounded-[10px] bg-accent p-3 text-xs font-semibold text-accent-foreground" data-testid="mcp-sent">{t('settings.mcpSent')}</p>
     </Card>
   );
 }

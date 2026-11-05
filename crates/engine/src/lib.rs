@@ -15,6 +15,7 @@ pub mod hash;
 pub mod hints;
 pub mod import;
 pub mod index;
+pub mod mcp;
 pub mod model;
 pub mod roots;
 pub mod scan;

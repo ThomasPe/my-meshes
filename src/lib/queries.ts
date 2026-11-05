@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import i18n from '@/i18n';
 import { getBackend } from '@/lib/backend';
 import { kickThumbQueue, useThumbs } from '@/lib/thumbs/queue';
-import type { AiSettings, BatchUpdate, ImportRequest, ListQuery, Project, ProjectSummary, ThumbLocation, UpdateMetadata, PromoteItem, NetworkSettings } from '@/lib/types';
+import type { AiSettings, BatchUpdate, ImportRequest, ListQuery, McpSettings, Project, ProjectSummary, ThumbLocation, UpdateMetadata, PromoteItem, NetworkSettings } from '@/lib/types';
 
 export const queryClient = new QueryClient({ defaultOptions: { queries: { staleTime: 10_000, retry: false, refetchOnWindowFocus: false } } });
 
@@ -27,6 +27,8 @@ export const keys = {
   inbox: (rootId: string) => ['inbox', rootId] as const,
   ai: ['ai'] as const,
   network: ['network'] as const,
+  mcp: ['mcp'] as const,
+  mcpStatus: ['mcpStatus'] as const,
 };
 
 export const useAppInfo = () => useQuery({ queryKey: keys.appInfo, queryFn: async () => (await getBackend()).appInfo(), staleTime: Infinity });
@@ -250,6 +252,22 @@ export function useSetNetworkSettings() {
   return useMutation({
     mutationFn: async (settings: NetworkSettings) => (await getBackend()).setNetworkSettings(settings),
     onSuccess: (s) => qc.setQueryData(keys.network, s),
+  });
+}
+export const useMcpSettings = () => useQuery({ queryKey: keys.mcp, queryFn: async () => (await getBackend()).getMcpSettings() });
+export const useMcpStatus = (enabled: boolean) => useQuery({ queryKey: keys.mcpStatus, queryFn: async () => (await getBackend()).mcpStatus(), refetchInterval: enabled ? 5000 : false });
+export function useSetMcpSettings() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (settings: McpSettings) => (await getBackend()).setMcpSettings(settings),
+    onSuccess: (s) => { qc.setQueryData(keys.mcp, s); qc.invalidateQueries({ queryKey: keys.mcpStatus }); },
+  });
+}
+export function useRegenerateMcpToken() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async () => (await getBackend()).regenerateMcpToken(),
+    onSuccess: (s) => { qc.setQueryData(keys.mcp, s); qc.invalidateQueries({ queryKey: keys.mcpStatus }); },
   });
 }
 export const useAiSettings = () => useQuery({ queryKey: keys.ai, queryFn: async () => (await getBackend()).getAiSettings() });

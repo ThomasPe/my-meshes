@@ -81,6 +81,15 @@ right level, and all of these pass locally:
 Add or extend tests in the same change. Prefer the cheapest level that proves the
 behaviour: engine unit test > UI test in browser mode > real-app E2E.
 
+## Command-line modes
+
+`meshkeep --mcp [url] [token]` runs no window: it is the stdio MCP bridge that forwards
+each line on stdin to the running app's endpoint (default `http://127.0.0.1:7340/mcp`)
+and prints the answer (ADR-0004). Nothing but protocol lines may go to stdout in that
+mode. The endpoint itself lives in `src-tauri/src/mcp_host.rs`; the tools in
+`crates/engine/src/mcp.rs`, where every new tool needs a test and, if it writes, the
+`allow_writes` gate.
+
 ## Test mode (real app)
 
 `--test-mode` or `MESHKEEP_TEST_MODE=1` isolates app data (`MESHKEEP_DATA_DIR` or a temp

@@ -33,6 +33,9 @@ pub struct Settings {
     /// Network use the user opted into (META-7 stage 2). Everything here defaults to off.
     #[serde(default)]
     pub network: NetworkSettings,
+    /// The local MCP server for AI agents (ADR-0004). Off by default.
+    #[serde(default)]
+    pub mcp: McpSettings,
     #[serde(flatten)]
     pub extra: BTreeMap<String, serde_json::Value>,
 }
@@ -45,6 +48,41 @@ pub struct NetworkSettings {
     /// tags. Sends that URL to its site; nothing else. Off by default.
     #[serde(default)]
     pub fetch_model_pages: bool,
+}
+
+/// The local MCP server (ADR-0004): listens on 127.0.0.1 only, every request carries the
+/// token. Writes are a separate switch so an agent can be read-only. `import_dirs` are the
+/// only folders outside the library the agent may list and import from.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct McpSettings {
+    #[serde(default)]
+    pub enabled: bool,
+    #[serde(default = "default_mcp_port")]
+    pub port: u16,
+    /// Bearer token; generated the first time the server is enabled, never empty afterwards.
+    #[serde(default)]
+    pub token: String,
+    #[serde(default)]
+    pub allow_writes: bool,
+    #[serde(default)]
+    pub import_dirs: Vec<PathBuf>,
+}
+
+pub const DEFAULT_MCP_PORT: u16 = 7340;
+fn default_mcp_port() -> u16 {
+    DEFAULT_MCP_PORT
+}
+
+impl Default for McpSettings {
+    fn default() -> Self {
+        McpSettings {
+            enabled: false,
+            port: DEFAULT_MCP_PORT,
+            token: String::new(),
+            allow_writes: false,
+            import_dirs: Vec::new(),
+        }
+    }
 }
 
 fn schema_v1() -> u32 {
@@ -67,6 +105,7 @@ impl Default for Settings {
             ai: AiSettings::default(),
             dismissed_hints: BTreeMap::new(),
             network: NetworkSettings::default(),
+            mcp: McpSettings::default(),
             extra: BTreeMap::new(),
         }
     }

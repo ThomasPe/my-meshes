@@ -15,7 +15,7 @@ use crate::model::{
 };
 use crate::roots::RootsStore;
 use crate::scan::{self, IgnoreMatcher, ScanOptions};
-use crate::settings::{NetworkSettings, Settings, SettingsStore};
+use crate::settings::{McpSettings, NetworkSettings, Settings, SettingsStore};
 use crate::sidecar;
 use crate::watch::{RootWatcher, WatchEvent};
 use crate::{threemf, thumbs};
@@ -429,6 +429,47 @@ impl Engine {
                 },
             );
         }
+    }
+
+    /// Reads a model page by URL (allow-listed hosts only) and returns what it says, for an
+    /// agent that found the link itself. Needs the "load model pages" setting like the rest.
+    pub fn fetch_page(&mut self, url: &str) -> Result<enrich::PageSuggestion> {
+        if !self.settings.get().network.fetch_model_pages {
+            return Err(EngineError::PageFetchDisabled);
+        }
+        if !enrich::host_allowed(url) {
+            return Err(EngineError::PageFetch(format!("{url}: not a supported model site")));
+        }
+        let (parsed, cached) = self.load_page(url)?;
+        self.page_suggestion(url, &parsed, cached)
+    }
+
+    pub fn mcp_settings(&self) -> McpSettings {
+        self.settings.get().mcp.clone()
+    }
+
+    /// Stores the MCP settings; enabling the server for the first time mints the token.
+    pub fn set_mcp_settings(&mut self, mut mcp: McpSettings) -> Result<McpSettings> {
+        if mcp.port < 1024 {
+            return Err(EngineError::NotAllowed(format!(
+                "port {} is reserved; choose one above 1023",
+                mcp.port
+            )));
+        }
+        if mcp.enabled && mcp.token.trim().is_empty() {
+            mcp.token = new_mcp_token();
+        }
+        mcp.import_dirs.retain(|d| !d.as_os_str().is_empty());
+        mcp.import_dirs.dedup();
+        self.settings.update(|s| s.mcp = mcp)?;
+        Ok(self.mcp_settings())
+    }
+
+    /// A fresh token; clients configured with the old one stop working at once.
+    pub fn regenerate_mcp_token(&mut self) -> Result<McpSettings> {
+        let token = new_mcp_token();
+        self.settings.update(|s| s.mcp.token = token)?;
+        Ok(self.mcp_settings())
     }
 
     pub fn network_settings(&self) -> NetworkSettings {
@@ -1876,6 +1917,10 @@ fn stamp_of(m: &std::fs::Metadata) -> SidecarStamp {
         size: m.len(),
     }
 }
+fn new_mcp_token() -> String {
+    format!("mk_{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple())
+}
+
 fn current_stamp(dir: &Path) -> Option<SidecarStamp> {
     std::fs::metadata(sidecar::sidecar_path(dir)).ok().map(|m| stamp_of(&m))
 }

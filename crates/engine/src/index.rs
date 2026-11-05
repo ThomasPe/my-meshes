@@ -7,8 +7,8 @@
 
 use crate::error::Result;
 use crate::model::{
-    FacetCount, Facets, FileEntry, FileKind, FolderNode, ListQuery, Project, ProjectSummary, SidecarState, SortKey, TagCount, ThumbJob,
-    ThumbSource, ThumbStats,
+    FacetCount, Facets, FileEntry, FileKind, FolderNode, ListQuery, MissingField, Project, ProjectSummary, SidecarState, SortKey, TagCount,
+    ThumbJob, ThumbSource, ThumbStats,
 };
 use crate::thumbs;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -416,6 +416,18 @@ impl Index {
         {
             where_.push("EXISTS (SELECT 1 FROM files fx WHERE fx.project_id = p.id AND fx.kind = 'model' AND fx.ext = ?)".into());
             args.push(Box::new(e));
+        }
+        for m in &q.missing {
+            where_.push(
+                match m {
+                    MissingField::Creator => "(p.creator IS NULL OR p.creator = '')",
+                    MissingField::License => "(p.license IS NULL OR p.license = '')",
+                    MissingField::Description => "(p.description IS NULL OR p.description = '')",
+                    MissingField::SourceUrl => "(p.source_url IS NULL OR p.source_url = '')",
+                    MissingField::Tags => "NOT EXISTS (SELECT 1 FROM tags tm WHERE tm.project_id = p.id)",
+                }
+                .into(),
+            );
         }
         if let Some(ids) = &collection {
             if ids.is_empty() {

@@ -3,7 +3,7 @@ use meshkeep_engine::watch::{RootWatcher, WatchEvent};
 use meshkeep_engine::Engine;
 use std::collections::HashMap;
 use std::path::PathBuf;
-use std::sync::{mpsc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager};
 
 /// Startup configuration. Test mode isolates all app data and can seed a fixture root so
@@ -50,12 +50,46 @@ impl RuntimeConfig {
 }
 
 pub struct AppState {
-    pub engine: Mutex<Engine>,
+    pub engine: Arc<Mutex<Engine>>,
     pub watchers: Mutex<HashMap<String, RootWatcher>>,
     pub watch_tx: mpsc::Sender<WatchEvent>,
     pub ai_keys: crate::keys::AiKeyStore,
     pub config: RuntimeConfig,
     pub data_dir: PathBuf,
+    /// The local MCP endpoint (ADR-0004); runs only while the setting is on.
+    pub mcp: crate::mcp_host::Host,
+}
+
+/// Starts or stops the MCP server to match the stored settings, and wires its changes to
+/// the same events the commands emit, so the window follows what an agent does.
+pub fn apply_mcp_settings(app: &AppHandle) {
+    let state = app.state::<AppState>();
+    let settings = state.engine.lock().unwrap().mcp_settings();
+    let handle = app.clone();
+    let on_change: crate::mcp_host::OnChange = Arc::new(move |changes: &[meshkeep_engine::mcp::Change]| {
+        for c in changes {
+            match c {
+                meshkeep_engine::mcp::Change::Project(id) => {
+                    let _ = handle.emit("project://changed", serde_json::json!({ "projectId": id }));
+                }
+                meshkeep_engine::mcp::Change::Library { root_id, reason } => {
+                    let _ = handle.emit(
+                        "library://changed",
+                        serde_json::json!({ "rootId": root_id, "report": serde_json::Value::Null, "reason": reason }),
+                    );
+                    if reason == "import" || reason == "promote" {
+                        if let Some(r) = root_id {
+                            let _ = handle.emit("inbox://changed", serde_json::json!({ "rootId": r }));
+                        }
+                    }
+                    if reason == "collection" {
+                        let _ = handle.emit("collections://changed", serde_json::json!({}));
+                    }
+                }
+            }
+        }
+    });
+    state.mcp.apply(&settings, state.engine.clone(), on_change);
 }
 
 /// In test mode with `MESHKEEP_FIXTURE_ROOT` set: register that folder (once) and scan it.

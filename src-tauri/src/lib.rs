@@ -3,13 +3,27 @@
 
 mod commands;
 mod keys;
+pub mod mcp_bridge;
+pub mod mcp_host;
 mod state;
 
 use state::{AppState, RuntimeConfig};
-use std::sync::{mpsc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 use tauri::Manager;
 
 pub fn run() {
+    // `meshkeep --mcp [url] [token]`: no window, no engine; stdin/stdout speak MCP and are
+    // forwarded to the running app (ADR-0004).
+    let args: Vec<String> = std::env::args().collect();
+    if args.get(1).map(|a| a == "--mcp").unwrap_or(false) {
+        let url = args.get(2).cloned().unwrap_or_else(|| mcp_bridge::DEFAULT_URL.to_string());
+        let token = args
+            .get(3)
+            .cloned()
+            .or_else(|| std::env::var("MESHKEEP_MCP_TOKEN").ok())
+            .unwrap_or_default();
+        std::process::exit(mcp_bridge::run(&url, &token));
+    }
     let config = RuntimeConfig::from_env_and_args();
     let (watch_tx, watch_rx) = mpsc::channel();
 
@@ -54,15 +68,17 @@ pub fn run() {
                 engine.set_ai_provider(Some(std::sync::Arc::new(meshkeep_engine::ai::MockProvider::new(mode))));
             }
             let state = AppState {
-                engine: Mutex::new(engine),
+                engine: Arc::new(Mutex::new(engine)),
                 watchers: Mutex::new(Default::default()),
                 watch_tx,
                 ai_keys: keys::AiKeyStore::new(config.test_mode),
                 config: config.clone(),
                 data_dir,
+                mcp: mcp_host::Host::new(),
             };
             app.manage(state);
             state::seed_test_fixture(app.handle());
+            state::apply_mcp_settings(app.handle());
             state::start_watchers(app.handle());
             state::spawn_watch_loop(app.handle().clone(), watch_rx);
             state::spawn_poll_loop(app.handle().clone());
@@ -119,6 +135,10 @@ pub fn run() {
             commands::reset_thumbnail,
             commands::set_thumbnail_image,
             commands::set_view_thumbnail,
+            commands::get_mcp_settings,
+            commands::set_mcp_settings,
+            commands::regenerate_mcp_token,
+            commands::mcp_status,
             commands::pick_import_files,
             commands::analyze_import,
             commands::execute_import,

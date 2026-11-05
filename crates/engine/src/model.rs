@@ -382,12 +382,26 @@ pub struct ListQuery {
     /// Projects containing at least one model file with this extension (lowercase, no dot).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub file_type: Option<String>,
+    /// Only projects lacking every listed field (what an agent fills in next).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub missing: Vec<MissingField>,
     #[serde(default)]
     pub sort: SortKey,
     #[serde(default)]
     pub limit: Option<u32>,
     #[serde(default)]
     pub offset: Option<u32>,
+}
+
+/// A metadata field a project may lack (`ListQuery::missing`).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MissingField {
+    Creator,
+    License,
+    Tags,
+    Description,
+    SourceUrl,
 }
 
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]

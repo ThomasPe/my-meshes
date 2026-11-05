@@ -318,6 +318,10 @@ export type AiProviderKind = 'anthropic';
 /** Opt-in network features (META-7 stage 2); each one is listed in the privacy policy. */
 export interface NetworkSettings { fetch_model_pages: boolean }
 
+/** The local MCP server for AI agents (ADR-0004). */
+export interface McpSettings { enabled: boolean; port: number; token: string; allow_writes: boolean; import_dirs: string[] }
+export interface McpStatus { running: boolean; port: number; error: string | null; requests: number; rejected: number; lastRequestAt: string | null; exePath: string; downloadsDir: string | null }
+
 export interface AiSettings {
   provider: AiProviderKind;
   base_url: string | null;

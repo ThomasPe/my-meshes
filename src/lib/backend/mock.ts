@@ -2,7 +2,7 @@
 // the Tauri commands, including error codes, so UI tests exercise real flows.
 import type { Backend, Unlisten } from './index';
 import { generate3mf, generateObj, generateStl } from '@/lib/mesh/generate';
-import type { AppError, Collection, FacetCount, FileEntry, FileKind, ThumbLocation, FolderNode, ImportItem, ImportProgress, InboxFile, LibraryChanged, LibraryRoot, ListQuery, Project, ProjectSummary, ScanProgress, SidecarStamp, SmartCollection, TagCount, ThumbJob, UpdateMetadata, HashProgress, AiSettingsView, MetadataSuggestion, Hints, CreatorSuggestion, EnrichProgress } from '@/lib/types';
+import type { AppError, Collection, FacetCount, FileEntry, FileKind, ThumbLocation, FolderNode, ImportItem, ImportProgress, InboxFile, LibraryChanged, LibraryRoot, ListQuery, Project, ProjectSummary, ScanProgress, SidecarStamp, SmartCollection, TagCount, ThumbJob, UpdateMetadata, HashProgress, AiSettingsView, MetadataSuggestion, Hints, CreatorSuggestion, EnrichProgress, McpSettings } from '@/lib/types';
 
 const kindOf = (name: string): FileKind => {
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
@@ -111,6 +111,9 @@ export function createMockBackend(): Backend {
   // AI assistance: endpoint and model in "settings", the key only as a flag (never readable back).
   // `?ai=unauthorized|rate_limited|invalid|unavailable` makes every call fail that way, like MESHKEEP_AI_MOCK.
   const network = { fetch_model_pages: false };
+  const mcp: McpSettings = { enabled: false, port: 7340, token: '', allow_writes: false, import_dirs: [] };
+  let mcpRequests = 0;
+  const mintToken = () => 'mk_' + Array.from({ length: 48 }, () => 'abcdef0123456789'[Math.floor(Math.random() * 16)]).join('');
   const aiSettings: AiSettingsView = { provider: 'anthropic', base_url: null, model: 'claude-haiku-5-5', hasKey: false };
   const aiFailure = new URLSearchParams(location.search).get('ai');
   const aiCache = new Map<string, MetadataSuggestion>();
@@ -582,6 +585,20 @@ export function createMockBackend(): Backend {
     onInboxChanged: (cb) => sub(listeners.inbox, cb),
     async onWatchError() { return () => {}; },
     async getNetworkSettings() { return { ...network }; },
+    async getMcpSettings() { return { ...mcp, import_dirs: mcp.import_dirs.slice() }; },
+    async setMcpSettings(s) {
+      await delay(60);
+      if (s.port < 1024) throw err('not_allowed', `port ${s.port} is reserved; choose one above 1023`);
+      Object.assign(mcp, { ...s, import_dirs: s.import_dirs.slice() });
+      if (mcp.enabled && !mcp.token) mcp.token = mintToken();
+      const w = window as unknown as { __mockMcp?: McpSettings[] }; (w.__mockMcp ??= []).push({ ...mcp });
+      return { ...mcp, import_dirs: mcp.import_dirs.slice() };
+    },
+    async regenerateMcpToken() { await delay(40); mcp.token = mintToken(); return { ...mcp, import_dirs: mcp.import_dirs.slice() }; },
+    async mcpStatus() {
+      if (mcp.enabled) mcpRequests += 1;
+      return { running: mcp.enabled && !!mcp.token, port: mcp.port, error: mcp.enabled && mcp.port === 7341 ? 'cannot listen on 127.0.0.1:7341: address in use' : null, requests: mcp.enabled ? mcpRequests : 0, rejected: 0, lastRequestAt: mcp.enabled ? new Date().toISOString() : null, exePath: 'C:\\Program Files\\Meshkeep\\meshkeep.exe', downloadsDir: 'C:\\Users\\mock\\Downloads' };
+    },
     async setNetworkSettings(s) { network.fetch_model_pages = !!s.fetch_model_pages; return { ...network }; },
     async getAiSettings() { return { ...aiSettings }; },
     async setAiSettings(s) {

@@ -220,5 +220,20 @@ Follow-ups on the same base (not scheduled): natural-language search ("Ask" mode
 turns the query into a smart-collection query), batch enrichment with a review list and
 cost estimate, import proposals in the staging dialog (see ADR-0003, features 4, 2 and 3).
 
+### Epic 10: MCP server (ADR-0004)
+- [x] **Local MCP endpoint and stdio bridge.** `crates/engine/src/mcp.rs` answers JSON-RPC
+      (initialize, tools, prompts) against the engine and reports changes; the shell hosts
+      it on 127.0.0.1 behind a token with an Origin check, restarts it when settings
+      change, emits the usual events after writes, and doubles as `meshkeep --mcp` for
+      Claude Desktop. Settings card: on/off, writes on/off, port, token (show, copy,
+      replace), import folders (Downloads in one click), status line, ready-made
+      configuration for Claude Desktop and Claude Code, and a plain statement of what an
+      agent sees. Tests: engine tools without a socket, the socket once (token, Origin,
+      JSON, change callback), the settings card in browser mode.
+- [ ] **Follow-ups.** Resources (`meshkeep://project/{id}`) for clients that browse;
+      a tool for the in-app AI suggestion so an agent without its own eyes can use the
+      thumbnail; progress notifications for long tools (duplicates, imports with pages);
+      an audit view of what agents changed (reuse the undo log once APP-6 exists).
+
 ## Phase 3: Model tools
 - [ ] **Transforms & mesh analysis** (VIEW-7).

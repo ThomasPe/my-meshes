@@ -1,4 +1,4 @@
-import type { AppInfo, BatchReport, BatchUpdate, CreatorSuggestions, DuplicateReport, EnrichProgress, EnrichReport, Hints, NetworkSettings, PageSuggestion, HashProgress, MoveReport, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata, AiSettings, AiSettingsView, AiTestReport, MetadataSuggestion } from '@/lib/types';
+import type { AppInfo, BatchReport, BatchUpdate, CreatorSuggestions, DuplicateReport, EnrichProgress, EnrichReport, Hints, McpSettings, McpStatus, NetworkSettings, PageSuggestion, HashProgress, MoveReport, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata, AiSettings, AiSettingsView, AiTestReport, MetadataSuggestion } from '@/lib/types';
 
 export type Unlisten = () => void;
 
@@ -99,6 +99,11 @@ export interface Backend {
   // AI assistance (ADR-0003): opt-in, key in the OS credential store, suggestions only.
   getNetworkSettings(): Promise<NetworkSettings>;
   setNetworkSettings(settings: NetworkSettings): Promise<NetworkSettings>;
+  /** The local MCP server (ADR-0004): settings, a fresh token, and whether it is listening. */
+  getMcpSettings(): Promise<McpSettings>;
+  setMcpSettings(settings: McpSettings): Promise<McpSettings>;
+  regenerateMcpToken(): Promise<McpSettings>;
+  mcpStatus(): Promise<McpStatus>;
   getAiSettings(): Promise<AiSettingsView>;
   setAiSettings(settings: AiSettings): Promise<AiSettingsView>;
   /** Stores or (with null / empty) removes the key; resolves to whether a key is stored now. */

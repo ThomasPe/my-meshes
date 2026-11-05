@@ -541,6 +541,51 @@ test('preview: a project image or the current view becomes the thumbnail, automa
   await expect(page.getByTestId('project-card').filter({ hasText: 'Gridfinity Baseplates' }).locator('img')).toBeVisible({ timeout: 20_000 });
 });
 
+test('MCP server: off by default, enabling mints a token, snippets and import folders follow the settings', async ({ page }) => {
+  await page.getByTestId('nav-settings').click();
+  const state = page.getByTestId('mcp-state');
+  await expect(state).toHaveAttribute('data-state', 'off');
+  await expect(page.getByTestId('mcp-token')).toHaveValue('');
+  await expect(page.getByTestId('mcp-snippets')).toHaveCount(0);
+  await page.getByTestId('mcp-toggle').click();
+  await expect(page.getByText('MCP server started')).toBeVisible();
+  await expect(state).toHaveAttribute('data-state', 'running');
+  await expect(state).toContainText('127.0.0.1:7340');
+  await expect(page.getByTestId('mcp-token')).toHaveValue(/^•+$/);
+  await page.getByTestId('mcp-token-show').click();
+  const token = await page.getByTestId('mcp-token').inputValue();
+  expect(token).toMatch(/^mk_[0-9a-f]{48}$/);
+  await expect(page.getByTestId('mcp-snippet-desktop')).toContainText(`"--mcp",\n        "http://127.0.0.1:7340/mcp",\n        "${token}"`);
+  await expect(page.getByTestId('mcp-snippet-code')).toContainText(`claude mcp add --transport http meshkeep http://127.0.0.1:7340/mcp --header "Authorization: Bearer ${token}"`);
+  // a new token replaces the old one everywhere
+  await page.getByTestId('mcp-token-regen').click();
+  await expect(page.getByText('New token created; update your client configuration')).toBeVisible();
+  await expect(page.getByTestId('mcp-token')).not.toHaveValue(token);
+  await expect(page.getByTestId('mcp-snippet-code')).not.toContainText(token);
+  // writes are a separate switch; import folders start empty and take Downloads in one click
+  await expect(page.getByTestId('mcp-folders')).toContainText('none yet');
+  await page.getByTestId('mcp-folder-downloads').click();
+  await expect(page.getByTestId('mcp-folder')).toHaveCount(1);
+  await expect(page.getByTestId('mcp-folder')).toContainText('Downloads');
+  await page.getByTestId('mcp-folder-add').click();
+  await expect(page.getByTestId('mcp-folder')).toHaveCount(2);
+  await page.getByTestId('mcp-writes').click();
+  await expect(page.getByText('Agents may now write metadata and import')).toBeVisible();
+  const saved = await page.evaluate(() => (window as unknown as { __mockMcp?: Array<{ enabled: boolean; allow_writes: boolean; import_dirs: string[] }> }).__mockMcp!.at(-1));
+  expect(saved).toMatchObject({ enabled: true, allow_writes: true, import_dirs: ['C:\\Users\\mock\\Downloads', 'E:\\More Models'] });
+  // a port below 1024 is refused, a taken port shows up in the status line
+  await page.getByTestId('mcp-port').fill('80');
+  await page.getByTestId('mcp-port-save').click();
+  await expect(page.getByText('Choose a port between 1024 and 65535')).toBeVisible();
+  await page.getByTestId('mcp-port').fill('7341');
+  await page.getByTestId('mcp-port-save').click();
+  await expect(state).toHaveAttribute('data-state', 'error');
+  await expect(state).toContainText('address in use');
+  await page.getByTestId('mcp-toggle').click();
+  await expect(state).toHaveAttribute('data-state', 'off');
+  await expect(page.getByTestId('mcp-snippets')).toHaveCount(0);
+});
+
 test('settings shows the last scan summary and the sync problem per root', async ({ page }) => {
   await page.getByTestId('nav-settings').click();
   await expect(page.getByTestId('root-scan-summary').first()).toContainText('72 projects · 131 files');

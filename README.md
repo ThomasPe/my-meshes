@@ -22,6 +22,10 @@ in `docs/decisions/`). What works today:
   language (en/de); self-updater in private builds, Microsoft Store build without it
 - feedback from inside the app: bug reports and ideas open as prefilled GitHub issues with
   version and system info, nothing is sent in the background
+- an MCP server for AI agents on the same machine (Claude Desktop, Claude Code): off by
+  default, token-protected, read-only unless writes are allowed; agents can search, fill
+  in metadata with evidence from files and model pages, and import from the folders you
+  list (`docs/decisions/0004-mcp-server.md`)
 
 Phase 2 (duplicates, keymap, undo, custom thumbnails, ...) is listed in `docs/backlog.md`.
 

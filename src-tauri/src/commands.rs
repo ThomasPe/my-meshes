@@ -8,7 +8,7 @@ use meshkeep_engine::model::{
     Facets, FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, ScanReport, SyncMode, TagCount, ThumbJob, ThumbLocation,
     ThumbStats,
 };
-use meshkeep_engine::settings::NetworkSettings;
+use meshkeep_engine::settings::{McpSettings, NetworkSettings};
 use meshkeep_engine::{
     BatchReport, BatchUpdate, CreatorSuggestions, DuplicateReport, EngineError, MoveReport, PromoteItem, PromoteReport, UpdateMetadata,
 };
@@ -981,6 +981,51 @@ fn key_err(e: String) -> AppError {
     AppError {
         code: "keyring",
         message: e,
+    }
+}
+
+// ---- MCP server (ADR-0004) ---------------------------------------------------------------
+
+#[tauri::command]
+pub fn get_mcp_settings(state: State<AppState>) -> McpSettings {
+    state.engine.lock().unwrap().mcp_settings()
+}
+
+#[tauri::command]
+pub fn set_mcp_settings(app: AppHandle, state: State<AppState>, settings: McpSettings) -> CmdResult<McpSettings> {
+    let saved = state.engine.lock().unwrap().set_mcp_settings(settings)?;
+    state::apply_mcp_settings(&app);
+    Ok(saved)
+}
+
+#[tauri::command]
+pub fn regenerate_mcp_token(app: AppHandle, state: State<AppState>) -> CmdResult<McpSettings> {
+    let saved = state.engine.lock().unwrap().regenerate_mcp_token()?;
+    state::apply_mcp_settings(&app);
+    Ok(saved)
+}
+
+/// Server state plus what the Settings page needs to write the client configuration: the
+/// path of this executable (for the stdio bridge) and the user's downloads folder (the
+/// usual first import folder).
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct McpStatusView {
+    #[serde(flatten)]
+    pub status: crate::mcp_host::McpStatus,
+    pub exe_path: String,
+    pub downloads_dir: Option<String>,
+}
+
+#[tauri::command]
+pub fn mcp_status(app: AppHandle, state: State<AppState>) -> McpStatusView {
+    let port = state.engine.lock().unwrap().mcp_settings().port;
+    McpStatusView {
+        status: state.mcp.status(port),
+        exe_path: std::env::current_exe()
+            .map(|p| p.to_string_lossy().into_owned())
+            .unwrap_or_default(),
+        downloads_dir: app.path().download_dir().ok().map(|p| p.to_string_lossy().into_owned()),
     }
 }
 
