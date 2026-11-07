@@ -670,6 +670,33 @@ test('project page uses the whole window on large screens (#52)', async ({ page 
   expect((await page.getByTestId('viewer').boundingBox())!.height).toBeLessThan(620);
 });
 
+test('library conventions: starter set, validation, check with deviations (#58)', async ({ page }) => {
+  await page.getByTestId('nav-settings').click();
+  const r1 = page.locator('[data-testid="conventions-root"][data-root="r1"]');
+  await expect(r1).toHaveAttribute('data-state', 'none');
+  await expect(r1.getByTestId('conventions-check')).toBeDisabled();
+  await r1.getByTestId('conventions-starter').click();
+  await expect(r1.getByTestId('conventions-text')).toHaveValue(/pattern: "\{creator\}\/\{title\}"/);
+  await r1.getByTestId('conventions-save').click();
+  await expect(page.getByText('Conventions saved')).toBeVisible();
+  await expect(r1).toHaveAttribute('data-state', 'set');
+  await r1.getByTestId('conventions-check').click();
+  const report = r1.getByTestId('conventions-report');
+  await expect(report).toContainText('4 deviations in');
+  await expect(report.locator('[data-kind="folder"]')).toHaveCount(3);
+  await expect(report.locator('[data-kind="license"]')).toContainText('GPL-3.0 → Personal use');
+  // a text that does not parse is refused and the file stays as it was
+  await r1.getByTestId('conventions-text').fill('bad: yes');
+  await r1.getByTestId('conventions-save').click();
+  await expect(page.getByText(/Invalid conventions.yaml/)).toBeVisible();
+  await expect(r1).toHaveAttribute('data-state', 'set');
+  // emptying the text removes the file
+  await r1.getByTestId('conventions-text').fill('');
+  await r1.getByTestId('conventions-save').click();
+  await expect(page.getByText('Conventions removed')).toBeVisible();
+  await expect(r1).toHaveAttribute('data-state', 'none');
+});
+
 test('settings shows the last scan summary and the sync problem per root', async ({ page }) => {
   await page.getByTestId('nav-settings').click();
   await expect(page.getByTestId('root-scan-summary').first()).toContainText('72 projects · 131 files');

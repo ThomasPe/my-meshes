@@ -1,6 +1,7 @@
 use crate::state::{self, AppState};
 use meshkeep_engine::ai::{AiSettings, AiTestReport, MetadataSuggestion};
 use meshkeep_engine::collections::{Collection, SmartCollection};
+use meshkeep_engine::conventions::{CheckReport, Conventions};
 use meshkeep_engine::enrich::{EnrichReport, PageSuggestion};
 use meshkeep_engine::hints::Hints;
 use meshkeep_engine::import::{ImportItem, ImportReport, ImportRequest, InboxFile};
@@ -51,6 +52,7 @@ impl From<EngineError> for AppError {
             EngineError::AiUnavailable(_) => "ai_unavailable",
             EngineError::PageFetchDisabled => "page_fetch_disabled",
             EngineError::PageFetch(_) => "page_fetch",
+            EngineError::ConventionsInvalid(_) => "conventions_invalid",
         };
         AppError {
             code,
@@ -1015,6 +1017,70 @@ pub struct McpStatusView {
     pub status: crate::mcp_host::McpStatus,
     pub exe_path: String,
     pub downloads_dir: Option<String>,
+}
+
+// ---- library conventions (#58) ---------------------------------------------------------------
+
+/// The file's text as written, what it parses to, or why it does not parse.
+#[derive(Serialize)]
+pub struct ConventionsView {
+    pub root_id: String,
+    pub path: String,
+    pub text: Option<String>,
+    pub parsed: Option<Conventions>,
+    pub error: Option<String>,
+}
+
+fn conventions_view(engine: &meshkeep_engine::Engine, root_id: &str) -> CmdResult<ConventionsView> {
+    let root = engine.root(root_id)?;
+    let text = engine.conventions_text(root_id)?;
+    let (parsed, error) = match engine.conventions(root_id) {
+        Ok(c) => (c, None),
+        Err(e) => (None, Some(e.to_string())),
+    };
+    Ok(ConventionsView {
+        root_id: root_id.to_string(),
+        path: root
+            .path
+            .join(meshkeep_engine::conventions::CONVENTIONS_REL)
+            .to_string_lossy()
+            .into_owned(),
+        text,
+        parsed,
+        error,
+    })
+}
+
+#[tauri::command]
+pub fn get_conventions(state: State<AppState>, root_id: String) -> CmdResult<ConventionsView> {
+    conventions_view(&state.engine.lock().unwrap(), &root_id)
+}
+
+/// Writes the text when it parses; an empty text removes the file.
+#[tauri::command]
+pub fn set_conventions(state: State<AppState>, root_id: String, text: String) -> CmdResult<ConventionsView> {
+    let mut engine = state.engine.lock().unwrap();
+    engine.set_conventions_text(&root_id, &text)?;
+    conventions_view(&engine, &root_id)
+}
+
+#[tauri::command]
+pub fn starter_conventions() -> String {
+    meshkeep_engine::conventions::starter_text()
+}
+
+#[tauri::command]
+pub async fn check_conventions(app: AppHandle, root_id: String) -> CmdResult<CheckReport> {
+    tauri::async_runtime::spawn_blocking(move || {
+        let state = app.state::<AppState>();
+        let engine = state.engine.lock().unwrap();
+        engine.check_conventions(&root_id).map_err(AppError::from)
+    })
+    .await
+    .map_err(|e| AppError {
+        code: "shell",
+        message: e.to_string(),
+    })?
 }
 
 #[tauri::command]

@@ -306,7 +306,7 @@ export interface ThumbStats {
 }
 
 export interface AppError {
-  code: 'sidecar_conflict' | 'sidecar_invalid' | 'root_offline' | 'not_found' | 'root_exists' | 'not_a_directory' | 'invalid_pattern' | 'invalid_name' | 'already_exists' | 'not_allowed' | 'io' | 'index' | 'serde' | 'watch' | 'shell' | 'updater' | 'mock' | 'ai_disabled' | 'ai_unauthorized' | 'ai_rate_limited' | 'ai_invalid_response' | 'ai_unavailable' | 'keyring' | 'page_fetch_disabled' | 'page_fetch';
+  code: 'sidecar_conflict' | 'sidecar_invalid' | 'root_offline' | 'not_found' | 'root_exists' | 'not_a_directory' | 'invalid_pattern' | 'invalid_name' | 'already_exists' | 'not_allowed' | 'io' | 'index' | 'serde' | 'watch' | 'shell' | 'updater' | 'mock' | 'ai_disabled' | 'ai_unauthorized' | 'ai_rate_limited' | 'ai_invalid_response' | 'ai_unavailable' | 'keyring' | 'page_fetch_disabled' | 'page_fetch' | 'conventions_invalid';
   message: string;
 }
 
@@ -320,6 +320,10 @@ export interface NetworkSettings { fetch_model_pages: boolean }
 
 /** The local MCP server for AI agents (ADR-0004). */
 export interface McpSettings { enabled: boolean; port: number; token: string; allow_writes: boolean; allow_deletes: boolean; import_dirs: string[] }
+/** Library conventions per root (#58): the file as text plus what it parses to. */
+export interface ConventionsView { root_id: string; path: string; text: string | null; parsed: Record<string, unknown> | null; error: string | null }
+export interface ConventionDeviation { project_id: string; rel_path: string; kind: 'folder' | 'title' | 'license' | 'tags'; current: string; expected: string; fixable: boolean }
+export interface ConventionReport { root_id: string; checked: number; deviations: ConventionDeviation[] }
 export interface McpStatus { running: boolean; port: number; error: string | null; requests: number; rejected: number; lastRequestAt: string | null; exePath: string; downloadsDir: string | null }
 
 export interface AiSettings {

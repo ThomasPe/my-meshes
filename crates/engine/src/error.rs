@@ -50,6 +50,8 @@ pub enum EngineError {
     PageFetchDisabled,
     #[error("the model page could not be loaded: {0}")]
     PageFetch(String),
+    #[error("invalid conventions.yaml: {0}")]
+    ConventionsInvalid(String),
 }
 
 pub type Result<T> = std::result::Result<T, EngineError>;

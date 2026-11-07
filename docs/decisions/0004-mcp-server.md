@@ -90,3 +90,20 @@ last step, removing a duplicate or a project, always fell back to the user. So:
   touch; the index, collections and favorites follow in the same call; the usual change
   events reach the window. `find_duplicates` now lists each member's shared files with
   the projects that also hold them, so an agent can decide between the two resolutions.
+
+## Amendment 2026-11-07: library conventions reach the agent (#58)
+
+Many choices an agent makes while sorting a library are the owner's to make (where single
+creators go, which license to use when the page is unclear, how tags are spelled), and
+without written rules every session chooses differently. Each root may now carry
+`.meshkeep/conventions.yaml` (edited in Settings, the file is the source of truth, it
+travels with the folder): a layout pattern, title cleanups, tag format, allowed licenses,
+a duplicate policy and free-text notes. The engine enforces the structured part
+(`check_conventions` lists deviations, `organize` fixes folders, titles and tags, tag rules
+apply on every metadata write) and reports a malformed file instead of ignoring it. The
+MCP server appends the conventions of every root to the `initialize` instructions and
+offers `get_conventions` and `check_conventions` as reading tools and `organize` behind
+"Allow writes". Open questions from the issue, decided: no defaults without a file (a
+starter set is one click away in Settings); `organize` lives behind "Allow writes" only,
+the window shows the deviations and leaves fixing to an agent for now; placeholders stay
+at `{creator}` and `{title}` until a case asks for more.

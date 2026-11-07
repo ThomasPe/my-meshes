@@ -95,12 +95,21 @@ fn handle_one(engine: &mut Engine, message: &Value) -> Outcome {
     };
     let mut changes = Vec::new();
     let result = match method {
-        "initialize" => Ok(json!({
-            "protocolVersion": PROTOCOL_VERSION,
-            "capabilities": { "tools": { "listChanged": false }, "prompts": { "listChanged": false } },
-            "serverInfo": server_info(),
-            "instructions": INSTRUCTIONS,
-        })),
+        "initialize" => {
+            // the libraries' own rules ride along, so an agent follows them without asking (#58)
+            let conv = engine.conventions_summary();
+            let instructions = if conv.is_empty() {
+                INSTRUCTIONS.to_string()
+            } else {
+                format!("{INSTRUCTIONS}\n\n{conv}")
+            };
+            Ok(json!({
+                "protocolVersion": PROTOCOL_VERSION,
+                "capabilities": { "tools": { "listChanged": false }, "prompts": { "listChanged": false } },
+                "serverInfo": server_info(),
+                "instructions": instructions,
+            }))
+        }
         "ping" => Ok(json!({})),
         "tools/list" => {
             let s = engine.mcp_settings();
@@ -280,6 +289,20 @@ pub fn tools(allow_writes: bool, allow_deletes: bool) -> Vec<Value> {
         ),
         tool("list_collections", "Manual collections and how many projects each holds.", schema(&[], &[]), true, false),
         tool(
+            "get_conventions",
+            "The written conventions of a library root (.meshkeep/conventions.yaml): layout pattern, title cleanups, tag format, allowed licenses, duplicate policy and free-text notes. Follow them. Without root_id, every root.",
+            schema(&[("root_id", s("Library root id"))], &[]),
+            true,
+            false,
+        ),
+        tool(
+            "check_conventions",
+            "Where projects of a root deviate from its conventions: wrong folder, a title the rules would clean, a license outside the list, tags not in the format. `fixable` says whether organize can fix it.",
+            schema(&[("root_id", s("Library root id"))], &["root_id"]),
+            true,
+            false,
+        ),
+        tool(
             "scan_root",
             "Rescan a library root so the index reflects the disk (after files changed outside the app).",
             schema(&[("root_id", s("Library root id"))], &["root_id"]),
@@ -388,6 +411,13 @@ pub fn tools(allow_writes: bool, allow_deletes: bool) -> Vec<Value> {
                     &[("project_ids", strings("Project ids")), ("collection_id", s("Existing collection id")), ("name", s("Collection name, used when no id is given"))],
                     &["project_ids"],
                 ),
+                false,
+                false,
+            ),
+            tool(
+                "organize",
+                "Fix the fixable deviations from a root's conventions: clean titles and tags through project.yaml, move projects into the folder the layout names. Licenses are only reported. With dry_run returns the plan.",
+                schema(&[("root_id", s("Library root id")), ("dry_run", b("Only return the plan"))], &["root_id"]),
                 false,
                 false,
             ),
@@ -531,6 +561,7 @@ fn call_tool(engine: &mut Engine, name: &str, args: &Value, changes: &mut Vec<Ch
                 | "add_to_collection"
                 | "move_files"
                 | "remove_empty_folders"
+                | "organize"
         );
     if is_write && !settings.allow_writes {
         return Err(ToolError::Failed(format!(
@@ -682,6 +713,34 @@ fn call_tool(engine: &mut Engine, name: &str, args: &Value, changes: &mut Vec<Ch
             .iter()
             .map(|c| json!({ "id": c.id, "name": c.name, "projects": c.projects.len() }))
             .collect::<Vec<_>>() })),
+        "get_conventions" => {
+            let roots: Vec<_> = match arg_str(args, "root_id") {
+                Some(id) => vec![engine.root(&id)?],
+                None => engine.roots()?,
+            };
+            Ok(json!({ "roots": roots.iter().map(|r| {
+                let (conventions, error) = match engine.conventions(&r.id) {
+                    Ok(c) => (c, None),
+                    Err(e) => (None, Some(e.to_string())),
+                };
+                json!({ "root_id": r.id, "path": r.path, "file": r.path.join(crate::conventions::CONVENTIONS_REL), "conventions": conventions, "error": error })
+            }).collect::<Vec<_>>() }))
+        }
+        "check_conventions" => {
+            let root = need_str(args, "root_id")?;
+            Ok(serde_json::to_value(engine.check_conventions(&root)?).unwrap_or_default())
+        }
+        "organize" => {
+            let root = need_str(args, "root_id")?;
+            let r = engine.organize(&root, dry_run)?;
+            if !dry_run && !r.applied.is_empty() {
+                changes.push(Change::Library {
+                    root_id: Some(root),
+                    reason: "move".into(),
+                });
+            }
+            Ok(serde_json::to_value(r).unwrap_or_default())
+        }
         "scan_root" => {
             let root = need_str(args, "root_id")?;
             let r = engine.scan_root_as(&root, "mcp", |_| {})?;
@@ -1215,7 +1274,7 @@ mod tests {
                 ..Default::default()
             })
             .unwrap();
-        assert_eq!(list(&mut engine), read_only + 10);
+        assert_eq!(list(&mut engine), read_only + 11);
         let (r, _) = call(&mut engine, 3, "no_such_tool", json!({}));
         assert_eq!(r["error"]["code"], -32602);
         // deleting needs the third switch, which needs writes
@@ -1236,7 +1295,162 @@ mod tests {
                 ..Default::default()
             })
             .unwrap();
-        assert_eq!(list(&mut engine), read_only + 14);
+        assert_eq!(list(&mut engine), read_only + 15);
+    }
+
+    /// The case from #58: a library sorted by creator with a shared folder, ids in titles,
+    /// mixed tag formats and a license outside the list.
+    #[test]
+    fn conventions_reach_the_agent_and_organize_fixes_what_it_can() {
+        use crate::model::SyncMode;
+        let data = tempfile::tempdir().unwrap();
+        let lib = tempfile::tempdir().unwrap();
+        let w = |p: &str, bytes: &[u8]| {
+            let path = lib.path().join(p);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, bytes).unwrap();
+        };
+        w("unsorted/Baby Rose/rose.stl", b"solid");
+        w(
+            "unsorted/Baby Rose/project.yaml",
+            b"metadata:\n  creator: Cinderwing3D\n  tags: [Print In Place, dragon]\n  license: CC-BY-ND-4.0\n",
+        );
+        w("unsorted/Cinder Snake/snake.stl", b"solid");
+        w("unsorted/Cinder Snake/project.yaml", b"metadata:\n  creator: Cinderwing3D\n");
+        w("Cinderwing3D/Jellyfish/jelly.stl", b"solid");
+        w("Cinderwing3D/Jellyfish/project.yaml", b"metadata:\n  creator: Cinderwing3D\n");
+        w("Small screws organizer - 6277078/box.stl", b"solid");
+        w(
+            "Small screws organizer - 6277078/project.yaml",
+            b"metadata:\n  creator: One Hit Wonder\n",
+        );
+        w("Mystery/thing.stl", b"solid");
+        let mut engine = Engine::open(data.path()).unwrap();
+        engine
+            .set_mcp_settings(McpSettings {
+                enabled: true,
+                allow_writes: true,
+                ..Default::default()
+            })
+            .unwrap();
+        let root = engine.add_root(lib.path(), SyncMode::Manual).unwrap();
+        engine.scan_root(&root.id, |_| {}).unwrap();
+        let id = |rel: &str| format!("{}:{rel}", root.id);
+
+        // no file: nothing in the instructions, nothing to check
+        let init = |e: &mut Engine| {
+            handle(e, &json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {} }))
+                .response
+                .unwrap()["result"]["instructions"]
+                .as_str()
+                .unwrap()
+                .to_string()
+        };
+        assert!(!init(&mut engine).contains("Conventions for"));
+        let (r, _) = call(&mut engine, 2, "check_conventions", json!({ "root_id": root.id }));
+        assert_eq!(structured(&r)["deviations"], json!([]));
+        let (r, _) = call(&mut engine, 3, "get_conventions", json!({}));
+        assert!(structured(&r)["roots"][0]["conventions"].is_null());
+
+        // a broken file is reported, not ignored silently
+        std::fs::create_dir_all(lib.path().join(".meshkeep")).unwrap();
+        std::fs::write(
+            lib.path().join(".meshkeep/conventions.yaml"),
+            b"layout:\n  pattern: \"{creator}\"\n",
+        )
+        .unwrap();
+        assert!(init(&mut engine).contains("invalid and ignored"));
+        let (r, _) = call(&mut engine, 4, "get_conventions", json!({ "root_id": root.id }));
+        assert!(structured(&r)["roots"][0]["error"].as_str().unwrap().contains("{title}"));
+        let (r, _) = call(&mut engine, 5, "check_conventions", json!({ "root_id": root.id }));
+        assert_eq!(r["result"]["isError"], true);
+
+        // the real rules: survive a rescan, reach the agent, name every deviation
+        let text = "layout:\n  pattern: \"{creator}/{title}\"\n  shared_folder: Misc\n  shared_threshold: 2\n  unknown_creator: Misc\ntitles:\n  strip: [thingiverse_id]\nmetadata:\n  tags: { case: lower, separator: \"-\" }\n  license_default: Personal use\n  licenses: [CC0-1.0, CC-BY-4.0, Personal use]\nnotes: |\n  Keep collections together.\n";
+        engine.set_conventions_text(&root.id, text).unwrap();
+        engine.scan_root(&root.id, |_| {}).unwrap();
+        let ins = init(&mut engine);
+        assert!(ins.contains("Conventions for the library at"), "{ins}");
+        assert!(ins.contains("Keep collections together"));
+        let (r, _) = call(&mut engine, 6, "check_conventions", json!({ "root_id": root.id }));
+        let v = structured(&r);
+        assert_eq!(v["checked"], 5);
+        let kinds: Vec<(String, String, String)> = v["deviations"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|d| {
+                (
+                    d["kind"].as_str().unwrap().to_string(),
+                    d["rel_path"].as_str().unwrap().to_string(),
+                    d["expected"].as_str().unwrap().to_string(),
+                )
+            })
+            .collect();
+        assert!(
+            kinds.contains(&("folder".into(), "unsorted/Baby Rose".into(), "Cinderwing3D/Baby Rose".into())),
+            "{kinds:?}"
+        );
+        assert!(kinds.contains(&("folder".into(), "unsorted/Cinder Snake".into(), "Cinderwing3D/Cinder Snake".into())));
+        assert!(
+            kinds.contains(&(
+                "folder".into(),
+                "Small screws organizer - 6277078".into(),
+                "Misc/Small screws organizer - 6277078".into()
+            )),
+            "one project: shared folder"
+        );
+        assert!(
+            kinds.contains(&("folder".into(), "Mystery".into(), "Misc/Mystery".into())),
+            "no creator: unknown folder"
+        );
+        assert!(kinds.contains(&(
+            "title".into(),
+            "Small screws organizer - 6277078".into(),
+            "Small screws organizer".into()
+        )));
+        assert!(kinds.contains(&("tags".into(), "unsorted/Baby Rose".into(), "dragon, print-in-place".into())));
+        assert!(kinds.contains(&("license".into(), "unsorted/Baby Rose".into(), "Personal use".into())));
+        assert!(!kinds.iter().any(|k| k.1 == "Cinderwing3D/Jellyfish"), "already where it belongs");
+
+        // tag rules apply on every write, not only in organize
+        let (r, _) = call(
+            &mut engine,
+            7,
+            "update_metadata",
+            json!({ "project_id": id("Cinderwing3D/Jellyfish"), "add_tags": ["Sea Life"] }),
+        );
+        assert_eq!(structured(&r)["tags"], json!(["sea-life"]));
+
+        // the plan, then the fix: licenses stay for a person
+        let (r, changes) = call(&mut engine, 8, "organize", json!({ "root_id": root.id, "dry_run": true }));
+        let v = structured(&r);
+        assert_eq!(v["planned"].as_array().unwrap().len(), 6);
+        assert_eq!(v["skipped"][0]["kind"], "license");
+        assert!(changes.is_empty());
+        assert!(lib.path().join("unsorted/Baby Rose").is_dir());
+        let (r, changes) = call(&mut engine, 9, "organize", json!({ "root_id": root.id }));
+        let v = structured(&r);
+        assert_eq!(v["applied"].as_array().unwrap().len(), 6, "{v}");
+        assert_eq!(v["failed"], json!([]));
+        assert!(!changes.is_empty());
+        assert!(lib.path().join("Cinderwing3D/Baby Rose/rose.stl").is_file());
+        assert!(lib.path().join("Misc/Mystery/thing.stl").is_file());
+        assert!(
+            lib.path().join("Misc/Small screws organizer - 6277078/box.stl").is_file(),
+            "folders keep their names; only the title is cleaned"
+        );
+        let organizer = engine.get_project(&id("Misc/Small screws organizer - 6277078")).unwrap();
+        assert_eq!(organizer.title, "Small screws organizer");
+        let rose = engine.get_project(&id("Cinderwing3D/Baby Rose")).unwrap();
+        assert_eq!(rose.tags, vec!["dragon", "print-in-place"]);
+        assert_eq!(rose.license.as_deref(), Some("CC-BY-ND-4.0"), "not touched");
+        let (r, _) = call(&mut engine, 10, "check_conventions", json!({ "root_id": root.id }));
+        let left = structured(&r)["deviations"].as_array().unwrap().len();
+        assert_eq!(left, 1, "only the license remains");
+        // an empty text removes the file again
+        engine.set_conventions_text(&root.id, "  ").unwrap();
+        assert!(engine.conventions(&root.id).unwrap().is_none());
     }
 
     /// The case from #57: a creator's collection holds loose models that also exist as

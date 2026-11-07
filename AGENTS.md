@@ -88,7 +88,9 @@ each line on stdin to the running app's endpoint (default `http://127.0.0.1:7340
 and prints the answer (ADR-0004). Nothing but protocol lines may go to stdout in that
 mode. The endpoint itself lives in `src-tauri/src/mcp_host.rs`; the tools in
 `crates/engine/src/mcp.rs`, where every new tool needs a test and, if it writes, the
-`allow_writes` gate.
+`allow_writes` gate (deleting tools the `allow_deletes` gate on top, trash only, with
+`dry_run`). Library conventions (`crates/engine/src/conventions.rs`) are per root in
+`.meshkeep/conventions.yaml`; a rule the engine enforces belongs in `check_conventions`.
 
 ## Test mode (real app)
 

@@ -392,7 +392,28 @@
     "mcpDeletesHintOn": "On: agents can move files and whole projects to the recycle bin, including duplicates they resolve. Nothing is deleted permanently; the recycle bin keeps it.",
     "mcpDeletesHintOff": "Off: agents can suggest what to delete, but only you can do it.",
     "mcpDeletesOn": "Agents may now move files and projects to the trash",
-    "mcpDeletesOff": "Agents can no longer delete"
+    "mcpDeletesOff": "Agents can no longer delete",
+    "conventions": "Library conventions",
+    "conventionsHint": "How each library should be organised, written to .meshkeep/conventions.yaml inside the folder so it travels with it. The app checks the rules; agents connected over MCP receive them with every session.",
+    "conventionsSet": "rules set",
+    "conventionsInvalid": "file invalid",
+    "conventionsNone": "no rules",
+    "conventionsPlaceholder": "No conventions yet. Insert the starter set or write your own YAML.",
+    "conventionsSave": "Save",
+    "conventionsStarter": "Insert starter set",
+    "conventionsCheck": "Check library",
+    "conventionsFile": ".meshkeep/conventions.yaml",
+    "conventionsSaved": "Conventions saved",
+    "conventionsRemoved": "Conventions removed",
+    "conventionsClean": "All {{count}} projects follow the rules.",
+    "conventionsDeviations": "{{count}} deviations in {{checked}} projects",
+    "conventionsFixHint": "An MCP agent can fix the highlighted ones with “organize”; licenses are yours to decide.",
+    "conventionKind": {
+      "folder": "folder",
+      "title": "title",
+      "license": "license",
+      "tags": "tags"
+    }
   },
   "status": {
     "watching": "Watching {{path}}",
@@ -424,7 +445,8 @@
     "ai_unavailable": "The AI provider could not be reached.",
     "keyring": "The API key could not be stored in the system credential store: {{message}}",
     "page_fetch_disabled": "Loading model pages is off. Turn it on in Settings → Network.",
-    "page_fetch": "The model page could not be loaded: {{message}}"
+    "page_fetch": "The model page could not be loaded: {{message}}",
+    "conventions_invalid": "Invalid conventions.yaml: {{message}}"
   },
   "common": {
     "cancel": "Cancel",

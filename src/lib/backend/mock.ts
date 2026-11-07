@@ -2,7 +2,7 @@
 // the Tauri commands, including error codes, so UI tests exercise real flows.
 import type { Backend, Unlisten } from './index';
 import { generate3mf, generateObj, generateStl } from '@/lib/mesh/generate';
-import type { AppError, Collection, FacetCount, FileEntry, FileKind, ThumbLocation, FolderNode, ImportItem, ImportProgress, InboxFile, LibraryChanged, LibraryRoot, ListQuery, Project, ProjectSummary, ScanProgress, SidecarStamp, SmartCollection, TagCount, ThumbJob, UpdateMetadata, HashProgress, AiSettingsView, MetadataSuggestion, Hints, CreatorSuggestion, EnrichProgress, McpSettings } from '@/lib/types';
+import type { AppError, Collection, FacetCount, FileEntry, FileKind, ThumbLocation, FolderNode, ImportItem, ImportProgress, InboxFile, LibraryChanged, LibraryRoot, ListQuery, Project, ProjectSummary, ScanProgress, SidecarStamp, SmartCollection, TagCount, ThumbJob, UpdateMetadata, HashProgress, AiSettingsView, MetadataSuggestion, Hints, CreatorSuggestion, EnrichProgress, McpSettings, ConventionDeviation } from '@/lib/types';
 
 const kindOf = (name: string): FileKind => {
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
@@ -116,6 +116,8 @@ export function createMockBackend(): Backend {
   // `?ai=unauthorized|rate_limited|invalid|unavailable` makes every call fail that way, like MESHKEEP_AI_MOCK.
   const network = { fetch_model_pages: false };
   const mcp: McpSettings = { enabled: false, port: 7340, token: '', allow_writes: false, allow_deletes: false, import_dirs: [] };
+  const conventions = new Map<string, string>();
+  const STARTER_CONVENTIONS = `# Library conventions for this folder (Meshkeep reads this file, agents receive it).\nversion: 1\nlayout:\n  pattern: "{creator}/{title}"\n  shared_folder: Misc\n  shared_threshold: 2\n  unknown_creator: Misc\ntitles:\n  strip: [thingiverse_id, date_suffix]\nmetadata:\n  tags: { language: en, case: lower, separator: "-" }\n  license_default: Personal use\n  licenses: [CC0-1.0, CC-BY-4.0, CC-BY-NC-SA-4.0, Personal use]\nnotes: |\n  Link the original model as the source, not a later remake.\n`;
   let mcpRequests = 0;
   const mintToken = () => 'mk_' + Array.from({ length: 48 }, () => 'abcdef0123456789'[Math.floor(Math.random() * 16)]).join('');
   const aiSettings: AiSettingsView = { provider: 'anthropic', base_url: null, model: 'claude-haiku-5-5', hasKey: false };
@@ -600,6 +602,29 @@ export function createMockBackend(): Backend {
       return { ...mcp, import_dirs: mcp.import_dirs.slice() };
     },
     async regenerateMcpToken() { await delay(40); mcp.token = mintToken(); return { ...mcp, import_dirs: mcp.import_dirs.slice() }; },
+    // conventions (#58): per root in memory; a text with "pattern:" is "parsed", "bad:" is invalid
+    async getConventions(rootId) {
+      const r = roots.find((x) => x.id === rootId); if (!r) throw err('not_found', rootId);
+      const text = conventions.get(rootId) ?? null;
+      const error = text && text.includes('bad:') ? 'invalid conventions.yaml: layout.pattern must end with {title}' : null;
+      return { root_id: rootId, path: `${r.path}\\.meshkeep\\conventions.yaml`, text, parsed: text && !error ? { version: 1 } : null, error };
+    },
+    async setConventions(rootId, text) {
+      await delay(40);
+      if (text.includes('bad:')) throw err('conventions_invalid', 'invalid conventions.yaml: layout.pattern must end with {title}');
+      if (text.trim()) conventions.set(rootId, text); else conventions.delete(rootId);
+      return this.getConventions(rootId);
+    },
+    async starterConventions() { return STARTER_CONVENTIONS; },
+    async checkConventions(rootId) {
+      await delay(80);
+      const text = conventions.get(rootId);
+      if (!text) return { root_id: rootId, checked: projects.filter((p) => p.root_id === rootId).length, deviations: [] };
+      const mine = projects.filter((p) => p.root_id === rootId);
+      const deviations: ConventionDeviation[] = mine.filter((p) => p.creator && !p.rel_path.startsWith(`${p.creator}/`)).slice(0, 3).map((p) => ({ project_id: p.id, rel_path: p.rel_path, kind: 'folder', current: p.rel_path, expected: `${p.creator}/${p.rel_path.split('/').pop()}`, fixable: true }));
+      deviations.push({ project_id: mine[0]!.id, rel_path: mine[0]!.rel_path, kind: 'license', current: 'GPL-3.0', expected: 'Personal use', fixable: false });
+      return { root_id: rootId, checked: mine.length, deviations };
+    },
     async mcpStatus() {
       if (mcp.enabled) mcpRequests += 1;
       return { running: mcp.enabled && !!mcp.token, port: mcp.port, error: mcp.enabled && mcp.port === 7341 ? 'cannot listen on 127.0.0.1:7341: address in use' : null, requests: mcp.enabled ? mcpRequests : 0, rejected: 0, lastRequestAt: mcp.enabled ? new Date().toISOString() : null, exePath: 'C:\\Program Files\\Meshkeep\\meshkeep.exe', downloadsDir: 'C:\\Users\\mock\\Downloads' };

@@ -234,6 +234,13 @@ cost estimate, import proposals in the staging dialog (see ADR-0003, features 4,
       amendment). `delete_file`, `delete_project`, `resolve_duplicates`, `remove_shared_files`
       (trash only) behind "Allow deleting"; `move_files` and `remove_empty_folders` behind
       "Allow writes"; all with `dry_run`; `find_duplicates` names the shared files per member.
+- [x] **Library conventions per root** (#58, ADR-0004 amendment). `.meshkeep/conventions.yaml`
+      with layout pattern, title cleanups, tag format, allowed licenses, duplicate policy and
+      notes; Settings card with editor, starter set, validation and a deviation check; engine
+      `check_conventions`/`organize` (folders, titles, tags; licenses only reported), tag rules on
+      every write; MCP `initialize` carries the rules, `get_conventions`, `check_conventions`,
+      `organize`. Not yet: the import dialog proposing the destination from the layout, an
+      "Organize" button in the window, more placeholders.
 - [ ] **Follow-ups.** Resources (`meshkeep://project/{id}`) for clients that browse;
       a tool for the in-app AI suggestion so an agent without its own eyes can use the
       thumbnail; progress notifications for long tools (duplicates, imports with pages);

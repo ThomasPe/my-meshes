@@ -9,6 +9,7 @@
 
 pub mod ai;
 pub mod collections;
+pub mod conventions;
 pub mod enrich;
 pub mod error;
 pub mod hash;
@@ -28,7 +29,7 @@ pub mod watch;
 mod engine;
 pub use engine::{
     BatchFailure, BatchReport, BatchUpdate, CreatorSuggestion, CreatorSuggestions, Deleter, DuplicateGroup, DuplicateKind, DuplicateMember,
-    DuplicateReport, Engine, HashProgress, MoveFilesDest, MoveFilesReport, MoveReport, PromoteFailure, PromoteItem, PromoteReport,
-    ScanProgress, SharedFile, UpdateMetadata,
+    DuplicateReport, Engine, HashProgress, MoveFilesDest, MoveFilesReport, MoveReport, OrganizeReport, PromoteFailure, PromoteItem,
+    PromoteReport, ScanProgress, SharedFile, UpdateMetadata,
 };
 pub use error::{EngineError, Result};

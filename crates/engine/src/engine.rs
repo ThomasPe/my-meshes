@@ -3,6 +3,7 @@
 
 use crate::ai::{self, AiProvider, AiSettings, AiTestReport, MetadataSuggestion, PreparedSuggestion, SharedProvider};
 use crate::collections::{Collection, CollectionsStore, SmartCollection};
+use crate::conventions::{self, CheckReport, Conventions, Deviation};
 use crate::enrich;
 use crate::error::{EngineError, Result};
 use crate::hash;
@@ -149,6 +150,18 @@ pub struct MoveFilesDest {
     pub root_id: String,
     #[serde(default)]
     pub rel: String,
+}
+
+/// What `organize` did or would do (#58).
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct OrganizeReport {
+    pub dry_run: bool,
+    /// Fixable deviations (folder, title, tags); with `dry_run` the whole plan.
+    pub planned: Vec<Deviation>,
+    pub applied: Vec<Deviation>,
+    pub failed: Vec<BatchFailure>,
+    /// Deviations only a person can settle (licenses).
+    pub skipped: Vec<Deviation>,
 }
 
 #[derive(Debug, Clone, Serialize, Default)]
@@ -472,6 +485,236 @@ impl Engine {
         }
         let (parsed, cached) = self.load_page(url)?;
         self.page_suggestion(url, &parsed, cached)
+    }
+
+    // ---- conventions (#58) -------------------------------------------------------------
+
+    /// The root's conventions, `None` without a file; a malformed file is an error.
+    pub fn conventions(&self, root_id: &str) -> Result<Option<Conventions>> {
+        let root = self.root(root_id)?;
+        conventions::read(&root.path)
+    }
+
+    /// The file as text, for the editor.
+    pub fn conventions_text(&self, root_id: &str) -> Result<Option<String>> {
+        let root = self.root(root_id)?;
+        conventions::read_text(&root.path)
+    }
+
+    /// Writes the text after it parsed; an empty text removes the file.
+    pub fn set_conventions_text(&mut self, root_id: &str, text: &str) -> Result<Option<Conventions>> {
+        let root = self.root(root_id)?;
+        if root.status == RootStatus::Offline {
+            return Err(EngineError::RootOffline(root.path));
+        }
+        if text.trim().is_empty() {
+            let path = root.path.join(conventions::CONVENTIONS_REL);
+            if path.exists() {
+                std::fs::remove_file(&path).map_err(crate::error::io_err(&path))?;
+                let _ = std::fs::remove_dir(path.parent().expect("has parent"));
+            }
+            return Ok(None);
+        }
+        conventions::write_text(&root.path, text)?;
+        conventions::read(&root.path)
+    }
+
+    /// One paragraph per root with conventions (or a note that its file is broken), for
+    /// MCP clients; empty when no root has any.
+    pub fn conventions_summary(&self) -> String {
+        let mut out = Vec::new();
+        for r in self.roots.list() {
+            match conventions::read(&r.path) {
+                Ok(Some(c)) => out.push(conventions::describe(&r.path, &c)),
+                Ok(None) => {}
+                Err(e) => out.push(format!(
+                    "The conventions file of the library at {} is invalid and ignored: {e}",
+                    r.path.display()
+                )),
+            }
+        }
+        out.join("\n\n")
+    }
+
+    fn tag_rules_for(&self, root_id: &str) -> Option<conventions::TagRules> {
+        let root = self.roots.get(root_id)?;
+        conventions::read(&root.path).ok().flatten().map(|c| c.metadata.tags)
+    }
+
+    /// Where every project of the root deviates from its conventions: wrong folder, a
+    /// title the rules would clean, a license outside the list, tags not in the format.
+    pub fn check_conventions(&self, root_id: &str) -> Result<CheckReport> {
+        let root = self.root(root_id)?;
+        let conv = conventions::read(&root.path)?.unwrap_or_default();
+        let summaries = self.index.list(
+            &ListQuery {
+                root_id: Some(root_id.to_string()),
+                ..Default::default()
+            },
+            None,
+        )?;
+        let mut per_creator: HashMap<String, u32> = HashMap::new();
+        for s in &summaries {
+            if let Some(c) = s.creator.as_deref().map(|c| c.trim().to_lowercase()).filter(|c| !c.is_empty()) {
+                *per_creator.entry(c).or_default() += 1;
+            }
+        }
+        let mut report = CheckReport {
+            root_id: root_id.to_string(),
+            ..Default::default()
+        };
+        for s in &summaries {
+            if s.rel_path.is_empty() || s.rel_path.starts_with(&format!("{}/", import::INBOX_DIR)) {
+                continue;
+            }
+            let Some(p) = self.index.project(&s.id)? else { continue };
+            report.checked += 1;
+            let count = p
+                .creator
+                .as_deref()
+                .map(|c| per_creator.get(&c.trim().to_lowercase()).copied().unwrap_or(0))
+                .unwrap_or(0);
+            if let Some(parent) = conventions::expected_parent(&conv.layout, p.creator.as_deref(), count) {
+                let current_parent = p.rel_path.rsplit_once('/').map(|(a, _)| a).unwrap_or("");
+                if current_parent != parent {
+                    let name = p.rel_path.rsplit('/').next().unwrap_or(&p.rel_path);
+                    report.deviations.push(Deviation {
+                        project_id: p.id.clone(),
+                        rel_path: p.rel_path.clone(),
+                        kind: "folder".into(),
+                        current: p.rel_path.clone(),
+                        expected: format!("{parent}/{name}"),
+                        fixable: true,
+                    });
+                }
+            }
+            if !conv.titles.strip.is_empty() {
+                if let Some(cleaned) = conventions::clean_title(&p.title, &conv.titles.strip) {
+                    report.deviations.push(Deviation {
+                        project_id: p.id.clone(),
+                        rel_path: p.rel_path.clone(),
+                        kind: "title".into(),
+                        current: p.title.clone(),
+                        expected: cleaned,
+                        fixable: true,
+                    });
+                }
+            }
+            if !conv.metadata.licenses.is_empty() {
+                if let Some(l) = p.license.as_deref().filter(|l| !l.trim().is_empty()) {
+                    if !conv.metadata.licenses.iter().any(|a| a.eq_ignore_ascii_case(l.trim())) {
+                        report.deviations.push(Deviation {
+                            project_id: p.id.clone(),
+                            rel_path: p.rel_path.clone(),
+                            kind: "license".into(),
+                            current: l.to_string(),
+                            expected: conv
+                                .metadata
+                                .license_default
+                                .clone()
+                                .unwrap_or_else(|| format!("one of {}", conv.metadata.licenses.join(", "))),
+                            fixable: false,
+                        });
+                    }
+                }
+            }
+            if conv.metadata.tags.case.is_some() || conv.metadata.tags.separator.is_some() {
+                let mut normalized: Vec<String> = p
+                    .tags
+                    .iter()
+                    .map(|t| conventions::normalize_tag(t, &conv.metadata.tags))
+                    .filter(|t| !t.is_empty())
+                    .collect();
+                normalized.sort();
+                normalized.dedup();
+                if normalized != p.tags {
+                    report.deviations.push(Deviation {
+                        project_id: p.id.clone(),
+                        rel_path: p.rel_path.clone(),
+                        kind: "tags".into(),
+                        current: p.tags.join(", "),
+                        expected: normalized.join(", "),
+                        fixable: true,
+                    });
+                }
+            }
+        }
+        Ok(report)
+    }
+
+    /// Fixes the fixable deviations: titles and tags through the sidecar, folders through
+    /// `move_projects` (grouped by destination). With `dry_run` only the plan comes back.
+    pub fn organize(&mut self, root_id: &str, dry_run: bool) -> Result<OrganizeReport> {
+        let check = self.check_conventions(root_id)?;
+        let mut report = OrganizeReport {
+            dry_run,
+            ..Default::default()
+        };
+        for d in &check.deviations {
+            match d.kind.as_str() {
+                "folder" | "title" | "tags" => report.planned.push(d.clone()),
+                _ => report.skipped.push(d.clone()),
+            }
+        }
+        if dry_run {
+            return Ok(report);
+        }
+        // titles and tags first (ids are stable), folders last (ids change)
+        for d in check.deviations.iter().filter(|d| d.kind == "title" || d.kind == "tags") {
+            let result = (|| -> Result<()> {
+                let p = self.get_project(&d.project_id)?;
+                let upd = UpdateMetadata {
+                    title: (d.kind == "title").then(|| d.expected.clone()),
+                    tags: (d.kind == "tags").then(|| {
+                        d.expected
+                            .split(',')
+                            .map(|t| t.trim().to_string())
+                            .filter(|t| !t.is_empty())
+                            .collect()
+                    }),
+                    expected_stamp: p.sidecar_stamp,
+                    ..Default::default()
+                };
+                self.update_metadata(&d.project_id, upd)?;
+                Ok(())
+            })();
+            match result {
+                Ok(()) => report.applied.push(d.clone()),
+                Err(e) => report.failed.push(BatchFailure {
+                    project_id: d.project_id.clone(),
+                    message: e.to_string(),
+                }),
+            }
+        }
+        let mut by_dest: BTreeMap<String, Vec<Deviation>> = BTreeMap::new();
+        for d in check.deviations.iter().filter(|d| d.kind == "folder") {
+            let parent = d.expected.rsplit_once('/').map(|(a, _)| a).unwrap_or("").to_string();
+            by_dest.entry(parent).or_default().push(d.clone());
+        }
+        for (dest, ds) in by_dest {
+            let ids: Vec<String> = ds.iter().map(|d| d.project_id.clone()).collect();
+            match self.move_projects(&ids, root_id, &dest) {
+                Ok(r) => {
+                    let failed: std::collections::HashSet<String> = r.failed.iter().map(|f| f.project_id.clone()).collect();
+                    for d in ds {
+                        if failed.contains(&d.project_id) {
+                            continue;
+                        }
+                        report.applied.push(d);
+                    }
+                    report.failed.extend(r.failed);
+                }
+                Err(e) => {
+                    for d in ds {
+                        report.failed.push(BatchFailure {
+                            project_id: d.project_id,
+                            message: e.to_string(),
+                        });
+                    }
+                }
+            }
+        }
+        Ok(report)
     }
 
     pub fn mcp_settings(&self) -> McpSettings {
@@ -1267,9 +1510,10 @@ impl Engine {
             md.description = non_empty(v);
         }
         if let Some(tags) = upd.tags {
+            let rules = self.tag_rules_for(&current.root_id).unwrap_or_default();
             let mut clean: Vec<String> = tags
                 .into_iter()
-                .map(|t| t.trim().to_lowercase())
+                .map(|t| conventions::normalize_tag(&t.trim().to_lowercase(), &rules))
                 .filter(|t| !t.is_empty())
                 .collect();
             clean.sort();
@@ -1324,9 +1568,15 @@ impl Engine {
                 if let Some(v) = &upd.license {
                     md.license = non_empty(v.clone());
                 }
+                let rules = self.tag_rules_for(&current.root_id).unwrap_or_default();
                 let mut tags: Vec<String> = md.tags.iter().map(|t| t.trim().to_lowercase()).filter(|t| !t.is_empty()).collect();
                 tags.extend(add.iter().cloned());
                 tags.retain(|t| !remove.contains(t));
+                let mut tags: Vec<String> = tags
+                    .iter()
+                    .map(|t| conventions::normalize_tag(t, &rules))
+                    .filter(|t| !t.is_empty())
+                    .collect();
                 tags.sort();
                 tags.dedup();
                 md.tags = tags;

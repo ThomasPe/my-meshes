@@ -392,7 +392,28 @@
     "mcpDeletesHintOn": "An: Agenten dürfen Dateien und ganze Projekte in den Papierkorb legen, auch Duplikate, die sie auflösen. Nichts wird endgültig gelöscht; der Papierkorb behält es.",
     "mcpDeletesHintOff": "Aus: Agenten können vorschlagen, was weg kann, löschen kannst nur du.",
     "mcpDeletesOn": "Agenten dürfen jetzt Dateien und Projekte in den Papierkorb legen",
-    "mcpDeletesOff": "Agenten dürfen nicht mehr löschen"
+    "mcpDeletesOff": "Agenten dürfen nicht mehr löschen",
+    "conventions": "Bibliothekskonventionen",
+    "conventionsHint": "Wie jede Bibliothek organisiert sein soll, gespeichert als .meshkeep/conventions.yaml im Ordner, damit es mit ihm wandert. Die App prüft die Regeln; per MCP verbundene Agenten bekommen sie in jeder Sitzung.",
+    "conventionsSet": "Regeln gesetzt",
+    "conventionsInvalid": "Datei ungültig",
+    "conventionsNone": "keine Regeln",
+    "conventionsPlaceholder": "Noch keine Konventionen. Füge den Startsatz ein oder schreibe eigenes YAML.",
+    "conventionsSave": "Speichern",
+    "conventionsStarter": "Startsatz einfügen",
+    "conventionsCheck": "Bibliothek prüfen",
+    "conventionsFile": ".meshkeep/conventions.yaml",
+    "conventionsSaved": "Konventionen gespeichert",
+    "conventionsRemoved": "Konventionen entfernt",
+    "conventionsClean": "Alle {{count}} Projekte folgen den Regeln.",
+    "conventionsDeviations": "{{count}} Abweichungen in {{checked}} Projekten",
+    "conventionsFixHint": "Ein MCP-Agent kann die markierten mit „organize“ beheben; Lizenzen entscheidest du.",
+    "conventionKind": {
+      "folder": "Ordner",
+      "title": "Titel",
+      "license": "Lizenz",
+      "tags": "Tags"
+    }
   },
   "status": {
     "watching": "Beobachte {{path}}",
@@ -424,7 +445,8 @@
     "ai_unavailable": "Der KI-Anbieter ist nicht erreichbar.",
     "keyring": "Der API-Schlüssel konnte nicht im Anmeldeinformationsspeicher des Systems abgelegt werden: {{message}}",
     "page_fetch_disabled": "Modellseiten laden ist aus. Schalte es in Einstellungen → Netzwerk ein.",
-    "page_fetch": "Die Modellseite konnte nicht geladen werden: {{message}}"
+    "page_fetch": "Die Modellseite konnte nicht geladen werden: {{message}}",
+    "conventions_invalid": "Ungültige conventions.yaml: {{message}}"
   },
   "common": {
     "cancel": "Abbrechen",

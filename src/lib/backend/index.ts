@@ -1,4 +1,4 @@
-import type { AppInfo, BatchReport, BatchUpdate, CreatorSuggestions, DuplicateReport, EnrichProgress, EnrichReport, Hints, McpSettings, McpStatus, NetworkSettings, PageSuggestion, HashProgress, MoveReport, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata, AiSettings, AiSettingsView, AiTestReport, MetadataSuggestion } from '@/lib/types';
+import type { AppInfo, BatchReport, BatchUpdate, ConventionReport, ConventionsView, CreatorSuggestions, DuplicateReport, EnrichProgress, EnrichReport, Hints, McpSettings, McpStatus, NetworkSettings, PageSuggestion, HashProgress, MoveReport, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata, AiSettings, AiSettingsView, AiTestReport, MetadataSuggestion } from '@/lib/types';
 
 export type Unlisten = () => void;
 
@@ -104,6 +104,11 @@ export interface Backend {
   setMcpSettings(settings: McpSettings): Promise<McpSettings>;
   regenerateMcpToken(): Promise<McpSettings>;
   mcpStatus(): Promise<McpStatus>;
+  /** Library conventions per root (#58): the YAML file, a starter text, and the deviations. */
+  getConventions(rootId: string): Promise<ConventionsView>;
+  setConventions(rootId: string, text: string): Promise<ConventionsView>;
+  starterConventions(): Promise<string>;
+  checkConventions(rootId: string): Promise<ConventionReport>;
   getAiSettings(): Promise<AiSettingsView>;
   setAiSettings(settings: AiSettings): Promise<AiSettingsView>;
   /** Stores or (with null / empty) removes the key; resolves to whether a key is stored now. */
