@@ -1,12 +1,16 @@
 //! Import with a staging step (IMP-1, IMP-2, IMP-3). `analyze` looks at dropped archives,
 //! folders and files and proposes what to do with each; nothing is written. `execute`
-//! performs the confirmed plan: extract archives into new project directories, copy folders,
-//! route loose files to `_Inbox`, and apply the archive policy (keep as attachment, move to
-//! `_Originals`, or trash). Every target is checked for collisions before the first write.
+//! performs the confirmed plan: extract archives into new project directories, copy folders
+//! and loose files (a 3MF is a zip inside, but it is a model and is never extracted), route
+//! files to `_Inbox`, and apply the archive policy (keep as attachment, move to `_Originals`,
+//! or trash) to real archives only. Every target is checked for collisions before the first
+//! write. A project is assembled below `.meshkeep-import` and renamed into place once it
+//! qualifies as a project; a failure removes the half-built folder and leaves the source alone.
 
 use crate::engine::Deleter;
 use crate::error::{io_err, EngineError, Result};
 use crate::model::FileKind;
+use crate::scan::{self, IgnoreMatcher, ScanOptions};
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::Read;
@@ -14,8 +18,11 @@ use std::path::{Component, Path, PathBuf};
 
 pub const INBOX_DIR: &str = "_Inbox";
 pub const ORIGINALS_DIR: &str = "_Originals";
-/// Folders below a root that are never projects: the inbox and kept originals.
-pub const SPECIAL_DIRS: &[&str] = &[INBOX_DIR, ORIGINALS_DIR];
+/// Working folder below a root where a project is assembled before it is renamed into place.
+/// Never scanned; a folder left in it belongs to an interrupted import and is replaced.
+pub const STAGING_DIR: &str = ".meshkeep-import";
+/// Folders below a root that are never projects: the inbox, kept originals and the staging area.
+pub const SPECIAL_DIRS: &[&str] = &[INBOX_DIR, ORIGINALS_DIR, STAGING_DIR];
 
 const ARCHIVE_EXTS: &[&str] = &["zip", "7z"];
 const UNSUPPORTED_ARCHIVE_EXTS: &[&str] = &["rar", "tar", "gz", "tgz"];
@@ -187,6 +194,12 @@ fn stem_name(p: &Path) -> String {
 
 fn is_model(name: &str) -> bool {
     name.rsplit('.').next().map(FileKind::from_extension) == Some(FileKind::Model)
+}
+
+/// A real archive the import extracts (`zip`, `7z`). A 3MF is a zip container too, but it is
+/// a model file and never counts as an archive here.
+fn is_archive(p: &Path) -> bool {
+    !p.is_dir() && ARCHIVE_EXTS.contains(&ext_of(p).as_str())
 }
 
 /// Rejects absolute paths, `..`, drive prefixes and empty names (zip-slip guard).
@@ -551,10 +564,17 @@ fn unique_file_name(dir: &Path, name: &str) -> PathBuf {
 
 /// Runs a confirmed plan. Collisions are rejected before anything is written; per-item
 /// failures after that are collected in the report and do not stop the other items.
-pub fn execute(root: &Path, req: &ImportRequest, deleter: &Deleter, mut progress: impl FnMut(ImportProgress)) -> Result<ImportReport> {
+pub fn execute(
+    root: &Path,
+    req: &ImportRequest,
+    deleter: &Deleter,
+    opts: &ScanOptions,
+    mut progress: impl FnMut(ImportProgress),
+) -> Result<ImportReport> {
     if !root.is_dir() {
         return Err(EngineError::RootOffline(root.to_path_buf()));
     }
+    let ignore = IgnoreMatcher::new(&opts.ignore)?;
     // Pass 1: validate every target.
     let mut targets: Vec<Option<PathBuf>> = Vec::with_capacity(req.items.len());
     let mut seen: Vec<String> = Vec::new();
@@ -600,46 +620,14 @@ pub fn execute(root: &Path, req: &ImportRequest, deleter: &Deleter, mut progress
                 }
                 ImportAction::Project => {
                     let target = target.expect("validated above");
-                    std::fs::create_dir_all(&target).map_err(io_err(&target))?;
-                    if item.source.is_dir() {
-                        copy_dir(&item.source, &target)?;
-                    } else {
-                        let summary = summarize_archive(&item.source)?;
-                        if ext_of(&item.source) == "7z" {
-                            extract_7z(&item.source, summary.strip_prefix.as_deref(), &target)?;
-                        } else {
-                            extract_zip(&item.source, summary.strip_prefix.as_deref(), &target)?;
-                        }
-                        let archive_name = item.source.file_name().and_then(|n| n.to_str()).unwrap_or("original.zip");
-                        match req.archive_policy {
-                            ArchivePolicy::Keep => {
-                                let dst = unique_file_name(&target, archive_name);
-                                std::fs::copy(&item.source, &dst).map_err(io_err(&dst))?;
-                            }
-                            ArchivePolicy::Originals => {
-                                let originals = root.join(ORIGINALS_DIR);
-                                std::fs::create_dir_all(&originals).map_err(io_err(&originals))?;
-                                let dst = unique_file_name(&originals, archive_name);
-                                if std::fs::rename(&item.source, &dst).is_err() {
-                                    std::fs::copy(&item.source, &dst).map_err(io_err(&dst))?;
-                                    deleter(&item.source).map_err(|e| EngineError::Io {
-                                        path: item.source.clone(),
-                                        source: e,
-                                    })?;
-                                }
-                            }
-                            ArchivePolicy::Trash => {
-                                deleter(&item.source).map_err(|e| EngineError::Io {
-                                    path: item.source.clone(),
-                                    source: e,
-                                })?;
-                            }
-                            ArchivePolicy::Leave => {}
-                        }
-                    }
+                    build_project(root, &item.source, &target, req.archive_policy, &ignore, opts)?;
                     report
                         .projects
                         .push(target.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
+                    // Only now, with the project in place and holding a model, may the source go.
+                    if is_archive(&item.source) {
+                        dispose_archive(root, &item.source, req.archive_policy, deleter)?;
+                    }
                 }
             }
             Ok(())
@@ -648,7 +636,109 @@ pub fn execute(root: &Path, req: &ImportRequest, deleter: &Deleter, mut progress
             report.errors.push(format!("{}: {e}", item.name));
         }
     }
+    // The staging area is empty once every item is in place or rolled back.
+    let _ = std::fs::remove_dir(root.join(STAGING_DIR));
     Ok(report)
+}
+
+/// Assembles one project below `<root>/.meshkeep-import/<name>` from a folder, an archive or
+/// a loose file, checks that the result qualifies as a project, and renames it to `target`.
+/// Any failure removes the staging folder again; the source is never touched here.
+fn build_project(
+    root: &Path,
+    source: &Path,
+    target: &Path,
+    policy: ArchivePolicy,
+    ignore: &IgnoreMatcher,
+    opts: &ScanOptions,
+) -> Result<()> {
+    let staging_root = root.join(STAGING_DIR);
+    let staging = staging_root.join(target.file_name().unwrap_or_default());
+    if staging.exists() {
+        // Left behind by an interrupted import of the same name: ours, never library content.
+        std::fs::remove_dir_all(&staging).map_err(io_err(&staging))?;
+    }
+    std::fs::create_dir_all(&staging).map_err(io_err(&staging))?;
+    let result = fill_project(source, &staging, policy).and_then(|_| {
+        if !scan::is_project_dir(&staging, ignore, root, opts) {
+            return Err(EngineError::NotAllowed(
+                "the result holds no model files, so no project was created".into(),
+            ));
+        }
+        move_dir(&staging, target)
+    });
+    if result.is_err() {
+        let _ = std::fs::remove_dir_all(&staging);
+        if target.exists() {
+            let _ = std::fs::remove_dir_all(target);
+        }
+    }
+    result
+}
+
+/// Copies or extracts `source` into the (empty) `dir`.
+fn fill_project(source: &Path, dir: &Path, policy: ArchivePolicy) -> Result<()> {
+    if source.is_dir() {
+        copy_dir(source, dir)?;
+    } else if is_archive(source) {
+        let summary = summarize_archive(source)?;
+        if ext_of(source) == "7z" {
+            extract_7z(source, summary.strip_prefix.as_deref(), dir)?;
+        } else {
+            extract_zip(source, summary.strip_prefix.as_deref(), dir)?;
+        }
+        if policy == ArchivePolicy::Keep {
+            let archive_name = source.file_name().and_then(|n| n.to_str()).unwrap_or("original.zip");
+            let dst = unique_file_name(dir, archive_name);
+            std::fs::copy(source, &dst).map_err(io_err(&dst))?;
+        }
+    } else {
+        // A loose file (stl, 3mf, obj, ...) is copied as it is; it is never extracted.
+        let name = source
+            .file_name()
+            .ok_or_else(|| EngineError::InvalidName(source.display().to_string()))?;
+        let dst = dir.join(name);
+        std::fs::copy(source, &dst).map_err(io_err(&dst))?;
+    }
+    Ok(())
+}
+
+/// Renames a finished staging folder into place; copies and removes it when the rename is
+/// refused (a different volume, a sync client holding a handle).
+fn move_dir(from: &Path, to: &Path) -> Result<()> {
+    if std::fs::rename(from, to).is_ok() {
+        return Ok(());
+    }
+    copy_dir(from, to)?;
+    std::fs::remove_dir_all(from).map_err(io_err(from))
+}
+
+/// Applies the archive policy to a real archive after its project is in place.
+fn dispose_archive(root: &Path, archive: &Path, policy: ArchivePolicy, deleter: &Deleter) -> Result<()> {
+    let archive_name = archive.file_name().and_then(|n| n.to_str()).unwrap_or("original.zip");
+    match policy {
+        // Already copied into the project while it was staged.
+        ArchivePolicy::Keep | ArchivePolicy::Leave => {}
+        ArchivePolicy::Originals => {
+            let originals = root.join(ORIGINALS_DIR);
+            std::fs::create_dir_all(&originals).map_err(io_err(&originals))?;
+            let dst = unique_file_name(&originals, archive_name);
+            if std::fs::rename(archive, &dst).is_err() {
+                std::fs::copy(archive, &dst).map_err(io_err(&dst))?;
+                deleter(archive).map_err(|e| EngineError::Io {
+                    path: archive.to_path_buf(),
+                    source: e,
+                })?;
+            }
+        }
+        ArchivePolicy::Trash => {
+            deleter(archive).map_err(|e| EngineError::Io {
+                path: archive.to_path_buf(),
+                source: e,
+            })?;
+        }
+    }
+    Ok(())
 }
 
 /// One loose file in `<root>/_Inbox`.
@@ -854,6 +944,132 @@ mod tests {
     }
 
     #[test]
+    fn execute_copies_loose_model_files_into_projects() {
+        // A loose 3MF or STL with action "project" is copied as it is: the 3MF is a zip
+        // inside but never extracted, and the archive policy does not touch model files.
+        let t = tempfile::tempdir().unwrap();
+        let src = t.path().join("src");
+        let root = t.path().join("root");
+        std::fs::create_dir_all(&root).unwrap();
+        let threemf = &[("3D/3dmodel.model", b"<model/>" as &[u8]), ("Metadata/thumbnail.png", b"png")];
+        write_zip(&src.join("Vase.3mf"), threemf);
+        let threemf_bytes = std::fs::read(src.join("Vase.3mf")).unwrap();
+        touch(&src.join("cake.stl"), 9);
+        for (i, policy) in [
+            ArchivePolicy::Keep,
+            ArchivePolicy::Originals,
+            ArchivePolicy::Trash,
+            ArchivePolicy::Leave,
+        ]
+        .into_iter()
+        .enumerate()
+        {
+            let req = ImportRequest {
+                root_id: "r".into(),
+                archive_policy: policy,
+                apply_hints: false,
+                fetch_pages: false,
+                items: vec![
+                    ImportRequestItem {
+                        source: src.join("Vase.3mf"),
+                        action: ImportAction::Project,
+                        name: format!("Vase {i}"),
+                    },
+                    ImportRequestItem {
+                        source: src.join("cake.stl"),
+                        action: ImportAction::Project,
+                        name: format!("Cake {i}"),
+                    },
+                ],
+            };
+            let report = execute(&root, &req, &remover(), &ScanOptions::default(), |_| {}).unwrap();
+            assert!(report.errors.is_empty(), "{policy:?}: {:?}", report.errors);
+            assert_eq!(report.projects, vec![format!("Vase {i}"), format!("Cake {i}")]);
+            let vase = root.join(format!("Vase {i}"));
+            assert_eq!(
+                std::fs::read(vase.join("Vase.3mf")).unwrap(),
+                threemf_bytes,
+                "{policy:?}: 3MF intact"
+            );
+            assert!(!vase.join("3D").exists(), "{policy:?}: a 3MF is never extracted");
+            assert_eq!(std::fs::read_dir(&vase).unwrap().count(), 1, "{policy:?}: only the model");
+            assert_eq!(std::fs::read(root.join(format!("Cake {i}/cake.stl"))).unwrap().len(), 9);
+            assert!(
+                src.join("Vase.3mf").is_file() && src.join("cake.stl").is_file(),
+                "{policy:?}: sources untouched"
+            );
+            assert!(!root.join(ORIGINALS_DIR).exists(), "{policy:?}: model files never go to _Originals");
+        }
+        assert!(!root.join(STAGING_DIR).exists(), "staging area is cleaned up");
+    }
+
+    #[test]
+    fn execute_rolls_back_a_failed_project_and_keeps_the_source() {
+        let t = tempfile::tempdir().unwrap();
+        let src = t.path().join("src");
+        let root = t.path().join("root");
+        std::fs::create_dir_all(&root).unwrap();
+        std::fs::create_dir_all(&src).unwrap();
+        std::fs::write(src.join("bad.zip"), b"not a zip").unwrap();
+        write_zip(&src.join("docs.zip"), &[("readme.txt", b"no models here")]);
+        touch(&src.join("notes/readme.md"), 3);
+        write_zip(&src.join("Good.zip"), &[("Good/part.stl", b"solid")]);
+        // Something an interrupted earlier run left in the staging area is neither a project
+        // nor in the way of the next import under that name.
+        touch(&root.join(STAGING_DIR).join("Good/half.stl"), 1);
+        let scanned = scan::scan_root("r", &root, &ScanOptions::default(), |_| {}).unwrap();
+        assert!(scanned.projects.is_empty(), "the staging area is never scanned");
+        let req = ImportRequest {
+            root_id: "r".into(),
+            archive_policy: ArchivePolicy::Trash,
+            apply_hints: false,
+            fetch_pages: false,
+            items: vec![
+                ImportRequestItem {
+                    source: src.join("bad.zip"),
+                    action: ImportAction::Project,
+                    name: "Bad".into(),
+                },
+                ImportRequestItem {
+                    source: src.join("docs.zip"),
+                    action: ImportAction::Project,
+                    name: "Docs".into(),
+                },
+                ImportRequestItem {
+                    source: src.join("notes"),
+                    action: ImportAction::Project,
+                    name: "Notes".into(),
+                },
+                ImportRequestItem {
+                    source: src.join("Good.zip"),
+                    action: ImportAction::Project,
+                    name: "Good".into(),
+                },
+            ],
+        };
+        let report = execute(&root, &req, &remover(), &ScanOptions::default(), |_| {}).unwrap();
+        assert_eq!(report.projects, vec!["Good"]);
+        assert_eq!(report.errors.len(), 3, "{:?}", report.errors);
+        assert!(report.errors[0].starts_with("Bad: "), "{:?}", report.errors);
+        assert!(report.errors[1].contains("no model files"), "{:?}", report.errors);
+        assert!(report.errors[2].contains("no model files"), "{:?}", report.errors);
+        for name in ["Bad", "Docs", "Notes"] {
+            assert!(!root.join(name).exists(), "{name}: no half-made folder stays behind");
+        }
+        for file in ["bad.zip", "docs.zip"] {
+            assert!(src.join(file).is_file(), "{file}: a failed item never trashes its source");
+        }
+        assert!(src.join("notes/readme.md").is_file());
+        assert!(root.join("Good/part.stl").is_file());
+        assert!(!root.join("Good/half.stl").exists(), "stale staging content is replaced");
+        assert!(
+            !src.join("Good.zip").exists(),
+            "the good archive was trashed after its project was in place"
+        );
+        assert!(!root.join(STAGING_DIR).exists());
+    }
+
+    #[test]
     fn execute_extracts_7z() {
         let t = tempfile::tempdir().unwrap();
         let src = t.path().join("src");
@@ -874,7 +1090,7 @@ mod tests {
                 name: "Seven".into(),
             }],
         };
-        let report = execute(&root, &req, &remover(), |_| {}).unwrap();
+        let report = execute(&root, &req, &remover(), &ScanOptions::default(), |_| {}).unwrap();
         assert!(report.errors.is_empty(), "{:?}", report.errors);
         assert!(root.join("Seven/part.stl").is_file());
         assert_eq!(std::fs::read(root.join("Seven/sub/notes.txt")).unwrap(), b"n");
@@ -924,6 +1140,7 @@ mod tests {
                 ],
             ),
             &remover(),
+            &ScanOptions::default(),
             |p| seen = p.index + 1,
         )
         .unwrap();
@@ -944,6 +1161,7 @@ mod tests {
             &root,
             &req(ArchivePolicy::Keep, vec![("Keep.zip", ImportAction::Project, "Keep")]),
             &remover(),
+            &ScanOptions::default(),
             |_| {},
         )
         .unwrap();
@@ -954,6 +1172,7 @@ mod tests {
             &root,
             &req(ArchivePolicy::Trash, vec![("Gone.zip", ImportAction::Project, "Gone")]),
             &remover(),
+            &ScanOptions::default(),
             |_| {},
         )
         .unwrap();
@@ -964,6 +1183,7 @@ mod tests {
             &root,
             &req(ArchivePolicy::Leave, vec![("Stay.zip", ImportAction::Project, "Stay")]),
             &remover(),
+            &ScanOptions::default(),
             |_| {},
         )
         .unwrap();
@@ -977,6 +1197,7 @@ mod tests {
             &root,
             &req(ArchivePolicy::Keep, vec![("Folder", ImportAction::Project, "Keep")]),
             &remover(),
+            &ScanOptions::default(),
             |_| {},
         )
         .unwrap_err();
@@ -985,6 +1206,7 @@ mod tests {
             &root,
             &req(ArchivePolicy::Keep, vec![("Folder", ImportAction::Project, "_Inbox")]),
             &remover(),
+            &ScanOptions::default(),
             |_| {},
         )
         .unwrap_err();
@@ -996,6 +1218,7 @@ mod tests {
                 vec![("Folder", ImportAction::Project, "Dup"), ("Folder", ImportAction::Project, "dup")],
             ),
             &remover(),
+            &ScanOptions::default(),
             |_| {},
         )
         .unwrap_err();
@@ -1007,6 +1230,7 @@ mod tests {
             &root,
             &req(ArchivePolicy::Keep, vec![("loose.stl", ImportAction::Inbox, "")]),
             &remover(),
+            &ScanOptions::default(),
             |_| {},
         )
         .unwrap();

@@ -854,7 +854,7 @@ impl Engine {
     /// Runs a confirmed import into a root and rescans that root afterwards.
     pub fn execute_import(&mut self, req: &ImportRequest, mut progress: impl FnMut(ImportProgress)) -> Result<ImportReport> {
         let root = self.root(&req.root_id)?;
-        let mut report = import::execute(&root.path, req, &self.deleter, &mut progress)?;
+        let mut report = import::execute(&root.path, req, &self.deleter, &self.scan_opts, &mut progress)?;
         self.scan_root_as(&req.root_id, "import", |_| {})?;
         if req.apply_hints || req.fetch_pages {
             self.enrich_imported(&req.root_id, req, &mut report, &mut progress);
