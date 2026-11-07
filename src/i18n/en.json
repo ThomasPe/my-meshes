@@ -6,7 +6,8 @@
     "library": "Library",
     "settings": "Settings",
     "search": "Search library…",
-    "theme": "Toggle theme"
+    "theme": "Toggle theme",
+    "feedback": "Send feedback"
   },
   "welcome": {
     "title": "Your 3D models, organized like a photo library",

@@ -1,8 +1,9 @@
-import { Boxes, LayoutGrid, Moon, Search, Settings, Sun } from 'lucide-react';
+import { Boxes, LayoutGrid, MessageSquarePlus, Moon, Search, Settings, Sun } from 'lucide-react';
 import { useEffect, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip';
+import { openFeedback } from '@/features/feedback/feedback';
 import { navigate, routeHref, type Route } from '@/lib/router';
 import { applyTheme, loadTheme, useUi } from '@/lib/store';
 import { cn } from '@/lib/utils';
@@ -44,6 +45,13 @@ export function TopBar({ route }: { route: Route }) {
         <input ref={input} data-testid="search" type="search" value={text} placeholder={t('nav.search')} autoComplete="off" className="min-w-0 flex-1 bg-transparent text-sm text-foreground outline-none placeholder:text-muted-foreground" onChange={(e) => { setText(e.target.value); if (route.page !== 'library') navigate({ page: 'library' }); }} />
         <kbd className="rounded-md border border-border bg-card px-1.5 py-0.5 font-mono text-[10px] text-muted-foreground">Ctrl K</kbd>
       </label>
+      {/* feedback from anywhere (#54): the same dialog Settings opens */}
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <Button variant="ghost" size="icon" aria-label={t('nav.feedback')} data-testid="nav-feedback" onClick={() => openFeedback()}><MessageSquarePlus className="size-4" /></Button>
+        </TooltipTrigger>
+        <TooltipContent>{t('nav.feedback')}</TooltipContent>
+      </Tooltip>
       <Tooltip>
         <TooltipTrigger asChild>
           <Button variant="ghost" size="icon" aria-label={t('nav.theme')} aria-pressed={dark} data-testid="theme-toggle" onClick={() => { const next = dark ? 'light' : 'dark'; applyTheme(next); setDark(next === 'dark'); }}>

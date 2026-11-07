@@ -606,6 +606,17 @@ test('first start: importing without a library offers to create one instead of a
   await expect(page.getByTestId('project-card').first()).toContainText('Cable Clip');
 });
 
+test('feedback opens from the header on any page (#54)', async ({ page }) => {
+  await page.getByTestId('nav-feedback').click();
+  await expect(page.getByTestId('feedback-dialog')).toBeVisible();
+  await page.keyboard.press('Escape');
+  await expect(page.getByTestId('feedback-dialog')).toBeHidden();
+  await page.getByTestId('project-card').first().dblclick();
+  await expect(page.getByTestId('project-page')).toBeVisible();
+  await page.getByTestId('nav-feedback').click();
+  await expect(page.getByTestId('feedback-dialog')).toBeVisible();
+});
+
 test('settings shows the last scan summary and the sync problem per root', async ({ page }) => {
   await page.getByTestId('nav-settings').click();
   await expect(page.getByTestId('root-scan-summary').first()).toContainText('72 projects · 131 files');

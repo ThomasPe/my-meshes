@@ -6,7 +6,8 @@
     "library": "Bibliothek",
     "settings": "Einstellungen",
     "search": "Bibliothek durchsuchen…",
-    "theme": "Design umschalten"
+    "theme": "Design umschalten",
+    "feedback": "Feedback senden"
   },
   "welcome": {
     "title": "Deine 3D-Modelle, organisiert wie eine Fotobibliothek",
