@@ -10,11 +10,13 @@
 
 use crate::engine::{BatchUpdate, PromoteItem, UpdateMetadata};
 use crate::error::EngineError;
-use crate::import::{ArchivePolicy, ImportAction, ImportRequest, ImportRequestItem};
+use crate::import::{ArchivePolicy, ImportAction, ImportProgress, ImportRequest, ImportRequestItem};
+use crate::lock::SharedEngine;
 use crate::model::{FileKind, ListQuery, MissingField, Project, SortKey};
 use crate::Engine;
 use serde_json::{json, Map, Value};
 use std::path::{Path, PathBuf};
+use std::time::Instant;
 
 pub const PROTOCOL_VERSION: &str = "2025-06-18";
 const MAX_TEXT_BYTES: u64 = 256 << 10;
@@ -102,26 +104,11 @@ fn handle_one(engine: &mut Engine, message: &Value) -> Outcome {
         "ping" => Ok(json!({})),
         "tools/list" => Ok(json!({ "tools": tools(engine.mcp_settings().allow_writes) })),
         "tools/call" => {
-            let name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
-            let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
-            Ok(match call_tool(engine, name, &args, &mut changes) {
-                Ok(v) => {
-                    // the spec wants an object here; clients reject a bare array
-                    let v = if v.is_object() { v } else { json!({ "result": v }) };
-                    json!({
-                        "content": [{ "type": "text", "text": serde_json::to_string_pretty(&v).unwrap_or_default() }],
-                        "structuredContent": v,
-                        "isError": false,
-                    })
-                }
-                Err(ToolError::Unknown(n)) => {
-                    return Outcome {
-                        response: Some(error_response(id, -32602, &format!("unknown tool: {n}"))),
-                        changes,
-                    }
-                }
-                Err(ToolError::Failed(msg)) => json!({ "content": [{ "type": "text", "text": msg }], "isError": true }),
-            })
+            let (name, args) = tool_call_params(&params);
+            let started = Instant::now();
+            let result = call_tool(engine, name, &args, &mut changes);
+            log_tool_call(name, started, &result, changes.len());
+            return tool_call_outcome(id, result, changes);
         }
         "prompts/list" => Ok(json!({ "prompts": prompts() })),
         "prompts/get" => prompt(params.get("name").and_then(|n| n.as_str()).unwrap_or(""), params.get("arguments")),
@@ -141,6 +128,126 @@ fn handle_one(engine: &mut Engine, message: &Value) -> Outcome {
 
 fn error_response(id: Value, code: i64, message: &str) -> Value {
     json!({ "jsonrpc": "2.0", "id": id, "error": { "code": code, "message": message } })
+}
+
+fn tool_call_params(params: &Value) -> (&str, Value) {
+    (
+        params.get("name").and_then(|n| n.as_str()).unwrap_or(""),
+        params.get("arguments").cloned().unwrap_or_else(|| json!({})),
+    )
+}
+
+/// The JSON-RPC answer to a `tools/call`: a tool result (possibly `isError`) or, for a name
+/// the server does not know, a protocol error.
+fn tool_call_outcome(id: Value, result: ToolResult, changes: Vec<Change>) -> Outcome {
+    let result = match result {
+        Ok(v) => {
+            // the spec wants an object here; clients reject a bare array
+            let v = if v.is_object() { v } else { json!({ "result": v }) };
+            json!({
+                "content": [{ "type": "text", "text": serde_json::to_string_pretty(&v).unwrap_or_default() }],
+                "structuredContent": v,
+                "isError": false,
+            })
+        }
+        Err(ToolError::Unknown(n)) => {
+            return Outcome {
+                response: Some(error_response(id, -32602, &format!("unknown tool: {n}"))),
+                changes,
+            }
+        }
+        Err(ToolError::Failed(msg)) => json!({ "content": [{ "type": "text", "text": msg }], "isError": true }),
+    };
+    Outcome {
+        response: Some(json!({ "jsonrpc": "2.0", "id": id, "result": result })),
+        changes,
+    }
+}
+
+/// One line per tool call in the app log: writes at info (the spec wants every write to the
+/// library logged), reads at debug, failures at warn. Arguments stay out; a path or a name
+/// an agent passed is not something a user should find in a log they send in.
+fn log_tool_call(name: &str, started: Instant, result: &ToolResult, changes: usize) {
+    let ms = started.elapsed().as_millis();
+    match result {
+        Ok(_) if is_write_tool(name) => tracing::info!("mcp: {name} ok in {ms} ms, {changes} change(s)"),
+        Ok(_) => tracing::debug!("mcp: {name} ok in {ms} ms"),
+        Err(ToolError::Unknown(n)) => tracing::warn!("mcp: unknown tool {n}"),
+        Err(ToolError::Failed(msg)) => tracing::warn!("mcp: {name} failed in {ms} ms: {msg}"),
+    }
+}
+
+fn is_write_tool(name: &str) -> bool {
+    matches!(
+        name,
+        "update_metadata"
+            | "batch_update"
+            | "execute_import"
+            | "promote_inbox"
+            | "rename_project"
+            | "move_projects"
+            | "set_favorite"
+            | "add_to_collection"
+    )
+}
+
+/// What the shell calls: the same as [`handle`] over a shared engine, except that
+/// `execute_import` holds the lock only to plan and to finish. Unpacking and copying, the
+/// slow part of a big import, runs while the window's commands can still get at the engine.
+/// `progress` receives the import's progress like the window's own import does.
+pub fn handle_shared(engine: &SharedEngine, message: &Value, progress: &mut dyn FnMut(ImportProgress)) -> Outcome {
+    let import_call = message
+        .get("method")
+        .and_then(|m| m.as_str())
+        .filter(|m| *m == "tools/call")
+        .and_then(|_| message.get("id").cloned().filter(|v| !v.is_null()))
+        .filter(|_| message.get("params").and_then(|p| p.get("name")).and_then(|n| n.as_str()) == Some("execute_import"));
+    let Some(id) = import_call else {
+        let mut engine = engine.lock().unwrap_or_else(|e| e.into_inner());
+        return handle(&mut engine, message);
+    };
+    let params = message.get("params").cloned().unwrap_or(Value::Null);
+    let (name, args) = tool_call_params(&params);
+    let started = Instant::now();
+    let mut changes = Vec::new();
+    let result = execute_import_shared(engine, &args, &mut changes, progress);
+    log_tool_call(name, started, &result, changes.len());
+    tool_call_outcome(id, result, changes)
+}
+
+fn execute_import_shared(
+    engine: &SharedEngine,
+    args: &Value,
+    changes: &mut Vec<Change>,
+    progress: &mut dyn FnMut(ImportProgress),
+) -> ToolResult {
+    let (req, plan) = {
+        let engine = engine.lock().unwrap_or_else(|e| e.into_inner());
+        write_gate(&engine, "execute_import")?;
+        let req = import_request(&engine, args)?;
+        let plan = engine.plan_import(&req)?;
+        (req, plan)
+    };
+    // no lock held: the window keeps answering while files move
+    let report = plan.run(&req, &mut *progress)?;
+    let report = {
+        let mut engine = engine.lock().unwrap_or_else(|e| e.into_inner());
+        engine.finish_import(&req, report, &mut *progress)?
+    };
+    changes.push(Change::Library {
+        root_id: Some(req.root_id.clone()),
+        reason: "import".into(),
+    });
+    Ok(serde_json::to_value(report).unwrap_or_default())
+}
+
+fn write_gate(engine: &Engine, name: &str) -> std::result::Result<(), ToolError> {
+    if is_write_tool(name) && !engine.mcp_settings().allow_writes {
+        return Err(ToolError::Failed(format!(
+            "{name} is not available: writes are off. The user can allow them in Settings → MCP server."
+        )));
+    }
+    Ok(())
 }
 
 enum ToolError {
@@ -447,26 +554,47 @@ fn arg_bool(args: &Value, key: &str) -> Option<bool> {
     args.get(key).and_then(|v| v.as_bool())
 }
 
+/// The `execute_import` arguments as an [`ImportRequest`], every source checked against the
+/// allowed import folders.
+fn import_request(engine: &Engine, args: &Value) -> std::result::Result<ImportRequest, ToolError> {
+    let dirs = engine.mcp_settings().import_dirs;
+    let root_id = need_str(args, "root_id")?;
+    let mut items = Vec::new();
+    for it in args.get("items").and_then(|v| v.as_array()).cloned().unwrap_or_default() {
+        let source = allowed_path(&dirs, Path::new(&need_str(&it, "source")?))?;
+        let action = match arg_str(&it, "action").as_deref() {
+            Some("project") => ImportAction::Project,
+            Some("inbox") => ImportAction::Inbox,
+            Some("skip") => ImportAction::Skip,
+            other => return Err(format!("unknown action {other:?}; use project, inbox or skip").into()),
+        };
+        let name = arg_str(&it, "name").unwrap_or_else(|| source.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
+        items.push(ImportRequestItem { source, action, name });
+    }
+    if items.is_empty() {
+        return Err("pass at least one item".to_string().into());
+    }
+    let archive_policy = match arg_str(args, "archive_policy").as_deref() {
+        Some("keep") => ArchivePolicy::Keep,
+        Some("originals") => ArchivePolicy::Originals,
+        Some("trash") => ArchivePolicy::Trash,
+        None | Some("leave") => ArchivePolicy::Leave,
+        Some(other) => return Err(format!("unknown archive_policy {other}").into()),
+    };
+    let req = ImportRequest {
+        root_id: root_id.clone(),
+        items,
+        archive_policy,
+        apply_hints: arg_bool(args, "apply_hints").unwrap_or(true),
+        fetch_pages: arg_bool(args, "fetch_pages").unwrap_or(false),
+    };
+    Ok(req)
+}
+
 // ---- tools --------------------------------------------------------------------------------
 
 fn call_tool(engine: &mut Engine, name: &str, args: &Value, changes: &mut Vec<Change>) -> ToolResult {
-    let writes = engine.mcp_settings().allow_writes;
-    let is_write = matches!(
-        name,
-        "update_metadata"
-            | "batch_update"
-            | "execute_import"
-            | "promote_inbox"
-            | "rename_project"
-            | "move_projects"
-            | "set_favorite"
-            | "add_to_collection"
-    );
-    if is_write && !writes {
-        return Err(ToolError::Failed(format!(
-            "{name} is not available: writes are off. The user can allow them in Settings → MCP server."
-        )));
-    }
+    write_gate(engine, name)?;
     match name {
         "list_roots" => {
             let roots = engine.roots()?;
@@ -665,41 +793,10 @@ fn call_tool(engine: &mut Engine, name: &str, args: &Value, changes: &mut Vec<Ch
             Ok(serde_json::to_value(r).unwrap_or_default())
         }
         "execute_import" => {
-            let dirs = engine.mcp_settings().import_dirs;
-            let root_id = need_str(args, "root_id")?;
-            let mut items = Vec::new();
-            for it in args.get("items").and_then(|v| v.as_array()).cloned().unwrap_or_default() {
-                let source = allowed_path(&dirs, Path::new(&need_str(&it, "source")?))?;
-                let action = match arg_str(&it, "action").as_deref() {
-                    Some("project") => ImportAction::Project,
-                    Some("inbox") => ImportAction::Inbox,
-                    Some("skip") => ImportAction::Skip,
-                    other => return Err(format!("unknown action {other:?}; use project, inbox or skip").into()),
-                };
-                let name = arg_str(&it, "name")
-                    .unwrap_or_else(|| source.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
-                items.push(ImportRequestItem { source, action, name });
-            }
-            if items.is_empty() {
-                return Err("pass at least one item".to_string().into());
-            }
-            let archive_policy = match arg_str(args, "archive_policy").as_deref() {
-                Some("keep") => ArchivePolicy::Keep,
-                Some("originals") => ArchivePolicy::Originals,
-                Some("trash") => ArchivePolicy::Trash,
-                None | Some("leave") => ArchivePolicy::Leave,
-                Some(other) => return Err(format!("unknown archive_policy {other}").into()),
-            };
-            let req = ImportRequest {
-                root_id: root_id.clone(),
-                items,
-                archive_policy,
-                apply_hints: arg_bool(args, "apply_hints").unwrap_or(true),
-                fetch_pages: arg_bool(args, "fetch_pages").unwrap_or(false),
-            };
+            let req = import_request(engine, args)?;
             let r = engine.execute_import(&req, |_| {})?;
             changes.push(Change::Library {
-                root_id: Some(root_id),
+                root_id: Some(req.root_id.clone()),
                 reason: "import".into(),
             });
             Ok(serde_json::to_value(r).unwrap_or_default())
@@ -1179,5 +1276,86 @@ mod tests {
         );
         assert_eq!(structured(&r)["moved"][0]["rel_path"], "Hooks/Wall Hook");
         assert!(lib.path().join("Hooks/Wall Hook/hook.stl").is_file());
+    }
+
+    #[test]
+    fn shared_import_frees_the_engine_while_files_move() {
+        let data = tempfile::tempdir().unwrap();
+        let lib = tempfile::tempdir().unwrap();
+        let downloads = tempfile::tempdir().unwrap();
+        touch(&downloads.path().join("Cable Clip/clip.stl"), 10);
+        std::fs::write(downloads.path().join("Cable Clip/README.md"), b"by PrintTools\nCC0\n").unwrap();
+        touch(&downloads.path().join("hook.stl"), 10);
+        let mut engine = Engine::open(data.path()).unwrap();
+        let root = engine.add_root(lib.path(), SyncMode::Manual).unwrap();
+        engine.scan_root(&root.id, |_| {}).unwrap();
+        let shared = SharedEngine::new(engine);
+        let msg = |id: u64, name: &str, args: Value| json!({ "jsonrpc": "2.0", "id": id, "method": "tools/call", "params": { "name": name, "arguments": args } });
+        let items = json!([{ "source": downloads.path().join("Cable Clip"), "action": "project", "name": "Cable Clip" }, { "source": downloads.path().join("hook.stl"), "action": "inbox" }]);
+        // writes off: the shared path keeps the gate
+        let mut none = |_: ImportProgress| {};
+        let out = handle_shared(
+            &shared,
+            &msg(1, "execute_import", json!({ "root_id": root.id, "items": items })),
+            &mut none,
+        );
+        assert_eq!(out.response.unwrap()["result"]["isError"], true);
+        assert!(out.changes.is_empty());
+        shared
+            .lock()
+            .unwrap()
+            .set_mcp_settings(McpSettings {
+                enabled: true,
+                allow_writes: true,
+                import_dirs: vec![downloads.path().to_path_buf()],
+                ..Default::default()
+            })
+            .unwrap();
+        // every other message takes the lock and goes the usual way
+        let out = handle_shared(&shared, &json!({ "jsonrpc": "2.0", "id": 2, "method": "ping" }), &mut none);
+        assert_eq!(out.response.unwrap()["result"], json!({}));
+        // during the copy phase the engine is free; during metadata it is held (by us)
+        let mut free_during_copy = Vec::new();
+        let mut phases = Vec::new();
+        let mut probe = |p: ImportProgress| {
+            if p.phase == "copy" {
+                free_during_copy.push(shared.try_lock().is_some());
+            }
+            phases.push(p.phase);
+        };
+        let out = handle_shared(
+            &shared,
+            &msg(3, "execute_import", json!({ "root_id": root.id, "items": items })),
+            &mut probe,
+        );
+        assert!(
+            !free_during_copy.is_empty() && free_during_copy.iter().all(|f| *f),
+            "{free_during_copy:?}"
+        );
+        assert!(phases.contains(&"metadata".to_string()), "{phases:?}");
+        let r = out.response.unwrap();
+        let v = &r["result"]["structuredContent"];
+        assert_eq!(v["projects"], json!(["Cable Clip"]), "{r}");
+        assert_eq!(v["inbox_files"], 1);
+        assert_eq!(v["metadata_written"], 1);
+        assert!(matches!(&out.changes[0], Change::Library { reason, .. } if reason == "import"));
+        assert_eq!(
+            shared
+                .lock()
+                .unwrap()
+                .get_project(&format!("{}:Cable Clip", root.id))
+                .unwrap()
+                .creator
+                .as_deref(),
+            Some("PrintTools")
+        );
+        // a bad request fails the same way as through `handle`
+        let out = handle_shared(
+            &shared,
+            &msg(4, "execute_import", json!({ "root_id": root.id, "items": [] })),
+            &mut none,
+        );
+        assert_eq!(out.response.unwrap()["result"]["isError"], true);
+        assert!(shared.try_lock().is_some(), "the lock is released on failure");
     }
 }

@@ -70,8 +70,10 @@ submission is outside the code: Partner Center identity values, screenshots
       conventions; thin per-tool wrappers (Copilot, Claude Code) pointing at it.
 - [x] **UI foundation.** Tokens and shell ported from the click dummy to Tailwind 4 +
       shadcn-style components; light/dark/system; i18n en + de with a parity test.
-- [x] **Logging.** `tauri-plugin-log` to stdout and the app log dir. Structured logging from engine and frontend to a rotating file in
-      app-data (`tauri-plugin-log` or `tracing` + file appender).
+- [x] **Logging.** `tauri-plugin-log` to stdout and the app log dir (`meshkeep.log`, rotated
+      at 5 MB, three generations kept); engine `tracing` events reach the same file. Panics
+      are logged with thread, location and backtrace before the process dies; MCP write
+      tools and slow engine-lock waits/holds (over 1 s, with source location) leave a line.
 - [x] **CI.** `.github/workflows/ci.yml`: engine (fmt, clippy, test) and frontend
       (typecheck, Vitest, Playwright UI) on Linux; e2e build + WebDriver E2E + release
       build on Windows. Installer-on-tag still to do.
@@ -180,7 +182,10 @@ submission is outside the code: Partner Center identity values, screenshots
 - [ ] **Dashboard** (NAV-10).
 - [ ] **Keymap** (APP-5).
 - [ ] **Undo/redo** (APP-6).
-- [ ] **Log viewer** (APP-8).
+- [ ] **Log viewer** (APP-8). Export is done: the Diagnostics card in Settings writes a zip
+      (log files, `settings.json` and `roots.json` without secrets and with user folders
+      shortened, environment block, data-dir listing) into a folder the user picks, and
+      opens the log folder. Browsing and filtering the log in the app is still open.
 - [x] **In-app feedback** (APP-12): Settings card and "Report" action on error toasts open a
       prefilled GitHub issue form (`.github/ISSUE_TEMPLATE/`) with version, OS, WebView and
       library size; the log tail goes to the clipboard with user folders shortened.

@@ -402,6 +402,13 @@ export function createMockBackend(): Backend {
       return { ...p };
     },
     async revealProject() {},
+    async exportDiagnostics() {
+      await delay(200);
+      const w = window as unknown as { __mockDiagnostics?: number };
+      w.__mockDiagnostics = (w.__mockDiagnostics ?? 0) + 1;
+      return { path: 'E:\\More Models\\meshkeep-diagnostics-20261107-1530.zip', entries: ['environment.txt', 'logs/meshkeep.log', 'settings.json', 'roots.json', 'data-dir.txt'], bytes: 48213 };
+    },
+    async openLogDir() {},
     async logTail(lines) { return Array.from({ length: Math.min(lines, 5) }, (_, i) => `[2026-10-20][12:00:0${i}][INFO][meshkeep_engine::scan] mock log line ${i + 1} ~/3D Models`).join('\n'); },
     async openUrl(url) { const w = window as unknown as { __mockOpened?: string[] }; (w.__mockOpened ??= []).push(url); },
     async revealFolder(rootId, relPath) { const w = window as unknown as { __mockRevealed?: string[] }; (w.__mockRevealed ??= []).push(`${rootId}:${relPath}`); },

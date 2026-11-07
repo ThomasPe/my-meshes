@@ -1,7 +1,9 @@
 //! The local MCP endpoint (ADR-0004): a small HTTP server on 127.0.0.1 that hands JSON-RPC
 //! messages to `meshkeep_engine::mcp`. Transport only: the token check, the Origin check
 //! (no browser page may reach it), one request at a time against the shared engine, and an
-//! event per change so the open window follows what an agent did.
+//! event per change so the open window follows what an agent did. The engine lock is taken
+//! per message by `mcp::handle_shared`, and an import releases it while files move, so the
+//! window's own commands are never stuck behind an agent's import for long.
 //!
 //! Streamable HTTP, the simple half: every message is a POST, the answer is JSON (no SSE
 //! stream, no session ids), notifications get 202. `GET` is 405 because the server never
@@ -9,8 +11,9 @@
 //! client gives up on it (tiny_http closes only on the request's own `Connection: close`),
 //! so the bridge sends that header; a stopped server refuses new connections at once.
 
+use meshkeep_engine::import::ImportProgress;
 use meshkeep_engine::mcp::{self, Change};
-use meshkeep_engine::Engine;
+use meshkeep_engine::SharedEngine;
 use serde::Serialize;
 use std::io::Read;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -20,6 +23,8 @@ use tiny_http::{Header, Method, Request, Response, Server};
 
 /// Called with the changes a message made, after the engine lock is released.
 pub type OnChange = Arc<dyn Fn(&[Change]) + Send + Sync>;
+/// Called with the progress of an import an agent started, like the window's own import.
+pub type OnProgress = Arc<dyn Fn(ImportProgress) + Send + Sync>;
 
 #[derive(Default)]
 struct Stats {
@@ -69,7 +74,14 @@ impl Host {
     }
 
     /// Starts on `addr` ("127.0.0.1:0" picks a free port) and returns the port in use.
-    pub fn start(&self, addr: &str, token: String, engine: Arc<Mutex<Engine>>, on_change: OnChange) -> Result<u16, String> {
+    pub fn start(
+        &self,
+        addr: &str,
+        token: String,
+        engine: Arc<SharedEngine>,
+        on_change: OnChange,
+        on_progress: OnProgress,
+    ) -> Result<u16, String> {
         self.stop();
         let server = Server::http(addr).map_err(|e| format!("cannot listen on {addr}: {e}"))?;
         let port = server.server_addr().to_ip().map(|a| a.port()).unwrap_or(0);
@@ -80,7 +92,7 @@ impl Host {
             .name("meshkeep-mcp".into())
             .spawn(move || {
                 while let Ok(mut req) = srv.recv() {
-                    let response = handle(&mut req, &token, &engine, &on_change, &stats);
+                    let response = handle(&mut req, &token, &engine, &on_change, &on_progress, &stats);
                     let _ = req.respond(response);
                 }
             })
@@ -104,13 +116,25 @@ impl Host {
 
     /// Starts, stops or restarts so the server matches the settings; a failure to bind is
     /// kept for the status line instead of failing the settings change.
-    pub fn apply(&self, settings: &meshkeep_engine::settings::McpSettings, engine: Arc<Mutex<Engine>>, on_change: OnChange) {
+    pub fn apply(
+        &self,
+        settings: &meshkeep_engine::settings::McpSettings,
+        engine: Arc<SharedEngine>,
+        on_change: OnChange,
+        on_progress: OnProgress,
+    ) {
         if !settings.enabled || settings.token.is_empty() {
             self.stop();
             *self.error.lock().unwrap() = None;
             return;
         }
-        if let Err(e) = self.start(&format!("127.0.0.1:{}", settings.port), settings.token.clone(), engine, on_change) {
+        if let Err(e) = self.start(
+            &format!("127.0.0.1:{}", settings.port),
+            settings.token.clone(),
+            engine,
+            on_change,
+            on_progress,
+        ) {
             log::warn!("{e}");
             *self.error.lock().unwrap() = Some(e);
         }
@@ -161,7 +185,7 @@ fn origin_ok(origin: Option<&str>) -> bool {
     }
 }
 
-fn handle(req: &mut Request, token: &str, engine: &Arc<Mutex<Engine>>, on_change: &OnChange, stats: &Stats) -> Reply {
+fn handle(req: &mut Request, token: &str, engine: &SharedEngine, on_change: &OnChange, on_progress: &OnProgress, stats: &Stats) -> Reply {
     let path = req.url().split('?').next().unwrap_or("/");
     if path != "/mcp" && path != "/" {
         return json_reply(404, r#"{"error":"not found"}"#.into());
@@ -201,10 +225,7 @@ fn handle(req: &mut Request, token: &str, engine: &Arc<Mutex<Engine>>, on_change
                     .to_string(),
             ),
         };
-    let outcome = {
-        let mut engine = engine.lock().unwrap();
-        mcp::handle(&mut engine, &message)
-    };
+    let outcome = mcp::handle_shared(engine, &message, &mut |p| on_progress(p));
     if !outcome.changes.is_empty() {
         on_change(&outcome.changes);
     }

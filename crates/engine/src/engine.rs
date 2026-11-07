@@ -184,10 +184,25 @@ pub struct PromoteReport {
 
 /// How files leave a library. The default moves them to the OS trash / recycle bin
 /// (IMP-5); tests inject a plain remove.
-pub type Deleter = Box<dyn Fn(&Path) -> std::io::Result<()> + Send>;
+pub type Deleter = Arc<dyn Fn(&Path) -> std::io::Result<()> + Send + Sync>;
 
 fn trash_deleter() -> Deleter {
-    Box::new(|p: &Path| trash::delete(p).map_err(|e| std::io::Error::other(e.to_string())))
+    Arc::new(|p: &Path| trash::delete(p).map_err(|e| std::io::Error::other(e.to_string())))
+}
+
+/// The part of an import that needs no engine: the root's path and the deleter. The shell
+/// runs [`ImportPlan::run`] without holding the engine lock, so the window stays usable
+/// while archives are unpacked and files copied (the slow part of a large import).
+pub struct ImportPlan {
+    root_path: PathBuf,
+    deleter: Deleter,
+}
+
+impl ImportPlan {
+    /// Validates every target, then unpacks and copies (`import::execute`). Pure file work.
+    pub fn run(&self, req: &ImportRequest, progress: impl FnMut(ImportProgress)) -> Result<ImportReport> {
+        import::execute(&self.root_path, req, &self.deleter, progress)
+    }
 }
 
 /// Where "use this view as preview" saves its picture inside a project (VIEW-4).
@@ -853,8 +868,28 @@ impl Engine {
 
     /// Runs a confirmed import into a root and rescans that root afterwards.
     pub fn execute_import(&mut self, req: &ImportRequest, mut progress: impl FnMut(ImportProgress)) -> Result<ImportReport> {
+        let plan = self.plan_import(req)?;
+        let report = plan.run(req, &mut progress)?;
+        self.finish_import(req, report, progress)
+    }
+
+    /// Phase 1 of an import: resolves the root. What comes back runs without the engine.
+    pub fn plan_import(&self, req: &ImportRequest) -> Result<ImportPlan> {
         let root = self.root(&req.root_id)?;
-        let mut report = import::execute(&root.path, req, &self.deleter, &mut progress)?;
+        Ok(ImportPlan {
+            root_path: root.path,
+            deleter: self.deleter.clone(),
+        })
+    }
+
+    /// Phase 3 of an import, after [`ImportPlan::run`]: rescans the root so the new projects
+    /// are indexed, then applies hints and model pages to their fresh sidecars.
+    pub fn finish_import(
+        &mut self,
+        req: &ImportRequest,
+        mut report: ImportReport,
+        mut progress: impl FnMut(ImportProgress),
+    ) -> Result<ImportReport> {
         self.scan_root_as(&req.root_id, "import", |_| {})?;
         if req.apply_hints || req.fetch_pages {
             self.enrich_imported(&req.root_id, req, &mut report, &mut progress);

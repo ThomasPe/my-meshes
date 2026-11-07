@@ -1,4 +1,4 @@
-import type { AppInfo, BatchReport, BatchUpdate, CreatorSuggestions, DuplicateReport, EnrichProgress, EnrichReport, Hints, McpSettings, McpStatus, NetworkSettings, PageSuggestion, HashProgress, MoveReport, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata, AiSettings, AiSettingsView, AiTestReport, MetadataSuggestion } from '@/lib/types';
+import type { AppInfo, BatchReport, DiagnosticsReport, BatchUpdate, CreatorSuggestions, DuplicateReport, EnrichProgress, EnrichReport, Hints, McpSettings, McpStatus, NetworkSettings, PageSuggestion, HashProgress, MoveReport, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata, AiSettings, AiSettingsView, AiTestReport, MetadataSuggestion } from '@/lib/types';
 
 export type Unlisten = () => void;
 
@@ -37,6 +37,10 @@ export interface Backend {
   onDuplicateProgress(cb: (p: HashProgress) => void): Promise<Unlisten>;
   /** Last lines of the app log with the home directory shortened, for a bug report. */
   logTail(lines: number): Promise<string>;
+  /** Writes the diagnostics zip (logs, settings without secrets, environment) into a folder the user picks; null when cancelled. */
+  exportDiagnostics(): Promise<DiagnosticsReport | null>;
+  /** Opens the folder with the app log in the file manager. */
+  openLogDir(): Promise<void>;
   /** Opens an http(s) link in the default browser. */
   openUrl(url: string): Promise<void>;
   readProjectFile(projectId: string, relPath: string): Promise<ArrayBuffer>;

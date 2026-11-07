@@ -2,6 +2,7 @@
 //! the shell can do (dialogs, revealing files, events to the webview, test mode).
 
 mod commands;
+mod diag;
 mod keys;
 pub mod mcp_bridge;
 pub mod mcp_host;
@@ -9,6 +10,10 @@ mod state;
 
 use state::{AppState, RuntimeConfig};
 use std::sync::{mpsc, Arc, Mutex};
+
+/// The log file rotates at this size; three generations are kept (APP-8). The plugin's
+/// default (40 KB, delete on overflow) lost the evidence of a crash by the next start.
+const LOG_FILE_MAX_BYTES: u128 = 5 * 1024 * 1024;
 use tauri::Manager;
 
 pub fn run() {
@@ -24,6 +29,7 @@ pub fn run() {
             .unwrap_or_default();
         std::process::exit(mcp_bridge::run(&url, &token));
     }
+    diag::install_panic_hook();
     let config = RuntimeConfig::from_env_and_args();
     let (watch_tx, watch_rx) = mpsc::channel();
 
@@ -38,6 +44,8 @@ pub fn run() {
                 } else {
                     log::LevelFilter::Info
                 })
+                .max_file_size(LOG_FILE_MAX_BYTES)
+                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepSome(3))
                 .targets([
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::Stdout),
                     tauri_plugin_log::Target::new(tauri_plugin_log::TargetKind::LogDir {
@@ -68,7 +76,7 @@ pub fn run() {
                 engine.set_ai_provider(Some(std::sync::Arc::new(meshkeep_engine::ai::MockProvider::new(mode))));
             }
             let state = AppState {
-                engine: Arc::new(Mutex::new(engine)),
+                engine: Arc::new(meshkeep_engine::SharedEngine::new(engine)),
                 watchers: Mutex::new(Default::default()),
                 watch_tx,
                 ai_keys: keys::AiKeyStore::new(config.test_mode),
@@ -101,6 +109,8 @@ pub fn run() {
             commands::reveal_project,
             commands::reveal_folder,
             commands::log_tail,
+            commands::export_diagnostics,
+            commands::open_log_dir,
             commands::open_url,
             commands::open_project_file,
             commands::pick_folder,

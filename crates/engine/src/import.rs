@@ -772,7 +772,7 @@ mod tests {
         w.finish().unwrap();
     }
     fn remover() -> Deleter {
-        Box::new(|p: &Path| {
+        std::sync::Arc::new(|p: &Path| {
             if p.is_dir() {
                 std::fs::remove_dir_all(p)
             } else {

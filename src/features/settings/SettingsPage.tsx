@@ -1,4 +1,4 @@
-import { Bell, Bug, Copy, Download, Eye, EyeOff, FolderOpen, Globe, HardDrive, Images, KeyRound, Loader2, Monitor, Moon, PencilLine, Plug, Plus, RefreshCw, Sparkles, Sun, Trash2, X } from 'lucide-react';
+import { Bell, Bug, Copy, Download, Eye, EyeOff, FileArchive, FolderOpen, Globe, HardDrive, Images, KeyRound, Loader2, Monitor, Moon, PencilLine, Plug, Plus, RefreshCw, Sparkles, Sun, Trash2, X } from 'lucide-react';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -15,12 +15,12 @@ import { useLibraryActions } from '@/features/library/useLibraryActions';
 import { LANGUAGES, setLanguage, type Language } from '@/i18n';
 import { getBackend } from '@/lib/backend';
 import { reportError } from '@/lib/errors';
-import { formatDate, formatDuration } from '@/lib/format';
+import { formatBytes, formatDate, formatDuration } from '@/lib/format';
 import { invalidateLibrary, keys, useAiSettings, useMcpSettings, useMcpStatus, useRegenerateMcpToken, useSetMcpSettings, useNetworkSettings, useSetNetworkSettings, useAppInfo, useContainerDirs, useIgnorePatterns, useRoots, useSetAiKey, useSetAiSettings, useSetThumbLocation, useThumbLocation, useThumbStats } from '@/lib/queries';
 import { kickThumbQueue, useThumbs } from '@/lib/thumbs/queue';
 import { dropThumbnailCache } from '@/lib/thumbs/useThumbnail';
 import { applyTheme, loadNotifications, loadTheme, saveNotifications, type Theme } from '@/lib/store';
-import { isAppError, type AiTestReport, type LibraryRoot, type McpSettings, type SyncMode, type ThumbLocation, type UpdateInfo } from '@/lib/types';
+import { isAppError, type AiTestReport, type DiagnosticsReport, type LibraryRoot, type McpSettings, type SyncMode, type ThumbLocation, type UpdateInfo } from '@/lib/types';
 import { useQueryClient } from '@tanstack/react-query';
 
 export function SettingsPage({ scanning, onScanEnd }: { scanning: ScanState; onScanEnd: (rootId: string) => void }) {
@@ -169,6 +169,8 @@ export function SettingsPage({ scanning, onScanEnd }: { scanning: ScanState; onS
         <Card title={t('settings.feedback')} hint={t('settings.feedbackHint')} action={<Button size="sm" variant="outline" onClick={() => openFeedback()} data-testid="send-feedback"><Bug />{t('settings.sendFeedback')}</Button>}>
           <div className="text-[13px] font-semibold text-secondary-foreground"><a className="underline-offset-2 hover:underline" href="https://github.com/ThomasPe/my-meshes/issues" target="_blank" rel="noreferrer">github.com/ThomasPe/my-meshes/issues</a></div>
         </Card>
+
+        <DiagnosticsCard />
 
         <Card title={t('settings.about')}>
           <dl className="grid grid-cols-[120px_minmax(0,1fr)] gap-x-3 gap-y-2 text-[13px]">
@@ -365,6 +367,32 @@ function McpCard() {
         </div>
       )}
       <p className="rounded-[10px] bg-accent p-3 text-xs font-semibold text-accent-foreground" data-testid="mcp-sent">{t('settings.mcpSent')}</p>
+    </Card>
+  );
+}
+
+/**
+ * APP-8: the diagnostics package. The spec rules out telemetry and crash upload, so this is
+ * how a problem in the field reaches a bug report: one zip the user saves and attaches.
+ */
+function DiagnosticsCard() {
+  const { t, i18n } = useTranslation();
+  const [state, setState] = useState<{ busy: boolean; report?: DiagnosticsReport | null }>({ busy: false });
+  const exportPackage = async () => {
+    setState({ busy: true });
+    try {
+      const b = await getBackend();
+      const report = await b.exportDiagnostics();
+      setState({ busy: false, report });
+      if (report) toast.success(t('settings.diagnosticsToast'));
+    } catch (e) { reportError(e); setState({ busy: false }); }
+  };
+  const openLogs = async () => { try { const b = await getBackend(); await b.openLogDir(); } catch (e) { reportError(e); } };
+  return (
+    <Card title={t('settings.diagnostics')} hint={t('settings.diagnosticsHint')} action={<span className="flex gap-2"><Button size="sm" variant="outline" onClick={() => void openLogs()} data-testid="open-log-dir"><FolderOpen />{t('settings.openLogDir')}</Button><Button size="sm" variant="outline" disabled={state.busy} onClick={() => void exportPackage()} data-testid="export-diagnostics"><FileArchive />{state.busy ? t('settings.exportDiagnosticsBusy') : t('settings.exportDiagnostics')}</Button></span>}>
+      <div className="text-[13px] font-semibold text-secondary-foreground" data-testid="diagnostics-status" data-state={state.busy ? 'busy' : state.report ? 'written' : state.report === null ? 'cancelled' : 'idle'} aria-live="polite">
+        {state.report ? <><span className="break-all font-mono text-xs">{t('settings.diagnosticsWritten', { path: state.report.path, size: formatBytes(state.report.bytes, i18n.language), count: state.report.entries.length })}</span><ul className="mt-1 list-disc pl-4 font-mono text-xs text-muted-foreground" data-testid="diagnostics-entries">{state.report.entries.map((e) => <li key={e}>{e}</li>)}</ul></> : state.report === null ? t('settings.diagnosticsCancelled') : t('settings.diagnosticsIdle')}
+      </div>
     </Card>
   );
 }

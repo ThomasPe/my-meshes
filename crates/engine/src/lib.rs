@@ -9,12 +9,14 @@
 
 pub mod ai;
 pub mod collections;
+pub mod diagnostics;
 pub mod enrich;
 pub mod error;
 pub mod hash;
 pub mod hints;
 pub mod import;
 pub mod index;
+pub mod lock;
 pub mod mcp;
 pub mod model;
 pub mod roots;
@@ -28,6 +30,8 @@ pub mod watch;
 mod engine;
 pub use engine::{
     BatchFailure, BatchReport, BatchUpdate, CreatorSuggestion, CreatorSuggestions, Deleter, DuplicateGroup, DuplicateKind, DuplicateMember,
-    DuplicateReport, Engine, HashProgress, MoveReport, PromoteFailure, PromoteItem, PromoteReport, ScanProgress, UpdateMetadata,
+    DuplicateReport, Engine, HashProgress, ImportPlan, MoveReport, PromoteFailure, PromoteItem, PromoteReport, ScanProgress,
+    UpdateMetadata,
 };
 pub use error::{EngineError, Result};
+pub use lock::SharedEngine;

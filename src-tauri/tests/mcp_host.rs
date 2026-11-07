@@ -1,7 +1,7 @@
 //! The MCP endpoint over a real socket: token and Origin checks, JSON in and out, and the
 //! change callback that keeps the window in sync.
 use meshkeep_engine::settings::McpSettings;
-use meshkeep_engine::Engine;
+use meshkeep_engine::{Engine, SharedEngine};
 use meshkeep_lib::mcp_host::Host;
 use std::sync::{Arc, Mutex};
 
@@ -17,7 +17,7 @@ fn serves_mcp_over_http_with_a_token() {
             ..Default::default()
         })
         .unwrap();
-    let engine = Arc::new(Mutex::new(engine));
+    let engine = Arc::new(SharedEngine::new(engine));
     let seen = Arc::new(Mutex::new(0usize));
     let counter = seen.clone();
     let host = Host::new();
@@ -27,6 +27,7 @@ fn serves_mcp_over_http_with_a_token() {
             "secret-token".into(),
             engine.clone(),
             Arc::new(move |changes| *counter.lock().unwrap() += changes.len()),
+            Arc::new(|_| {}),
         )
         .unwrap();
     assert!(port > 0);

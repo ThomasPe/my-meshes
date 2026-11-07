@@ -47,7 +47,13 @@ Meshkeep exposes its engine as an MCP server, inside the running app.
 5. **Engine owns the protocol.** `crates/engine/src/mcp.rs` turns a JSON-RPC value into a
    result and a list of changes; the shell adds the socket, the token check and the
    events. Every tool is tested without a socket; the socket is tested once.
-6. **What leaves the machine** is the client's business, not the server's, and the
+6. **The window never waits long for an agent.** The shell handles one message at a time,
+   but `mcp::handle_shared` takes the engine lock per message, and `execute_import`
+   releases it while archives are unpacked and files copied; only the rescan and the
+   metadata step hold it. Every write tool leaves a line in the app log (name, duration,
+   changes), and a caller that waits for or holds the engine lock longer than a second is
+   logged with its source location, so a frozen window has a trace.
+7. **What leaves the machine** is the client's business, not the server's, and the
    Settings card says so in plain words: the tools return project metadata, file names,
    readme text, the listed import folders and (with the setting on) what model pages say;
    where the connected client sends that depends on the client. The privacy policy carries

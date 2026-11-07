@@ -82,7 +82,7 @@
 | APP-5 | Keyboard shortcuts for core actions (search, delete, rename, navigate) with a central, configurable keymap. | Later |
 | APP-6 | Undo/redo for disk operations (rename, move, tag) via inverse operations. | Later |
 | APP-7 | Notifications for import errors, sync failures and completed background jobs. | MVP |
-| APP-8 | Log viewer: browse, filter and export application logs for bug reports. | Later |
+| APP-8 | Log viewer: browse, filter and export application logs for bug reports. Export is a diagnostics package (logs, settings and roots without secrets, environment, user folders shortened) written to a folder the user picks; nothing is uploaded. | Export done, viewer Later |
 | APP-9 | Updates: private builds update themselves (manual check, optional beta channel); Store builds leave updating to the Store and hide the updater (Q2). | MVP |
 | APP-10 | Native title bar (decided Q14): no frameless window in v1; Snap Layouts, Mica and accessibility come for free and Store review stays simple. Revisit after the MVP if wanted. | Decided |
 | APP-12 | In-app feedback: "Send feedback" (Settings, error toasts) collects a bug report or idea with version, OS, WebView and library size and opens it as a prefilled GitHub issue form in the browser; a log excerpt with shortened user folders goes to the clipboard. The app never posts to GitHub itself (no token to ship) and the reporter owns the issue. | MVP |

@@ -213,6 +213,13 @@ export interface AppInfo {
   osVersion: string;
 }
 
+/** What `export_diagnostics` wrote (APP-8). */
+export interface DiagnosticsReport {
+  path: string;
+  entries: string[];
+  bytes: number;
+}
+
 export interface LibraryStats {
   projects: number;
   totalBytes: number;

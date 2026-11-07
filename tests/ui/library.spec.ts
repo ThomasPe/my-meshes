@@ -136,6 +136,18 @@ test('the sidebar stays on the project page; picking a folder there returns to t
   await expect(page.getByTestId('panel-sidebar')).toHaveCount(0);
 });
 
+test('settings: the diagnostics package is written on request and its contents are listed', async ({ page }) => {
+  await page.getByTestId('nav-settings').click();
+  const status = page.getByTestId('diagnostics-status');
+  await expect(status).toHaveAttribute('data-state', 'idle');
+  await page.getByTestId('export-diagnostics').click();
+  await expect(status).toHaveAttribute('data-state', 'written');
+  await expect(status).toContainText('meshkeep-diagnostics-20261107-1530.zip');
+  await expect(page.getByTestId('diagnostics-entries').getByRole('listitem')).toHaveCount(5);
+  await expect(page.getByTestId('diagnostics-entries')).toContainText('logs/meshkeep.log');
+  expect(await page.evaluate(() => (window as unknown as { __mockDiagnostics?: number }).__mockDiagnostics)).toBe(1);
+});
+
 test('settings: the model-page switch is off by default and its state is explained', async ({ page }) => {
   await page.getByTestId('nav-settings').click();
   const status = page.getByTestId('fetch-pages-status');

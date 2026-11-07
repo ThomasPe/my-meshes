@@ -86,6 +86,21 @@ describe('Meshkeep (test mode, fixture library)', () => {
     expect(info.testMode).toBe(true);
     expect(info.e2eBuild).toBe(true);
   });
+
+  it('writes a diagnostics package with the log and the settings without the MCP token', async () => {
+    // MESHKEEP_PICK_SAVE_DIR answers the folder picker with the isolated data dir
+    const saveDir = process.env.MESHKEEP_E2E_DATA_DIR!;
+    await $('[data-testid="nav-settings"]').click();
+    await $('[data-testid="export-diagnostics"]').click();
+    const status = $('[data-testid="diagnostics-status"]');
+    await browser.waitUntil(async () => (await status.getAttribute('data-state')) === 'written', { timeout: 15000 });
+    const zips = fs.readdirSync(saveDir).filter((f) => /^meshkeep-diagnostics-\d{8}-\d{4}\.zip$/.test(f));
+    expect(zips.length).toBe(1);
+    // entry names sit uncompressed in the zip's local headers; the contents are deflated
+    const bytes = fs.readFileSync(path.join(saveDir, zips[0]!)).toString('latin1');
+    for (const entry of ['environment.txt', 'logs/meshkeep.log', 'settings.json', 'roots.json', 'data-dir.txt']) expect(bytes).toContain(entry);
+    expect(await $('[data-testid="diagnostics-entries"]').getText()).toContain('logs/meshkeep.log');
+  });
 });
 
 // ---- D2: thumbnails, favorites, rename against the real engine --------------------------

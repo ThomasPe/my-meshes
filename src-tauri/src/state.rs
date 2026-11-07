@@ -1,6 +1,6 @@
 use meshkeep_engine::model::SyncMode;
 use meshkeep_engine::watch::{RootWatcher, WatchEvent};
-use meshkeep_engine::Engine;
+use meshkeep_engine::SharedEngine;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{mpsc, Arc, Mutex};
@@ -50,7 +50,7 @@ impl RuntimeConfig {
 }
 
 pub struct AppState {
-    pub engine: Arc<Mutex<Engine>>,
+    pub engine: Arc<SharedEngine>,
     pub watchers: Mutex<HashMap<String, RootWatcher>>,
     pub watch_tx: mpsc::Sender<WatchEvent>,
     pub ai_keys: crate::keys::AiKeyStore,
@@ -89,7 +89,11 @@ pub fn apply_mcp_settings(app: &AppHandle) {
             }
         }
     });
-    state.mcp.apply(&settings, state.engine.clone(), on_change);
+    let progress_handle = app.clone();
+    let on_progress: crate::mcp_host::OnProgress = Arc::new(move |p| {
+        let _ = progress_handle.emit("import://progress", &p);
+    });
+    state.mcp.apply(&settings, state.engine.clone(), on_change, on_progress);
 }
 
 /// In test mode with `MESHKEEP_FIXTURE_ROOT` set: register that folder (once) and scan it.

@@ -1,6 +1,13 @@
+//! Commands are thin wrappers over the engine. Synchronous ones carry
+//! `#[tauri::command(async)]`: Tauri runs a plain `fn` command on the main thread, and the
+//! main thread is the window. Waiting for the engine lock there, while a scan or an import
+//! holds it, froze the whole window (not just the one request); on the runtime's thread
+//! pool the request waits and the window keeps painting. Long jobs still go through
+//! `spawn_blocking` so they also stay clear of the async workers.
 use crate::state::{self, AppState};
 use meshkeep_engine::ai::{AiSettings, AiTestReport, MetadataSuggestion};
 use meshkeep_engine::collections::{Collection, SmartCollection};
+use meshkeep_engine::diagnostics::{self, DiagnosticsReport};
 use meshkeep_engine::enrich::{EnrichReport, PageSuggestion};
 use meshkeep_engine::hints::Hints;
 use meshkeep_engine::import::{ImportItem, ImportReport, ImportRequest, InboxFile};
@@ -104,7 +111,7 @@ pub struct AppInfo {
     os_version: String,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn app_info(app: AppHandle, state: State<AppState>) -> AppInfo {
     AppInfo {
         version: app.package_info().version.to_string(),
@@ -133,7 +140,7 @@ pub fn app_info(app: AppHandle, state: State<AppState>) -> AppInfo {
 
 /// Last `lines` lines of the app log for a bug report, with the home directory shortened to
 /// `~` so a pasted excerpt does not carry the user name (APP-12).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn log_tail(app: AppHandle, lines: usize) -> CmdResult<String> {
     let path = app
         .path()
@@ -155,21 +162,121 @@ pub fn log_tail(app: AppHandle, lines: usize) -> CmdResult<String> {
     };
     let all: Vec<&str> = text.lines().collect();
     let start = all.len().saturating_sub(lines.clamp(1, 2000));
-    let mut tail = all[start..].join("\n");
-    if let Ok(home) = app.path().home_dir() {
-        let home = home.to_string_lossy().into_owned();
-        for h in [home.clone(), home.replace('\\', "/")] {
-            if h.len() > 3 {
-                tail = tail.replace(&h, "~");
-            }
-        }
+    let tail = all[start..].join("\n");
+    Ok(diagnostics::redact(&tail, app.path().home_dir().ok().as_deref()))
+}
+
+/// Where the folder picker of a diagnostics export is answered without a dialog in test mode:
+/// `MESHKEEP_PICK_SAVE_DIR` first, else the general `MESHKEEP_PICK_FOLDER`.
+fn test_mode_folder(app: &AppHandle, vars: &[&str]) -> Option<PathBuf> {
+    if !app.state::<AppState>().config.test_mode {
+        return None;
     }
-    Ok(tail)
+    vars.iter().find_map(|v| std::env::var_os(v).map(PathBuf::from))
+}
+
+/// APP-8: writes the diagnostics package (log files, settings without secrets, roots,
+/// environment) as a zip into a folder the user picks and reveals it. `None` when the picker
+/// was cancelled. Nothing leaves the machine; the user attaches the file to a report.
+#[tauri::command]
+pub async fn export_diagnostics(app: AppHandle) -> CmdResult<Option<DiagnosticsReport>> {
+    let folder = match test_mode_folder(&app, &["MESHKEEP_PICK_SAVE_DIR", "MESHKEEP_PICK_FOLDER"]) {
+        Some(p) => Some(p),
+        None => {
+            let picker = app.clone();
+            tauri::async_runtime::spawn_blocking(move || picker.dialog().file().blocking_pick_folder())
+                .await
+                .map_err(|e| AppError {
+                    code: "shell",
+                    message: e.to_string(),
+                })?
+                .map(|p| PathBuf::from(p.to_string()))
+        }
+    };
+    let Some(folder) = folder else { return Ok(None) };
+    let handle = app.clone();
+    let report = tauri::async_runtime::spawn_blocking(move || -> CmdResult<DiagnosticsReport> {
+        let state = handle.state::<AppState>();
+        let environment = environment_block(&handle, &state);
+        let now = time::OffsetDateTime::now_local().unwrap_or_else(|_| time::OffsetDateTime::now_utc());
+        let out = folder.join(diagnostics::file_name(now));
+        let sources = diagnostics::Sources {
+            log_dir: handle.path().app_log_dir().ok(),
+            data_dir: state.data_dir.clone(),
+            environment,
+            home: handle.path().home_dir().ok(),
+        };
+        Ok(diagnostics::write_package(&out, &sources)?)
+    })
+    .await
+    .map_err(|e| AppError {
+        code: "shell",
+        message: e.to_string(),
+    })??;
+    log::info!(
+        "diagnostics package written: {} entries, {} bytes",
+        report.entries.len(),
+        report.bytes
+    );
+    if !app.state::<AppState>().config.test_mode {
+        let _ = app.opener().reveal_item_in_dir(&report.path);
+    }
+    Ok(Some(report))
+}
+
+/// `environment.txt` of the package: what the About card shows plus the library's shape
+/// and the state of the opt-in features. Paths are shortened by the engine when written.
+fn environment_block(app: &AppHandle, state: &AppState) -> String {
+    let info = app_info(app.clone(), app.state::<AppState>());
+    let mut engine = state.engine.lock().unwrap();
+    let roots: Vec<serde_json::Value> = engine
+        .roots()
+        .unwrap_or_default()
+        .iter()
+        .map(|r| {
+            serde_json::json!({
+                "id": r.id, "path": r.path, "mode": r.mode, "status": r.status,
+                "last_scan": r.last_scan, "last_error": r.last_error,
+            })
+        })
+        .collect();
+    let (projects, total_bytes) = engine.count(None).unwrap_or_default();
+    let mcp = engine.mcp_settings();
+    let details = serde_json::json!({
+        "exported_at": time::OffsetDateTime::now_utc().format(&time::format_description::well_known::Rfc3339).unwrap_or_default(),
+        "app": { "version": info.version, "channel": info.channel, "updater": info.updater, "store": info.store, "e2e_build": info.e2e_build, "test_mode": info.test_mode },
+        "system": { "os": info.os_version, "arch": info.arch, "webview": info.webview },
+        "data_dir": info.data_dir,
+        "library": { "projects": projects, "total_bytes": total_bytes, "favorites": engine.favorite_count().unwrap_or(0), "roots": roots },
+        "previews": { "location": engine.thumb_location(), "stats": engine.thumb_stats().ok() },
+        "scanner": { "ignore": engine.ignore_patterns(), "container_dirs": engine.container_dirs() },
+        "network": engine.network_settings(),
+        "ai": { "provider": engine.ai_settings().provider, "model": engine.ai_settings().model, "key_stored": state.ai_keys.get().ok().flatten().is_some() },
+        "mcp": { "enabled": mcp.enabled, "allow_writes": mcp.allow_writes, "port": mcp.port, "import_dirs": mcp.import_dirs, "status": state.mcp.status(mcp.port) },
+    });
+    format!(
+        "Meshkeep {} diagnostics\n\n{}\n",
+        info.version,
+        serde_json::to_string_pretty(&details).unwrap_or_default()
+    )
+}
+
+/// Opens the folder with `meshkeep.log` in the file manager.
+#[tauri::command(async)]
+pub fn open_log_dir(app: AppHandle) -> CmdResult<()> {
+    let dir = app.path().app_log_dir()?;
+    std::fs::create_dir_all(&dir)?;
+    app.opener()
+        .open_path(dir.to_string_lossy().into_owned(), None::<&str>)
+        .map_err(|e| AppError {
+            code: "shell",
+            message: e.to_string(),
+        })
 }
 
 /// Opens a web link in the default browser; only http(s), so a crafted sidecar cannot launch
 /// anything else through this command.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_url(app: AppHandle, url: String) -> CmdResult<()> {
     if !(url.starts_with("https://") || url.starts_with("http://")) {
         return Err(AppError {
@@ -183,12 +290,12 @@ pub fn open_url(app: AppHandle, url: String) -> CmdResult<()> {
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_roots(state: State<AppState>) -> CmdResult<Vec<LibraryRoot>> {
     Ok(state.engine.lock().unwrap().roots()?)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn add_root(app: AppHandle, state: State<AppState>, path: String, mode: Option<SyncMode>) -> CmdResult<LibraryRoot> {
     let mode = mode.unwrap_or(SyncMode::Watch);
     let root = { state.engine.lock().unwrap().add_root(&PathBuf::from(path), mode)? };
@@ -198,7 +305,7 @@ pub fn add_root(app: AppHandle, state: State<AppState>, path: String, mode: Opti
     Ok(root)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn remove_root(app: AppHandle, state: State<AppState>, id: String) -> CmdResult<LibraryRoot> {
     state::stop_watcher_for(&app, &id);
     let root = { state.engine.lock().unwrap().remove_root(&id)? };
@@ -206,7 +313,7 @@ pub fn remove_root(app: AppHandle, state: State<AppState>, id: String) -> CmdRes
     Ok(root)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_root_mode(
     app: AppHandle,
     state: State<AppState>,
@@ -249,27 +356,27 @@ pub async fn scan_root(app: AppHandle, id: String) -> CmdResult<ScanReport> {
     Ok(report)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_projects(state: State<AppState>, query: ListQuery) -> CmdResult<Vec<ProjectSummary>> {
     Ok(state.engine.lock().unwrap().list_projects(&query)?)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_project(state: State<AppState>, id: String) -> CmdResult<Project> {
     Ok(state.engine.lock().unwrap().get_project(&id)?)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn tag_counts(state: State<AppState>, root_id: Option<String>) -> CmdResult<Vec<TagCount>> {
     Ok(state.engine.lock().unwrap().tag_counts(root_id.as_deref())?)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn facets(state: State<AppState>, root_id: Option<String>) -> CmdResult<Facets> {
     Ok(state.engine.lock().unwrap().facets(root_id.as_deref())?)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn folder_tree(state: State<AppState>, root_id: String) -> CmdResult<Vec<FolderNode>> {
     Ok(state.engine.lock().unwrap().folder_tree(&root_id)?)
 }
@@ -282,7 +389,7 @@ pub struct LibraryStats {
     favorites: u32,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn library_stats(state: State<AppState>, root_id: Option<String>) -> CmdResult<LibraryStats> {
     let engine = state.engine.lock().unwrap();
     let (projects, total_bytes) = engine.count(root_id.as_deref())?;
@@ -313,7 +420,7 @@ pub async fn read_project_file(app: AppHandle, project_id: String, rel_path: Str
     Ok(Response::new(bytes))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_metadata(app: AppHandle, state: State<AppState>, project_id: String, update: UpdateMetadata) -> CmdResult<Project> {
     let project = { state.engine.lock().unwrap().update_metadata(&project_id, update)? };
     let _ = app.emit("project://changed", serde_json::json!({ "projectId": project.id }));
@@ -321,7 +428,7 @@ pub fn update_metadata(app: AppHandle, state: State<AppState>, project_id: Strin
 }
 
 /// META-6: one change for a multi-selection, written by the engine project by project.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn batch_update_metadata(
     app: AppHandle,
     state: State<AppState>,
@@ -336,7 +443,7 @@ pub fn batch_update_metadata(
 }
 
 /// Opens a folder of a root (tree node, inbox) in the file manager.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn reveal_folder(app: AppHandle, state: State<AppState>, root_id: String, rel_path: String) -> CmdResult<()> {
     let dir = { state.engine.lock().unwrap().resolve_dir(&root_id, &rel_path)? };
     app.opener()
@@ -347,7 +454,7 @@ pub fn reveal_folder(app: AppHandle, state: State<AppState>, root_id: String, re
         })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn reveal_project(app: AppHandle, state: State<AppState>, project_id: String) -> CmdResult<()> {
     let dir = {
         let engine = state.engine.lock().unwrap();
@@ -360,7 +467,7 @@ pub fn reveal_project(app: AppHandle, state: State<AppState>, project_id: String
     })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn open_project_file(app: AppHandle, state: State<AppState>, project_id: String, rel_path: String) -> CmdResult<()> {
     let path = { state.engine.lock().unwrap().resolve_file(&project_id, &rel_path)? };
     app.opener()
@@ -417,43 +524,43 @@ pub async fn pick_folder(app: AppHandle) -> CmdResult<Option<String>> {
     Ok(picked.map(|p| p.to_string()))
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_ignore_patterns(state: State<AppState>) -> Vec<String> {
     state.engine.lock().unwrap().ignore_patterns().to_vec()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_ignore_patterns(state: State<AppState>, patterns: Vec<String>) -> CmdResult<Vec<String>> {
     let mut engine = state.engine.lock().unwrap();
     engine.set_ignore_patterns(patterns)?;
     Ok(engine.ignore_patterns().to_vec())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_container_dirs(state: State<AppState>) -> Vec<String> {
     state.engine.lock().unwrap().container_dirs().to_vec()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_container_dirs(state: State<AppState>, names: Vec<String>) -> CmdResult<Vec<String>> {
     let mut engine = state.engine.lock().unwrap();
     engine.set_container_dirs(names)?;
     Ok(engine.container_dirs().to_vec())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_thumb_location(state: State<AppState>) -> ThumbLocation {
     state.engine.lock().unwrap().thumb_location()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_thumb_location(state: State<AppState>, location: ThumbLocation) -> CmdResult<ThumbLocation> {
     Ok(state.engine.lock().unwrap().set_thumb_location(location)?)
 }
 
 // ---- favorites, rename, delete ---------------------------------------------------------
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_favorite(app: AppHandle, state: State<AppState>, project_id: String, favorite: bool) -> CmdResult<Project> {
     let project = { state.engine.lock().unwrap().set_favorite(&project_id, favorite)? };
     let _ = app.emit("project://changed", serde_json::json!({ "projectId": project.id }));
@@ -490,7 +597,7 @@ pub async fn fetch_model_pages(app: AppHandle, project_ids: Vec<String>) -> CmdR
     Ok(out)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn project_hints(state: State<AppState>, project_id: String) -> CmdResult<Hints> {
     Ok(state.engine.lock().unwrap().project_hints(&project_id)?)
 }
@@ -507,7 +614,7 @@ pub async fn creator_suggestions(app: AppHandle) -> CmdResult<CreatorSuggestions
     Ok(out)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn dismiss_creator_hint(state: State<AppState>, project_id: String, value: String) -> CmdResult<()> {
     Ok(state.engine.lock().unwrap().dismiss_creator_hint(&project_id, &value)?)
 }
@@ -534,7 +641,7 @@ pub async fn find_duplicates(app: AppHandle) -> CmdResult<DuplicateReport> {
     Ok(report)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn move_projects(
     app: AppHandle,
     state: State<AppState>,
@@ -556,7 +663,7 @@ pub fn move_projects(
     Ok(report)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rename_project(app: AppHandle, state: State<AppState>, project_id: String, new_name: String) -> CmdResult<Project> {
     let project = { state.engine.lock().unwrap().rename_project(&project_id, &new_name)? };
     let _ = app.emit(
@@ -567,7 +674,7 @@ pub fn rename_project(app: AppHandle, state: State<AppState>, project_id: String
 }
 
 /// Moves the project directory to the OS trash (IMP-5).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_project(app: AppHandle, state: State<AppState>, project_id: String) -> CmdResult<()> {
     let root_id = {
         let mut engine = state.engine.lock().unwrap();
@@ -583,7 +690,7 @@ pub fn delete_project(app: AppHandle, state: State<AppState>, project_id: String
 }
 
 /// Moves one file to the OS trash. `None` when the project vanished with it.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_file(app: AppHandle, state: State<AppState>, project_id: String, rel_path: String) -> CmdResult<Option<Project>> {
     let (root_id, project) = {
         let mut engine = state.engine.lock().unwrap();
@@ -606,19 +713,19 @@ pub fn delete_file(app: AppHandle, state: State<AppState>, project_id: String, r
 
 // ---- thumbnails ----------------------------------------------------------------------
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn thumb_queue(state: State<AppState>, limit: Option<u32>) -> CmdResult<Vec<ThumbJob>> {
     Ok(state.engine.lock().unwrap().thumb_queue(limit.unwrap_or(50))?)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn thumb_stats(state: State<AppState>) -> CmdResult<ThumbStats> {
     Ok(state.engine.lock().unwrap().thumb_stats()?)
 }
 
 /// Raw PNG bytes in the request body; the project id travels URL-encoded in a header
 /// (headers must be ASCII, folder names need not be).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn store_thumbnail(state: State<AppState>, request: Request<'_>) -> CmdResult<String> {
     let project_id = request
         .headers()
@@ -638,12 +745,12 @@ pub fn store_thumbnail(state: State<AppState>, request: Request<'_>) -> CmdResul
     Ok(state.engine.lock().unwrap().store_thumbnail(&project_id, png)?)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn store_embedded_thumbnail(state: State<AppState>, project_id: String) -> CmdResult<String> {
     Ok(state.engine.lock().unwrap().store_embedded_thumbnail(&project_id)?)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn thumbnail_failed(state: State<AppState>, project_id: String, reason: String) -> CmdResult<()> {
     Ok(state.engine.lock().unwrap().thumbnail_failed(&project_id, &reason)?)
 }
@@ -661,7 +768,7 @@ pub async fn read_thumbnail(app: AppHandle, key: String) -> CmdResult<Response> 
 }
 
 /// VIEW-4: one of the project's images becomes the preview; `None` goes back to automatic.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_thumbnail_image(app: AppHandle, state: State<AppState>, project_id: String, rel_path: Option<String>) -> CmdResult<Project> {
     let p = state.engine.lock().unwrap().set_thumbnail_image(&project_id, rel_path.as_deref())?;
     let _ = app.emit("project://changed", serde_json::json!({ "projectId": project_id }));
@@ -670,7 +777,7 @@ pub fn set_thumbnail_image(app: AppHandle, state: State<AppState>, project_id: S
 
 /// VIEW-4: raw PNG bytes of the viewer's current view become the preview (header as in
 /// `store_thumbnail`).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_view_thumbnail(app: AppHandle, state: State<AppState>, request: Request<'_>) -> CmdResult<Project> {
     let project_id = request
         .headers()
@@ -692,14 +799,14 @@ pub fn set_view_thumbnail(app: AppHandle, state: State<AppState>, request: Reque
     Ok(p)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn reset_thumbnail(app: AppHandle, state: State<AppState>, project_id: String) -> CmdResult<()> {
     state.engine.lock().unwrap().reset_thumbnail(&project_id)?;
     let _ = app.emit("project://changed", serde_json::json!({ "projectId": project_id }));
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn clear_thumbnails(app: AppHandle, state: State<AppState>) -> CmdResult<()> {
     state.engine.lock().unwrap().clear_thumbnails()?;
     let _ = app.emit(
@@ -729,7 +836,7 @@ fn percent_decode(s: &str) -> String {
 
 // ---- import and inbox ----------------------------------------------------------------
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn analyze_import(state: State<AppState>, paths: Vec<String>) -> Vec<ImportItem> {
     let paths: Vec<PathBuf> = paths.into_iter().map(PathBuf::from).collect();
     state.engine.lock().unwrap().analyze_import(&paths)
@@ -758,12 +865,12 @@ pub async fn execute_import(app: AppHandle, request: ImportRequest) -> CmdResult
     Ok(report)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_inbox(state: State<AppState>, root_id: String) -> CmdResult<Vec<InboxFile>> {
     Ok(state.engine.lock().unwrap().list_inbox(&root_id)?)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn promote_inbox(app: AppHandle, state: State<AppState>, root_id: String, files: Vec<String>, name: String) -> CmdResult<Project> {
     let project = { state.engine.lock().unwrap().promote_inbox(&root_id, &files, &name)? };
     let _ = app.emit(
@@ -773,7 +880,7 @@ pub fn promote_inbox(app: AppHandle, state: State<AppState>, root_id: String, fi
     Ok(project)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn promote_inbox_each(app: AppHandle, state: State<AppState>, root_id: String, items: Vec<PromoteItem>) -> CmdResult<PromoteReport> {
     let report = { state.engine.lock().unwrap().promote_inbox_each(&root_id, &items)? };
     if !report.created.is_empty() {
@@ -785,7 +892,7 @@ pub fn promote_inbox_each(app: AppHandle, state: State<AppState>, root_id: Strin
     Ok(report)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_inbox_file(app: AppHandle, state: State<AppState>, root_id: String, name: String) -> CmdResult<()> {
     state.engine.lock().unwrap().delete_inbox_file(&root_id, &name)?;
     let _ = app.emit("inbox://changed", serde_json::json!({ "rootId": root_id }));
@@ -798,66 +905,66 @@ fn collections_changed(app: &AppHandle) {
     let _ = app.emit("collections://changed", serde_json::Value::Null);
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_collections(state: State<AppState>) -> Vec<Collection> {
     state.engine.lock().unwrap().collections()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_collection(app: AppHandle, state: State<AppState>, name: String) -> CmdResult<Collection> {
     let c = { state.engine.lock().unwrap().create_collection(&name)? };
     collections_changed(&app);
     Ok(c)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn rename_collection(app: AppHandle, state: State<AppState>, id: String, name: String) -> CmdResult<Collection> {
     let c = { state.engine.lock().unwrap().rename_collection(&id, &name)? };
     collections_changed(&app);
     Ok(c)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_collection(app: AppHandle, state: State<AppState>, id: String) -> CmdResult<()> {
     state.engine.lock().unwrap().delete_collection(&id)?;
     collections_changed(&app);
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn add_to_collection(app: AppHandle, state: State<AppState>, id: String, project_ids: Vec<String>) -> CmdResult<Collection> {
     let c = { state.engine.lock().unwrap().add_to_collection(&id, &project_ids)? };
     collections_changed(&app);
     Ok(c)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn remove_from_collection(app: AppHandle, state: State<AppState>, id: String, project_ids: Vec<String>) -> CmdResult<Collection> {
     let c = { state.engine.lock().unwrap().remove_from_collection(&id, &project_ids)? };
     collections_changed(&app);
     Ok(c)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn reorder_collection(app: AppHandle, state: State<AppState>, id: String, order: Vec<String>) -> CmdResult<Collection> {
     let c = { state.engine.lock().unwrap().reorder_collection(&id, &order)? };
     collections_changed(&app);
     Ok(c)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_smart_collections(state: State<AppState>) -> Vec<SmartCollection> {
     state.engine.lock().unwrap().smart_collections()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn create_smart_collection(app: AppHandle, state: State<AppState>, name: String, query: ListQuery) -> CmdResult<SmartCollection> {
     let c = { state.engine.lock().unwrap().create_smart_collection(&name, query)? };
     collections_changed(&app);
     Ok(c)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn update_smart_collection(
     app: AppHandle,
     state: State<AppState>,
@@ -870,14 +977,14 @@ pub fn update_smart_collection(
     Ok(c)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn delete_smart_collection(app: AppHandle, state: State<AppState>, id: String) -> CmdResult<()> {
     state.engine.lock().unwrap().delete_smart_collection(&id)?;
     collections_changed(&app);
     Ok(())
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn list_smart_collection(state: State<AppState>, id: String, overrides: Option<ListQuery>) -> CmdResult<Vec<ProjectSummary>> {
     Ok(state.engine.lock().unwrap().list_smart_collection(&id, overrides.as_ref())?)
 }
@@ -994,19 +1101,19 @@ fn key_err(e: String) -> AppError {
 
 // ---- MCP server (ADR-0004) ---------------------------------------------------------------
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_mcp_settings(state: State<AppState>) -> McpSettings {
     state.engine.lock().unwrap().mcp_settings()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_mcp_settings(app: AppHandle, state: State<AppState>, settings: McpSettings) -> CmdResult<McpSettings> {
     let saved = state.engine.lock().unwrap().set_mcp_settings(settings)?;
     state::apply_mcp_settings(&app);
     Ok(saved)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn regenerate_mcp_token(app: AppHandle, state: State<AppState>) -> CmdResult<McpSettings> {
     let saved = state.engine.lock().unwrap().regenerate_mcp_token()?;
     state::apply_mcp_settings(&app);
@@ -1025,7 +1132,7 @@ pub struct McpStatusView {
     pub downloads_dir: Option<String>,
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn mcp_status(app: AppHandle, state: State<AppState>) -> McpStatusView {
     let port = state.engine.lock().unwrap().mcp_settings().port;
     McpStatusView {
@@ -1037,24 +1144,24 @@ pub fn mcp_status(app: AppHandle, state: State<AppState>) -> McpStatusView {
     }
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_network_settings(state: State<AppState>) -> NetworkSettings {
     state.engine.lock().unwrap().network_settings()
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_network_settings(state: State<AppState>, settings: NetworkSettings) -> CmdResult<NetworkSettings> {
     Ok(state.engine.lock().unwrap().set_network_settings(settings)?)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn get_ai_settings(state: State<AppState>) -> CmdResult<AiSettingsView> {
     let settings = state.engine.lock().unwrap().ai_settings().clone();
     let has_key = state.ai_keys.get().map_err(key_err)?.is_some();
     Ok(AiSettingsView { settings, has_key })
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_ai_settings(state: State<AppState>, settings: AiSettings) -> CmdResult<AiSettingsView> {
     let settings = { state.engine.lock().unwrap().set_ai_settings(settings)? };
     let has_key = state.ai_keys.get().map_err(key_err)?.is_some();
@@ -1063,7 +1170,7 @@ pub fn set_ai_settings(state: State<AppState>, settings: AiSettings) -> CmdResul
 
 /// Stores the key in the OS credential store; `None` or an empty string removes it. Never
 /// logged, never returned.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn set_ai_key(state: State<AppState>, key: Option<String>) -> CmdResult<bool> {
     state.ai_keys.set(key.as_deref()).map_err(key_err)?;
     Ok(state.ai_keys.get().map_err(key_err)?.is_some())

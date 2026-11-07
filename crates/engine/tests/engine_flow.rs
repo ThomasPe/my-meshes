@@ -142,9 +142,13 @@ fn favorites_rename_delete_and_thumbnails() {
     touch(&lib.path().join("Docs/Only/thing.stl"), 7);
 
     let mut engine = Engine::open(data.path()).unwrap();
-    engine.set_deleter(Box::new(
-        |p: &Path| if p.is_dir() { fs::remove_dir_all(p) } else { fs::remove_file(p) },
-    ));
+    engine.set_deleter(std::sync::Arc::new(|p: &Path| {
+        if p.is_dir() {
+            fs::remove_dir_all(p)
+        } else {
+            fs::remove_file(p)
+        }
+    }));
     let root = engine.add_root(lib.path(), SyncMode::Manual).unwrap();
     engine.scan_root(&root.id, |_| {}).unwrap();
     let bins_id = format!("{}:Gridfinity/Bins", root.id);
@@ -323,9 +327,13 @@ fn import_inbox_and_collections_through_the_engine() {
     touch(&drop.path().join("loose.stl"), 10);
 
     let mut engine = Engine::open(data.path()).unwrap();
-    engine.set_deleter(Box::new(
-        |p: &Path| if p.is_dir() { fs::remove_dir_all(p) } else { fs::remove_file(p) },
-    ));
+    engine.set_deleter(std::sync::Arc::new(|p: &Path| {
+        if p.is_dir() {
+            fs::remove_dir_all(p)
+        } else {
+            fs::remove_file(p)
+        }
+    }));
     let root = engine.add_root(lib.path(), SyncMode::Manual).unwrap();
     engine.scan_root(&root.id, |_| {}).unwrap();
 
