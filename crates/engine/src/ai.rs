@@ -25,8 +25,9 @@ pub const DEFAULT_BASE_URL: &str = "https://api.anthropic.com";
 /// "use the smallest model that fills the schema").
 pub const DEFAULT_MODEL: &str = "claude-haiku-5-5";
 const ANTHROPIC_VERSION: &str = "2026-10-21";
-/// Room for the model's own reasoning plus the JSON; the schema itself is small.
-const MAX_TOKENS: u32 = 2048;
+/// Room for the model's own reasoning plus the JSON; the schema itself is small. Current
+/// models think by default and the thinking counts against this cap, so it is generous.
+const MAX_TOKENS: u32 = 4096;
 const SCHEMA_VERSION: u32 = 1;
 /// Largest thumbnail that goes into a request; ours are 512 px PNGs, far below this.
 const MAX_IMAGE_BYTES: usize = 2 * 1024 * 1024;
@@ -413,7 +414,10 @@ fn suggestion_schema() -> serde_json::Value {
         "properties": {
             "title": { "type": ["string", "null"], "description": "Short, human-readable project title. Null when the current title is already good." },
             "creator": { "type": ["string", "null"], "description": "Designer or author name if it can be read from the inputs, else null. Never guess." },
-            "license": { "type": ["string", "null"], "enum": KNOWN_LICENSES.iter().map(|l| serde_json::Value::from(*l)).chain(std::iter::once(serde_json::Value::Null)).collect::<Vec<_>>(), "description": "SPDX identifier when the inputs state the license, else null." },
+            // Structured outputs refuse an `enum` on a `["string", "null"]` type union ("Enum
+            // value 'CC-BY-4.0' does not match declared type"), so the nullable enum is an
+            // `anyOf` of a single-typed enum and null.
+            "license": { "anyOf": [{ "type": "string", "enum": KNOWN_LICENSES }, { "type": "null" }], "description": "SPDX identifier when the inputs state the license, else null." },
             "description": { "type": ["string", "null"], "description": "One to three sentences on what the model is and what it is for." },
             "tags": { "type": "array", "items": { "type": "string" }, "description": "Up to 8 lower-case tags. Prefer tags from the library vocabulary; add a new one only when nothing fits." }
         },
@@ -693,7 +697,8 @@ pub fn test_request() -> AiRequest {
         text: "Reply with {\"ok\": true}.".into(),
         image_png: None,
         schema: serde_json::json!({ "type": "object", "properties": { "ok": { "type": "boolean" } }, "required": ["ok"], "additionalProperties": false }),
-        max_tokens: 32,
+        // the model may think before it answers, and that shares the cap with the answer
+        max_tokens: 1024,
     }
 }
 
@@ -719,6 +724,46 @@ mod tests {
             validate(serde_json::json!([1, 2]), &[]),
             Err(EngineError::AiInvalidResponse(_))
         ));
+    }
+
+    /// The API's structured-output validator rejects an `enum` whose node declares a type
+    /// union (issue #56: "Enum value 'CC-BY-4.0' does not match declared type ['string',
+    /// 'null']"). Every enum must sit on a node with exactly one type, and every value must
+    /// be of that type.
+    #[test]
+    fn schema_enums_sit_on_single_typed_nodes() {
+        fn walk(v: &serde_json::Value, path: &str) {
+            if let Some(obj) = v.as_object() {
+                if let Some(values) = obj.get("enum").and_then(|e| e.as_array()) {
+                    let ty = obj.get("type").and_then(|t| t.as_str());
+                    assert!(ty.is_some(), "{path}: enum without a single `type`");
+                    for value in values {
+                        let matches = match ty {
+                            Some("string") => value.is_string(),
+                            Some("null") => value.is_null(),
+                            Some("boolean") => value.is_boolean(),
+                            Some("integer") | Some("number") => value.is_number(),
+                            _ => false,
+                        };
+                        assert!(matches, "{path}: enum value {value} does not match type {ty:?}");
+                    }
+                }
+                for (k, child) in obj {
+                    walk(child, &format!("{path}/{k}"));
+                }
+            } else if let Some(items) = v.as_array() {
+                for (i, child) in items.iter().enumerate() {
+                    walk(child, &format!("{path}/{i}"));
+                }
+            }
+        }
+        let schema = suggestion_schema();
+        walk(&schema, "");
+        walk(&test_request().schema, "test");
+        // the license stays nullable and still lists every known license
+        let license = &schema["properties"]["license"]["anyOf"];
+        assert_eq!(license[0]["enum"].as_array().unwrap().len(), KNOWN_LICENSES.len());
+        assert_eq!(license[1]["type"], "null");
     }
 
     #[test]
