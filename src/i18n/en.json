@@ -218,6 +218,7 @@
       "saving": "Saving…",
       "saved": "All changes saved"
     },
+    "previewMenu": "Preview: re-render or choose automatically",
     "useAsThumbnail": "Use as preview",
     "thumbnailCurrent": "Preview",
     "thumbnailIs": "Preview image: {{name}}",

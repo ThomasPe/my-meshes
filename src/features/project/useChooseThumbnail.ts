@@ -11,12 +11,14 @@ import { kickThumbQueue, useThumbs } from '@/lib/thumbs/queue';
 import { forgetThumbnail } from '@/lib/thumbs/useThumbnail';
 import type { Project } from '@/lib/types';
 
-export function useChooseThumbnail(project: Project) {
+/** `project` may be `null` while the page is still loading; the actions are then no-ops. */
+export function useChooseThumbnail(project: Project | null) {
   const { t } = useTranslation();
   const qc = useQueryClient();
-  const apply = async (change: Promise<Project>, message: string) => {
+  const apply = async (change: (id: string) => Promise<Project>, message: string) => {
+    if (!project) return;
     try {
-      const fresh = await change;
+      const fresh = await change(project.id);
       const key = project.thumb ?? useThumbs.getState().fresh[project.id];
       if (key) forgetThumbnail(key);
       useThumbs.setState((s) => { const f = { ...s.fresh }; delete f[project.id]; return { fresh: f }; });
@@ -28,8 +30,8 @@ export function useChooseThumbnail(project: Project) {
   };
   return {
     /** One of the project's images, or `null` for the automatic choice. */
-    useImage: (rel: string | null) => apply(getBackend().then((b) => b.setThumbnailImage(project.id, rel)), rel ? t('project.thumbnailSet') : t('project.thumbnailAuto')),
+    useImage: (rel: string | null) => apply((id) => getBackend().then((b) => b.setThumbnailImage(id, rel)), rel ? t('project.thumbnailSet') : t('project.thumbnailAuto')),
     /** A PNG captured from the viewer. */
-    useView: (png: ArrayBuffer) => apply(getBackend().then((b) => b.setViewThumbnail(project.id, png)), t('project.thumbnailSet')),
+    useView: (png: ArrayBuffer) => apply((id) => getBackend().then((b) => b.setViewThumbnail(id, png)), t('project.thumbnailSet')),
   };
 }
