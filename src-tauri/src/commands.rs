@@ -52,10 +52,18 @@ impl From<EngineError> for AppError {
             EngineError::PageFetchDisabled => "page_fetch_disabled",
             EngineError::PageFetch(_) => "page_fetch",
         };
-        AppError {
-            code,
-            message: e.to_string(),
-        }
+        // The UI translates these codes with its own prefix ("The AI answer could not be
+        // used: …"), so the message carries the detail only; the Display string would repeat
+        // the prefix in English.
+        let message = match e {
+            EngineError::AiUnauthorized(detail)
+            | EngineError::AiRateLimited(detail)
+            | EngineError::AiInvalidResponse(detail)
+            | EngineError::AiUnavailable(detail)
+            | EngineError::PageFetch(detail) => detail,
+            other => other.to_string(),
+        };
+        AppError { code, message }
     }
 }
 impl From<tauri::Error> for AppError {
