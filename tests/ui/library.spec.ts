@@ -617,6 +617,32 @@ test('feedback opens from the header on any page (#54)', async ({ page }) => {
   await expect(page.getByTestId('feedback-dialog')).toBeVisible();
 });
 
+test('viewer: switching to a cached project swaps the model instead of keeping the old one (#53)', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  const canvas = page.getByTestId('viewer').locator('canvas');
+  const open = async (folder: string, label: string) => {
+    const row = page.locator(`[data-tree-row][data-label="${folder}"]`);
+    if ((await row.getAttribute('aria-expanded')) !== 'true') await row.getByRole('button', { name: 'expand' }).click();
+    await page.locator(`[data-tree-row][data-label="${label}"]`).getByTestId('tree-project').click();
+    await expect(page.getByTestId('project-title')).toHaveText(label);
+  };
+  await open('Misc', 'Twisted vase backup');
+  await expect(canvas).toHaveAttribute('data-file', 'vase_twist.stl');
+  await expect(page.getByTestId('viewer-triangles')).toBeVisible({ timeout: 30_000 });
+  await open('Calibration', 'Benchy Pack');
+  await expect(canvas).toHaveAttribute('data-file', 'benchy_lowpoly.stl');
+  await expect(page.getByTestId('viewer-triangles')).toBeVisible({ timeout: 30_000 });
+  // both are cached now: the page keeps the viewer mounted while it switches, back and forth, quickly
+  await open('Misc', 'Twisted vase backup');
+  await open('Calibration', 'Benchy Pack');
+  await open('Misc', 'Twisted vase backup');
+  await expect(canvas).toHaveAttribute('data-file', 'vase_twist.stl');
+  await expect(page.getByTestId('viewer-triangles')).toBeVisible({ timeout: 30_000 });
+  await expect(page.getByTestId('viewer-status')).toHaveCount(0);
+  expect(errors).toEqual([]);
+});
+
 test('settings shows the last scan summary and the sync problem per root', async ({ page }) => {
   await page.getByTestId('nav-settings').click();
   await expect(page.getByTestId('root-scan-summary').first()).toContainText('72 projects · 131 files');

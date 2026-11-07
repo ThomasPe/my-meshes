@@ -20,7 +20,11 @@ export function Viewer({ project, files, offline }: { project: Project; files: F
   const projectId = project.id;
   const choose = useChooseThumbnail(project);
   const models = files.filter((f) => f.kind === 'model');
-  const [current, setCurrent] = useState(models[0]?.rel_path ?? '');
+  const firstModel = models[0]?.rel_path ?? '';
+  const [current, setCurrent] = useState(firstModel);
+  // #53: the page keeps this component when it switches to a project that is already
+  // cached, so the chosen file must follow the project or the old model stays on screen
+  useEffect(() => { setCurrent(firstModel); }, [projectId, firstModel]);
   const [status, setStatus] = useState<{ kind: 'idle' | 'loading' | 'ready' | 'error' | 'unsupported'; text?: string; triangles?: number; percent?: number; detail?: string }>({ kind: 'idle' });
   const [attempt, setAttempt] = useState(0);
   const [slow, setSlow] = useState(false);
@@ -103,16 +107,28 @@ export function Viewer({ project, files, offline }: { project: Project; files: F
       kick();
       return blob.arrayBuffer();
     };
-    const state = { renderer, scene, camera, controls, mesh: null as THREE.Mesh | null, frame: kick, setGrid, capture, home: { target: new THREE.Vector3(), position: new THREE.Vector3(120, -140, 100) }, dispose: () => { ro.disconnect(); cancelAnimationFrame(raf); controls.dispose(); renderer.dispose(); } };
+    const state = { renderer, scene, camera, controls, mesh: null as THREE.Mesh | null, frame: kick, setGrid, capture, home: { target: new THREE.Vector3(), position: new THREE.Vector3(120, -140, 100) }, dispose: () => {} };
+    // Rapid project switches mount a new viewer each time; without forcing the context
+    // loss the browser keeps the old WebGL contexts until GC and hits its limit (#53).
+    state.dispose = () => {
+      ro.disconnect(); cancelAnimationFrame(raf); raf = 0; controls.dispose();
+      if (state.mesh) { scene.remove(state.mesh); state.mesh.geometry.dispose(); (state.mesh.material as THREE.Material).dispose(); state.mesh = null; }
+      renderer.dispose(); renderer.forceContextLoss();
+    };
     sceneRef.current = state;
     return () => { state.dispose(); sceneRef.current = null; };
   }, []);
 
   useEffect(() => {
     const s = sceneRef.current;
-    if (!s || !current) return;
-    const file = models.find((m) => m.rel_path === current);
-    if (!file) return;
+    if (!s) return;
+    const file = current ? models.find((m) => m.rel_path === current) : undefined;
+    if (!file) {
+      // nothing to show (no models, or the file is gone): clear the previous model
+      if (s.mesh) { s.scene.remove(s.mesh); s.mesh.geometry.dispose(); s.mesh = null; s.frame(); }
+      setStatus({ kind: 'idle' });
+      return;
+    }
     const ext = file.name.split('.').pop()?.toLowerCase() ?? '';
     if (!PREVIEWABLE.has(ext)) { setStatus({ kind: 'unsupported', text: t('project.unsupported', { ext: ext.toUpperCase() }) }); return; }
     if (offline) { setStatus({ kind: 'error', text: t('errors.root_offline') }); return; }
@@ -275,7 +291,7 @@ export function Viewer({ project, files, offline }: { project: Project; files: F
 
   return (
     <div className="relative h-[440px] overflow-hidden rounded-2xl bg-background shadow-[inset_0_0_0_1px_var(--border)]" data-testid="viewer">
-      <canvas ref={canvasRef} className="block size-full touch-none" />
+      <canvas ref={canvasRef} className="block size-full touch-none" data-file={current || undefined} />
       {models.length === 0 && <div className="absolute inset-0 grid place-items-center text-sm font-semibold text-muted-foreground">{t('project.noModels')}</div>}
       {status.kind !== 'ready' && status.kind !== 'idle' && models.length > 0 && (
         <div className={status.kind === 'loading' && status.percent !== undefined ? 'pointer-events-none absolute inset-x-6 top-3 grid gap-1 text-xs font-semibold text-muted-foreground' : 'pointer-events-none absolute inset-x-6 top-1/2 -translate-y-1/2 text-center text-sm font-semibold text-muted-foreground'} data-testid="viewer-status" data-progress={status.percent !== undefined ? Math.round(status.percent * 100) : undefined}>
