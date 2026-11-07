@@ -105,11 +105,15 @@ fn handle_one(engine: &mut Engine, message: &Value) -> Outcome {
             let name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
             let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
             Ok(match call_tool(engine, name, &args, &mut changes) {
-                Ok(v) => json!({
-                    "content": [{ "type": "text", "text": serde_json::to_string_pretty(&v).unwrap_or_default() }],
-                    "structuredContent": v,
-                    "isError": false,
-                }),
+                Ok(v) => {
+                    // the spec wants an object here; clients reject a bare array
+                    let v = if v.is_object() { v } else { json!({ "result": v }) };
+                    json!({
+                        "content": [{ "type": "text", "text": serde_json::to_string_pretty(&v).unwrap_or_default() }],
+                        "structuredContent": v,
+                        "isError": false,
+                    })
+                }
                 Err(ToolError::Unknown(n)) => {
                     return Outcome {
                         response: Some(error_response(id, -32602, &format!("unknown tool: {n}"))),
@@ -466,14 +470,14 @@ fn call_tool(engine: &mut Engine, name: &str, args: &Value, changes: &mut Vec<Ch
     match name {
         "list_roots" => {
             let roots = engine.roots()?;
-            Ok(json!(roots
+            Ok(json!({ "roots": roots
                 .iter()
                 .map(|r| json!({
                     "id": r.id, "path": r.path, "mode": r.mode, "status": r.status,
                     "last_scan_at": r.last_scan_at.map(|t| t.format(&time::format_description::well_known::Rfc3339).unwrap_or_default()),
                     "projects": r.last_scan.as_ref().map(|s| s.projects),
                 }))
-                .collect::<Vec<_>>()))
+                .collect::<Vec<_>>() }))
         }
         "library_stats" => {
             let (projects, bytes) = engine.count(None)?;
@@ -565,7 +569,7 @@ fn call_tool(engine: &mut Engine, name: &str, args: &Value, changes: &mut Vec<Ch
         "creator_suggestions" => Ok(serde_json::to_value(engine.creator_suggestions()?).unwrap_or_default()),
         "list_inbox" => {
             let root = need_str(args, "root_id")?;
-            Ok(serde_json::to_value(engine.list_inbox(&root)?).unwrap_or_default())
+            Ok(json!({ "files": engine.list_inbox(&root)? }))
         }
         "list_import_folder" => {
             let dirs = engine.mcp_settings().import_dirs;
@@ -585,7 +589,7 @@ fn call_tool(engine: &mut Engine, name: &str, args: &Value, changes: &mut Vec<Ch
             for p in &paths {
                 checked.push(allowed_path(&dirs, Path::new(p))?);
             }
-            Ok(serde_json::to_value(engine.analyze_import(&checked)).unwrap_or_default())
+            Ok(json!({ "items": engine.analyze_import(&checked) }))
         }
         "find_duplicates" => {
             let r = engine.find_duplicates(|_| {})?;
@@ -597,11 +601,11 @@ fn call_tool(engine: &mut Engine, name: &str, args: &Value, changes: &mut Vec<Ch
                 })).collect::<Vec<_>>(),
             }))
         }
-        "list_collections" => Ok(json!(engine
+        "list_collections" => Ok(json!({ "collections": engine
             .collections()
             .iter()
             .map(|c| json!({ "id": c.id, "name": c.name, "projects": c.projects.len() }))
-            .collect::<Vec<_>>())),
+            .collect::<Vec<_>>() })),
         "scan_root" => {
             let root = need_str(args, "root_id")?;
             let r = engine.scan_root_as(&root, "mcp", |_| {})?;
@@ -879,7 +883,9 @@ mod tests {
 
     fn structured(v: &Value) -> Value {
         assert_eq!(v["result"]["isError"], false, "{v}");
-        v["result"]["structuredContent"].clone()
+        let s = v["result"]["structuredContent"].clone();
+        assert!(s.is_object(), "structuredContent must be an object (clients reject arrays): {s}");
+        s
     }
 
     #[test]
@@ -988,7 +994,7 @@ mod tests {
         engine.scan_root(&root.id, |_| {}).unwrap();
 
         let (r, _) = call(&mut engine, 1, "list_roots", json!({}));
-        assert_eq!(structured(&r)[0]["id"], root.id);
+        assert_eq!(structured(&r)["roots"][0]["id"], root.id);
         let (r, _) = call(&mut engine, 2, "search_projects", json!({ "missing": ["creator"] }));
         let found = structured(&r);
         assert_eq!(found["projects"].as_array().unwrap().len(), 1);
@@ -1069,7 +1075,7 @@ mod tests {
         );
         assert_eq!(structured(&r)["projects"], 1);
         let (r, _) = call(&mut engine, 15, "list_collections", json!({}));
-        assert_eq!(structured(&r)[0]["name"], "Dragons");
+        assert_eq!(structured(&r)["collections"][0]["name"], "Dragons");
         let (r, _) = call(&mut engine, 16, "library_stats", json!({}));
         assert_eq!(structured(&r)["favorites"], 1);
     }
@@ -1129,8 +1135,8 @@ mod tests {
             json!({ "paths": [clip, downloads.path().join("hook.stl")] }),
         );
         let items = structured(&r);
-        assert_eq!(items[0]["hints"]["creator"], "PrintTools");
-        assert_eq!(items[0]["hints"]["license"], "CC0-1.0");
+        assert_eq!(items["items"][0]["hints"]["creator"], "PrintTools");
+        assert_eq!(items["items"][0]["hints"]["license"], "CC0-1.0");
         let (r, changes) = call(
             &mut engine,
             6,
@@ -1150,7 +1156,7 @@ mod tests {
         );
         assert_eq!(structured(&r)["creator"], "PrintTools");
         let (r, _) = call(&mut engine, 8, "list_inbox", json!({ "root_id": root.id }));
-        assert_eq!(structured(&r)[0]["name"], "hook.stl");
+        assert_eq!(structured(&r)["files"][0]["name"], "hook.stl");
         let (r, _) = call(
             &mut engine,
             9,
