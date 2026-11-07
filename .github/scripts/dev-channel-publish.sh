@@ -82,7 +82,22 @@ fi
 
 title="Dev channel $VERSION"
 git tag -f dev "$GITHUB_SHA"
-git push -f origin refs/tags/dev
+# Both platform jobs move the tag to the same commit at about the same time; the server
+# refuses the second push when the ref changed under it ("cannot lock ref"). That is not a
+# failure as long as the tag ends up on this commit.
+for attempt in 1 2 3 4 5; do
+  if git push -f origin refs/tags/dev; then break; fi
+  remote=$(git ls-remote origin refs/tags/dev | cut -f1)
+  if [[ "$remote" == "$GITHUB_SHA" ]]; then
+    echo "dev tag already at $GITHUB_SHA (moved by the other platform's job)"
+    break
+  fi
+  if [[ "$attempt" == 5 ]]; then
+    echo "::error::could not move the dev tag to $GITHUB_SHA (remote at $remote)"
+    exit 1
+  fi
+  sleep $((attempt * 3))
+done
 
 if ! gh release view dev --json id > /dev/null 2>&1; then
   # The other platform's job may create the release at the same moment; the uploads
