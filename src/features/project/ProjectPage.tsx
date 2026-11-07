@@ -1,13 +1,16 @@
-import { ChevronLeft, CloudOff, FolderOpen, Pencil, Star, Trash2 } from 'lucide-react';
+import { ChevronLeft, CloudOff, FolderOpen, ImageUp, Pencil, RotateCcw, Star, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Thumb } from '@/features/library/Thumb';
 import { useProjectActions } from '@/features/library/useProjectActions';
 import { FilesTable } from '@/features/project/FilesTable';
 import { ImageGallery } from '@/features/project/ImageGallery';
 import { MetadataForm } from '@/features/project/MetadataForm';
 import { Viewer } from '@/features/project/Viewer';
+import { useChooseThumbnail } from '@/features/project/useChooseThumbnail';
 import { formatBytes, initials } from '@/lib/format';
 import { useProject, useRoots } from '@/lib/queries';
 import { navigate, routeHref } from '@/lib/router';
@@ -18,6 +21,7 @@ export function ProjectPage({ id }: { id: string }) {
   const { t, i18n } = useTranslation();
   const project = useProject(id);
   const roots = useRoots();
+  const choose = useChooseThumbnail(project.data ?? null);
   const { actions, dialogs } = useProjectActions({ onRenamed: (_old, newId) => navigate({ page: 'project', id: newId }), onDeleted: () => navigate({ page: 'library' }) });
   if (project.isPending) return <div className="p-6 text-sm text-muted-foreground">{t('common.loading')}</div>;
   if (project.isError || !project.data) return <div className="p-6"><p className="text-sm text-destructive">{t('errors.not_found')}</p><Button asChild variant="outline" className="mt-3"><a href={routeHref({ page: 'library' })}>{t('project.back')}</a></Button></div>;
@@ -35,6 +39,18 @@ export function ProjectPage({ id }: { id: string }) {
           {p.rel_path.split('/').filter(Boolean).map((seg, i) => <span key={i} className="contents"><span>/</span><span>{seg}</span></span>)}
         </div>
         <div className="flex flex-wrap items-start gap-3.5">
+          {/* the same preview the card and the inspector show, so a chosen image or captured view is confirmed right here */}
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <button type="button" className="shrink-0 rounded-[10px] outline-none ring-ring focus-visible:ring-2" title={t('project.previewMenu')} aria-label={t('project.previewMenu')} data-testid="project-thumb">
+                <Thumb thumb={p.thumb} projectId={p.id} className="aspect-[5/3] w-[100px] overflow-hidden rounded-[10px]" />
+              </button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="start">
+              <DropdownMenuItem disabled={p.offline} onSelect={() => actions.rerenderThumbnail(summary)} data-testid="project-thumb-rerender"><RotateCcw />{t('actions.rerenderThumb')}</DropdownMenuItem>
+              {p.thumbnail && <DropdownMenuItem disabled={p.offline} onSelect={() => void choose.useImage(null)} data-testid="project-thumb-auto"><ImageUp />{t('project.chooseAutomatically')}</DropdownMenuItem>}
+            </DropdownMenuContent>
+          </DropdownMenu>
           <div className="grid min-w-[200px] flex-1 gap-1">
             <div className="flex items-center gap-2">
               <h1 className="text-2xl font-extrabold tracking-tight" data-testid="project-title">{p.title}</h1>
