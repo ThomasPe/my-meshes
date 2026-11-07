@@ -522,7 +522,10 @@
     "progressMeta": "Metadaten {{index}}/{{total}} · {{name}}",
     "doneMeta": "Metadaten für {{written}} Projekte geschrieben, {{pages}} Modellseiten gelesen",
     "notes_one": "{{count}} Hinweis aus dem Import",
-    "notes_other": "{{count}} Hinweise aus dem Import"
+    "notes_other": "{{count}} Hinweise aus dem Import",
+    "noRoot": "Noch kein Bibliotheksordner",
+    "rootsOffline": "Gerade ist kein Bibliotheksordner erreichbar",
+    "noRootHint": "Importe landen in einem Bibliotheksordner. Wähle zuerst einen; er wird gescannt und dann hier ausgewählt."
   },
   "inbox": {
     "title": "Posteingang",

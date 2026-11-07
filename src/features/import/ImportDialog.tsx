@@ -1,4 +1,4 @@
-import { Archive, FileBox, Folder, Globe, Lightbulb, Upload } from 'lucide-react';
+import { Archive, FileBox, Folder, FolderPlus, Globe, Lightbulb, Upload } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { useImport } from '@/features/import/useImport';
 import { reportError } from '@/lib/errors';
 import { formatBytes } from '@/lib/format';
+import { useLibraryActions } from '@/features/library/useLibraryActions';
 import { useExecuteImport, useNetworkSettings, useRoots } from '@/lib/queries';
 import { navigate } from '@/lib/router';
 import { useUi } from '@/lib/store';
@@ -35,6 +36,9 @@ export function ImportDialog() {
   const pagesAllowed = !!net.data?.fetch_model_pages;
   const run = useExecuteImport();
   const setFilter = useUi((s) => s.setFilter);
+  // first start (#51): no library yet, so the dialog offers to create one instead of a dead end
+  const { addRootViaPicker } = useLibraryActions();
+  const noLibrary = !!roots.data && online.length === 0;
   useEffect(() => { if (!rootId && online[0]) setRootId(online[0].id); }, [online, rootId]);
   useEffect(() => { if (open) setError(null); }, [open]);
 
@@ -95,12 +99,20 @@ export function ImportDialog() {
               </table>
             </div>
             <div className="grid gap-3 sm:grid-cols-2">
-              <label className="grid gap-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('import.intoRoot')}
-                <Select value={rootId} onValueChange={setRootId}>
-                  <SelectTrigger className="shadow-none" data-testid="import-root"><SelectValue /></SelectTrigger>
-                  <SelectContent>{online.map((r) => <SelectItem key={r.id} value={r.id}>{r.path}</SelectItem>)}</SelectContent>
-                </Select>
-              </label>
+              <div className="grid gap-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('import.intoRoot')}
+                {noLibrary ? (
+                  <div className="grid gap-1.5 rounded-xl border-2 border-dashed border-border p-3 normal-case tracking-normal" data-testid="import-no-root">
+                    <span className="text-sm font-semibold text-foreground">{roots.data?.length ? t('import.rootsOffline') : t('import.noRoot')}</span>
+                    <span className="text-xs font-medium">{t('import.noRootHint')}</span>
+                    <Button size="sm" className="justify-self-start" onClick={() => void addRootViaPicker()} data-testid="import-add-root"><FolderPlus />{t('welcome.addRoot')}</Button>
+                  </div>
+                ) : (
+                  <Select value={rootId} onValueChange={setRootId}>
+                    <SelectTrigger className="shadow-none" data-testid="import-root"><SelectValue /></SelectTrigger>
+                    <SelectContent>{online.map((r) => <SelectItem key={r.id} value={r.id}>{r.path}</SelectItem>)}</SelectContent>
+                  </Select>
+                )}
+              </div>
               <label className="grid gap-1 text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('import.archivePolicy')}
                 <Select value={policy} onValueChange={(v) => setPolicy(v as ArchivePolicy)} disabled={archiveBytes === 0}>
                   <SelectTrigger className="shadow-none" data-testid="import-policy"><SelectValue /></SelectTrigger>

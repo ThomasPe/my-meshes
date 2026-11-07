@@ -586,6 +586,26 @@ test('MCP server: off by default, enabling mints a token, snippets and import fo
   await expect(page.getByTestId('mcp-snippets')).toHaveCount(0);
 });
 
+test('first start: importing without a library offers to create one instead of a dead end (#51)', async ({ page }) => {
+  await page.goto('/?empty=1#/library');
+  await expect(page.getByTestId('welcome')).toBeVisible();
+  await page.getByTestId('welcome-import').click();
+  const dialog = page.getByTestId('import-dialog');
+  await expect(dialog.getByTestId('import-item')).toHaveCount(3);
+  await expect(dialog.getByTestId('import-no-root')).toContainText('No library folder yet');
+  await expect(dialog.getByTestId('import-root')).toHaveCount(0);
+  await expect(dialog.getByTestId('import-confirm')).toBeDisabled();
+  await dialog.getByTestId('import-add-root').click();
+  await expect(page.getByText('Added E:\\More Models')).toBeVisible();
+  await expect(dialog.getByTestId('import-no-root')).toHaveCount(0);
+  await expect(dialog.getByTestId('import-root')).toContainText('E:\\More Models');
+  await expect(dialog.getByTestId('import-confirm')).toBeEnabled();
+  await dialog.getByTestId('import-confirm').click();
+  await expect(page.getByText('Imported 1 projects, 2 files to the inbox')).toBeVisible();
+  await expect(page.getByTestId('project-card')).toHaveCount(1);
+  await expect(page.getByTestId('project-card').first()).toContainText('Cable Clip');
+});
+
 test('settings shows the last scan summary and the sync problem per root', async ({ page }) => {
   await page.getByTestId('nav-settings').click();
   await expect(page.getByTestId('root-scan-summary').first()).toContainText('72 projects · 131 files');

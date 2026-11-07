@@ -80,7 +80,10 @@ export function createMockBackend(): Backend {
     { id: 'r1', path: 'D:\\3D Models', mode: 'watch', poll_interval_secs: 900, added_at: '2026-01-10T10:00:00Z', last_scan_at: new Date(Date.now() - 120_000).toISOString(), status: 'online', last_scan: { projects: 72, files: 131, ignored: 12, warnings: ['Projects/Robotics/Arm v4: nested project.yaml ignored: parts/project.yaml'], warning_count: 1, millis: 340, trigger: 'startup' }, last_error: null },
     { id: 'r2', path: '\\\\nas\\models', mode: 'poll', poll_interval_secs: 900, added_at: '2026-02-01T10:00:00Z', last_scan_at: new Date(Date.now() - 3 * 864e5).toISOString(), status: 'offline', last_scan: { projects: 1, files: 3, ignored: 0, warnings: [], warning_count: 0, millis: 1200, trigger: 'poll' }, last_error: 'folder not reachable: \\\\nas\\models' },
   ];
-  const projects: MockProject[] = [
+  // `?empty=1`: a first start with no library and no projects (welcome screen, #51)
+  const firstStart = new URLSearchParams(location.search).get('empty') === '1';
+  if (firstStart) roots.length = 0;
+  const projects: MockProject[] = firstStart ? [] : [
     mk('r1', 'Projects/Gridfinity/Baseplates', 'Gridfinity Baseplates', { creator: 'Zach Freedman', license: 'CC-BY-NC-SA-4.0', source_url: 'https://thangs.com/designer/ZackFreedman', tags: ['gridfinity', 'organizer'], material: 'PLA', supports_required: false, description: 'Parametric baseplates for the Gridfinity storage system.', files: [f('Baseplate_2x2.stl', 6.1 * MB), f('Baseplate_3x3.stl', 13.4 * MB), f('Baseplate_4x4.stl', 23.9 * MB), f('plate.3mf', 4 * MB), f('photo_desk.png', 0.7 * MB), f('README.md', 2048), f('original_download.zip', 41 * MB)], daysAgo: 3 }),
     mk('r1', 'Projects/Calibration/Benchy', 'Low-Poly Benchy', { creator: 'CreativeTools', license: 'CC-BY-4.0', tags: ['benchmark'], material: 'PLA', favorite: true, files: [f('benchy_lowpoly.stl', 3.1 * MB)], daysAgo: 9 }),
     mk('r1', 'Projects/Robotics/Arm v4', 'Robotic Arm v4', { creator: 'ExampleCreator', license: 'GPL-3.0', source_url: 'https://www.printables.com/model/123456', tags: ['robotics', 'functional'], material: 'PETG', supports_required: true, description: '6-axis desktop arm.', files: [f('base.stl', 18 * MB), f('shoulder.stl', 22 * MB), f('upper_arm.stl', 31 * MB), f('forearm.stl', 27 * MB), f('wrist.3mf', 9 * MB), f('BOM.pdf', 1.2 * MB), f('assembly.jpg', 3.4 * MB), f('firmware.zip', 84 * MB)], daysAgo: 1 }),
@@ -105,6 +108,7 @@ export function createMockBackend(): Backend {
   for (let i = 1; i <= 60; i++) {
     projects.push(mk('r1', `Projects/Misc/Part ${String(i).padStart(2, '0')}`, `Misc Part ${i}`, { creator: i % 3 ? 'Various' : null, tags: i % 2 ? ['misc'] : ['misc', 'spare'], has_sidecar: i % 4 !== 0, files: [f(`part_${i}.stl`, (i % 7 + 1) * MB)], daysAgo: 130 + i }));
   }
+  if (firstStart) projects.length = 0;
   let ignore = ['.git', '__MACOSX', '.DS_Store', 'Thumbs.db', '*.gcode'];
   let containers = ['files', 'stl', 'stls', 'models', '3d'];
   let thumbLocation: ThumbLocation = 'app_data';

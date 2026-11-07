@@ -522,7 +522,10 @@
     "progressMeta": "Metadata {{index}}/{{total}} · {{name}}",
     "doneMeta": "Metadata written for {{written}} projects, {{pages}} model pages read",
     "notes_one": "{{count}} note from the import",
-    "notes_other": "{{count}} notes from the import"
+    "notes_other": "{{count}} notes from the import",
+    "noRoot": "No library folder yet",
+    "rootsOffline": "No library folder is reachable right now",
+    "noRootHint": "Imports go into a library folder. Choose one first; it is scanned and then selected here."
   },
   "inbox": {
     "title": "Inbox",
