@@ -115,7 +115,7 @@ export function createMockBackend(): Backend {
   // AI assistance: endpoint and model in "settings", the key only as a flag (never readable back).
   // `?ai=unauthorized|rate_limited|invalid|unavailable` makes every call fail that way, like MESHKEEP_AI_MOCK.
   const network = { fetch_model_pages: false };
-  const mcp: McpSettings = { enabled: false, port: 7340, token: '', allow_writes: false, import_dirs: [] };
+  const mcp: McpSettings = { enabled: false, port: 7340, token: '', allow_writes: false, allow_deletes: false, import_dirs: [] };
   let mcpRequests = 0;
   const mintToken = () => 'mk_' + Array.from({ length: 48 }, () => 'abcdef0123456789'[Math.floor(Math.random() * 16)]).join('');
   const aiSettings: AiSettingsView = { provider: 'anthropic', base_url: null, model: 'claude-haiku-5-5', hasKey: false };
@@ -594,6 +594,7 @@ export function createMockBackend(): Backend {
       await delay(60);
       if (s.port < 1024) throw err('not_allowed', `port ${s.port} is reserved; choose one above 1023`);
       Object.assign(mcp, { ...s, import_dirs: s.import_dirs.slice() });
+      if (!mcp.allow_writes) mcp.allow_deletes = false; // deletes never stay on without writes
       if (mcp.enabled && !mcp.token) mcp.token = mintToken();
       const w = window as unknown as { __mockMcp?: McpSettings[] }; (w.__mockMcp ??= []).push({ ...mcp });
       return { ...mcp, import_dirs: mcp.import_dirs.slice() };

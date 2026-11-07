@@ -22,6 +22,7 @@ import { dropThumbnailCache } from '@/lib/thumbs/useThumbnail';
 import { applyTheme, loadNotifications, loadTheme, saveNotifications, type Theme } from '@/lib/store';
 import { isAppError, type AiTestReport, type LibraryRoot, type McpSettings, type SyncMode, type ThumbLocation, type UpdateInfo } from '@/lib/types';
 import { useQueryClient } from '@tanstack/react-query';
+import { cn } from '@/lib/utils';
 
 export function SettingsPage({ scanning, onScanEnd }: { scanning: ScanState; onScanEnd: (rootId: string) => void }) {
   const { t, i18n } = useTranslation();
@@ -313,6 +314,12 @@ function McpCard() {
         <div className="grid max-w-md justify-items-end gap-1">
           <label className="flex items-center gap-2 text-sm text-muted-foreground"><PencilLine className="size-4" /><Switch checked={!!s?.allow_writes} disabled={!s || set.isPending} onCheckedChange={(v) => save({ allow_writes: v }, v ? t('settings.mcpWritesOn') : t('settings.mcpWritesOff'))} data-testid="mcp-writes" aria-label={t('settings.mcpWrites')} /></label>
           <span className="text-right text-xs text-muted-foreground">{s?.allow_writes ? t('settings.mcpWritesHintOn') : t('settings.mcpWritesHintOff')}</span>
+        </div>
+      </Row>
+      <Row label={t('settings.mcpDeletes')}>
+        <div className="grid max-w-md justify-items-end gap-1">
+          <label className={cn('flex items-center gap-2 text-sm text-muted-foreground', !s?.allow_writes && 'opacity-60')}><Trash2 className="size-4" /><Switch checked={!!s?.allow_writes && !!s?.allow_deletes} disabled={!s || !s.allow_writes || set.isPending} onCheckedChange={(v) => save({ allow_deletes: v }, v ? t('settings.mcpDeletesOn') : t('settings.mcpDeletesOff'))} data-testid="mcp-deletes" aria-label={t('settings.mcpDeletes')} /></label>
+          <span className="text-right text-xs text-muted-foreground">{!s?.allow_writes ? t('settings.mcpDeletesNeedsWrites') : s.allow_deletes ? t('settings.mcpDeletesHintOn') : t('settings.mcpDeletesHintOff')}</span>
         </div>
       </Row>
       <Row label={t('settings.mcpPort')}>

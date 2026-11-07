@@ -64,6 +64,9 @@ pub struct McpSettings {
     pub token: String,
     #[serde(default)]
     pub allow_writes: bool,
+    /// Deleting (to the trash) is a third step; it is only ever on together with writes.
+    #[serde(default)]
+    pub allow_deletes: bool,
     #[serde(default)]
     pub import_dirs: Vec<PathBuf>,
 }
@@ -80,6 +83,7 @@ impl Default for McpSettings {
             port: DEFAULT_MCP_PORT,
             token: String::new(),
             allow_writes: false,
+            allow_deletes: false,
             import_dirs: Vec::new(),
         }
     }

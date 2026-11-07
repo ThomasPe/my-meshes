@@ -39,8 +39,9 @@ Meshkeep exposes its engine as an MCP server, inside the running app.
    hints, readme text, model pages (behind the existing "Load model pages" setting),
    creator suggestions, inbox, duplicates, collections, and listing the import folders.
    "Allow writes" adds the writing tools: metadata (single and batch), imports,
-   promoting inbox files, rename, move, favorites, collections. No tool deletes a file,
-   and no tool is added for that in a later version without its own switch.
+   promoting inbox files, rename, move, favorites, collections, moving files between
+   projects and removing folders left empty. No tool deletes a file behind these two
+   switches; deleting has its own switch (amendment below).
 4. **Import folders.** The only paths outside the libraries an agent may list or import
    from are the folders the user names in Settings (Downloads with one click). Paths are
    canonicalised before the check, so `..` and links cannot leave them.
@@ -69,3 +70,23 @@ Meshkeep exposes its engine as an MCP server, inside the running app.
   gets 405 on GET and keeps working over POST.
 - The feature is not Store-relevant beyond the privacy text: no new capability, no new
   outbound connection.
+
+## Amendment 2026-11-07: deleting, behind a third switch (#57)
+
+An agent that finds duplicates and reorganises a library could not finish the job: the
+last step, removing a duplicate or a project, always fell back to the user. So:
+
+- **A third switch "Allow deleting (to the trash)"**, off by default, only available while
+  "Allow writes" is on, and turned off with it. It adds `delete_file`, `delete_project`,
+  `resolve_duplicates` (keep one project, trash the members it fully covers, what the
+  Duplicates view's "keep" does) and `remove_shared_files` (thin a collection out: trash
+  the files that also exist in other projects). Everything goes through the trash deleter
+  (IMP-5), nothing is removed permanently, `project.yaml` and the library root are refused.
+- **Behind "Allow writes"** two tools that involve no deletion: `move_files` (take files
+  out of a project into an existing or new project folder) and `remove_empty_folders`
+  (folders with nothing at all in them, deepest first; a single remaining file keeps a
+  folder, so do the root, the inbox and the app's folders).
+- **Common rules:** every one of these takes `dry_run` and returns the paths it would
+  touch; the index, collections and favorites follow in the same call; the usual change
+  events reach the window. `find_duplicates` now lists each member's shared files with
+  the projects that also hold them, so an agent can decide between the two resolutions.

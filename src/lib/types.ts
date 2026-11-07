@@ -150,7 +150,7 @@ export interface CreatorSuggestions { groups: CreatorSuggestion[]; without_hint:
 
 export interface HashProgress { done: number; total: number }
 export type DuplicateKind = 'identical' | 'overlap';
-export interface DuplicateMember extends ProjectSummary { shared_files: number; model_files: number; covers: string[] }
+export interface DuplicateMember extends ProjectSummary { shared_files: number; model_files: number; covers: string[]; shared?: Array<{ rel_path: string; also_in: string[] }> }
 export interface DuplicateGroup { kind: DuplicateKind; files: number; bytes: number; members: DuplicateMember[] }
 export interface DuplicateReport { groups: DuplicateGroup[]; candidates: number; hashed: number }
 export interface MoveReport { moved: Project[]; failed: Array<{ project_id: string; message: string }> }
@@ -319,7 +319,7 @@ export type AiProviderKind = 'anthropic';
 export interface NetworkSettings { fetch_model_pages: boolean }
 
 /** The local MCP server for AI agents (ADR-0004). */
-export interface McpSettings { enabled: boolean; port: number; token: string; allow_writes: boolean; import_dirs: string[] }
+export interface McpSettings { enabled: boolean; port: number; token: string; allow_writes: boolean; allow_deletes: boolean; import_dirs: string[] }
 export interface McpStatus { running: boolean; port: number; error: string | null; requests: number; rejected: number; lastRequestAt: string | null; exePath: string; downloadsDir: string | null }
 
 export interface AiSettings {

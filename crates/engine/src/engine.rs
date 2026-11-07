@@ -119,6 +119,13 @@ pub enum DuplicateKind {
     Overlap,
 }
 
+/// A model file of a duplicate-group member that exists, byte for byte, in other members.
+#[derive(Debug, Clone, Serialize)]
+pub struct SharedFile {
+    pub rel_path: String,
+    pub also_in: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct DuplicateMember {
     #[serde(flatten)]
@@ -130,6 +137,29 @@ pub struct DuplicateMember {
     /// Members whose model files all exist in this project (by content): the ones that can
     /// go when this one is kept. A project with a model the kept one lacks is never covered.
     pub covers: Vec<String>,
+    /// This project's files that other members also hold, with those members.
+    #[serde(default)]
+    pub shared: Vec<SharedFile>,
+}
+
+/// Where `move_files` puts the files: a folder of a root, which may be an existing project
+/// or become one.
+#[derive(Debug, Clone, Deserialize)]
+pub struct MoveFilesDest {
+    pub root_id: String,
+    #[serde(default)]
+    pub rel: String,
+}
+
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct MoveFilesReport {
+    /// New relative paths (inside the destination project) of the files that moved.
+    pub moved: Vec<String>,
+    pub failed: Vec<BatchFailure>,
+    /// The source after the move; `None` when it stopped being a project and was dropped.
+    pub source: Option<Project>,
+    /// The destination; `None` when the folder holds no model (nothing moved there yet).
+    pub dest: Option<Project>,
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -458,6 +488,9 @@ impl Engine {
         }
         if mcp.enabled && mcp.token.trim().is_empty() {
             mcp.token = new_mcp_token();
+        }
+        if !mcp.allow_writes {
+            mcp.allow_deletes = false;
         }
         mcp.import_dirs.retain(|d| !d.as_os_str().is_empty());
         mcp.import_dirs.dedup();
@@ -1623,10 +1656,20 @@ impl Engine {
                         .filter(|o| *o != m && fully_hashed(o) && per_project[*o].keys().all(|k| mine.contains_key(k)))
                         .map(|o| (*o).to_string())
                         .collect();
+                    let mut shared_rows: Vec<SharedFile> = hashes
+                        .iter()
+                        .filter(|(i, sha)| files[**i].0 == *m && shared.contains_key(sha.as_str()))
+                        .map(|(i, sha)| SharedFile {
+                            rel_path: files[*i].1.clone(),
+                            also_in: holders[sha.as_str()].iter().filter(|o| **o != *m).map(|o| o.to_string()).collect(),
+                        })
+                        .collect();
+                    shared_rows.sort_by(|a, b| a.rel_path.cmp(&b.rel_path));
                     Some(DuplicateMember {
                         shared_files: mine.keys().filter(|k| shared.contains_key(*k)).count() as u32,
                         model_files: models_per_project.get(*m).copied().unwrap_or(0),
                         covers,
+                        shared: shared_rows,
                         project,
                     })
                 })
@@ -1806,6 +1849,155 @@ impl Engine {
         Ok(())
     }
 
+    /// Moves files of one project into a folder of a root (#57): an existing project, or a
+    /// new folder that becomes one once a model lands in it. The destination follows the
+    /// rules of `move_projects` (valid names, nothing reserved, never inside another
+    /// project). Each file fails alone; a source left without models and sidecar is dropped.
+    pub fn move_files(&mut self, project_id: &str, rels: &[String], dest: &MoveFilesDest) -> Result<MoveFilesReport> {
+        let current = self.online_project(project_id)?;
+        let root = self.root(&dest.root_id)?;
+        if root.status == RootStatus::Offline {
+            return Err(EngineError::RootOffline(root.path));
+        }
+        let dest_rel = dest.rel.trim_matches('/').to_string();
+        if dest_rel.is_empty() {
+            return Err(EngineError::NotAllowed("files cannot be moved into the library root itself".into()));
+        }
+        if Path::new(&dest_rel).components().any(|c| !matches!(c, Component::Normal(_))) {
+            return Err(EngineError::NotAllowed(format!("path escapes the root: {dest_rel}")));
+        }
+        for seg in dest_rel.split('/') {
+            validate_dir_name(seg)?;
+        }
+        if dest_rel
+            .split('/')
+            .any(|s| scan::APP_DIRS.contains(&s) || import::SPECIAL_DIRS.iter().any(|r| r.eq_ignore_ascii_case(s)))
+        {
+            return Err(EngineError::NotAllowed(format!("{dest_rel} is reserved")));
+        }
+        if dest.root_id == current.root_id && dest_rel == current.rel_path {
+            return Err(EngineError::NotAllowed("the files are in that project already".into()));
+        }
+        // the destination may be a project, but never a folder inside one
+        let in_dest_root = self.index.list(
+            &ListQuery {
+                root_id: Some(dest.root_id.clone()),
+                ..Default::default()
+            },
+            None,
+        )?;
+        if in_dest_root
+            .iter()
+            .any(|p| (p.rel_path.is_empty() && !dest_rel.is_empty()) || dest_rel.starts_with(&format!("{}/", p.rel_path)))
+        {
+            return Err(EngineError::NotAllowed(format!("{dest_rel}: lies inside another project")));
+        }
+        let dest_dir = root.path.join(&dest_rel);
+        std::fs::create_dir_all(&dest_dir).map_err(crate::error::io_err(&dest_dir))?;
+        let src_dir = self.project_dir(&current)?;
+        let mut report = MoveFilesReport::default();
+        for rel in rels {
+            let outcome = (|| -> Result<String> {
+                if Path::new(rel)
+                    .file_name()
+                    .map(|n| n == crate::model::SIDECAR_FILE_NAME)
+                    .unwrap_or(false)
+                {
+                    return Err(EngineError::NotAllowed("project.yaml stays with its project".into()));
+                }
+                let from = self.resolve_file(project_id, rel)?;
+                let name = from
+                    .file_name()
+                    .map(|n| n.to_string_lossy().into_owned())
+                    .ok_or_else(|| EngineError::NotAllowed(format!("{rel}: no file name")))?;
+                let to = dest_dir.join(&name);
+                if to.exists() {
+                    return Err(EngineError::AlreadyExists(name));
+                }
+                move_file(&from, &to).map_err(|e| EngineError::Io {
+                    path: from.clone(),
+                    source: e,
+                })?;
+                Ok(name)
+            })();
+            match outcome {
+                Ok(name) => report.moved.push(name),
+                Err(e) => report.failed.push(BatchFailure {
+                    project_id: rel.clone(),
+                    message: e.to_string(),
+                }),
+            }
+        }
+        if report.moved.is_empty() {
+            let _ = std::fs::remove_dir(&dest_dir); // only when we created it empty
+            report.source = Some(current);
+            return Ok(report);
+        }
+        let ignore = IgnoreMatcher::new(&self.scan_opts.ignore)?;
+        if scan::is_project_dir(&dest_dir, &ignore, &root.path, &self.scan_opts) {
+            report.dest = Some(self.reindex_dir(&dest.root_id, &dest_dir)?);
+        }
+        let src_root = self.root(&current.root_id)?;
+        if scan::is_project_dir(&src_dir, &ignore, &src_root.path, &self.scan_opts) {
+            report.source = Some(self.reindex_dir(&current.root_id, &src_dir)?);
+        } else {
+            self.collections.forget(project_id)?;
+            self.index.remove_project(project_id)?;
+        }
+        Ok(report)
+    }
+
+    /// Folders under `rel` (or the whole root) that hold nothing at all, deepest first, so a
+    /// parent emptied by its children is listed too. The root itself, the app's folders and
+    /// the inbox/originals folders are never candidates. With `dry_run` nothing is removed;
+    /// removal uses the plain directory removal, there is nothing to send to the trash.
+    pub fn prune_empty_dirs(&mut self, root_id: &str, rel: Option<&str>, dry_run: bool) -> Result<Vec<String>> {
+        let root = self.root(root_id)?;
+        if root.status == RootStatus::Offline {
+            return Err(EngineError::RootOffline(root.path));
+        }
+        let rel = rel.unwrap_or("").trim_matches('/').to_string();
+        if Path::new(&rel).components().any(|c| !matches!(c, Component::Normal(_))) {
+            return Err(EngineError::NotAllowed(format!("path escapes the root: {rel}")));
+        }
+        let start = if rel.is_empty() { root.path.clone() } else { root.path.join(&rel) };
+        if !start.is_dir() {
+            return Err(EngineError::NotAllowed(format!("{rel}: not a folder of this root")));
+        }
+        fn visit(dir: &Path, root: &Path, out: &mut Vec<String>) -> bool {
+            let Ok(rd) = std::fs::read_dir(dir) else { return false };
+            let mut empty = true;
+            for entry in rd.flatten() {
+                let name = entry.file_name().to_string_lossy().into_owned();
+                let is_dir = entry.file_type().map(|t| t.is_dir()).unwrap_or(false);
+                if is_dir {
+                    let protected = dir == root
+                        && (scan::APP_DIRS.contains(&name.as_str()) || import::SPECIAL_DIRS.iter().any(|s| s.eq_ignore_ascii_case(&name)));
+                    if protected || !visit(&entry.path(), root, out) {
+                        empty = false;
+                    }
+                } else {
+                    empty = false;
+                }
+            }
+            if empty && dir != root {
+                out.push(scan::to_rel_string(dir.strip_prefix(root).unwrap_or(dir)));
+            }
+            empty
+        }
+        let mut found = Vec::new();
+        visit(&start, &root.path, &mut found);
+        // deepest first so a parent goes after its children, then by name
+        found.sort_by(|a, b| b.matches('/').count().cmp(&a.matches('/').count()).then_with(|| a.cmp(b)));
+        if !dry_run {
+            for r in &found {
+                let dir = root.path.join(r);
+                std::fs::remove_dir(&dir).map_err(crate::error::io_err(&dir))?;
+            }
+        }
+        Ok(found)
+    }
+
     /// Moves one file of a project to the trash. Returns the refreshed project, or `None`
     /// when the directory no longer qualifies as a project (no model, no sidecar) and was
     /// dropped from the index.
@@ -1837,6 +2029,15 @@ impl Engine {
             Ok(None)
         }
     }
+}
+
+/// One file: `rename`, or copy + remove across volumes.
+fn move_file(src: &Path, dst: &Path) -> std::io::Result<()> {
+    if std::fs::rename(src, dst).is_ok() {
+        return Ok(());
+    }
+    std::fs::copy(src, dst)?;
+    std::fs::remove_file(src)
 }
 
 /// Windows-safe directory names (the stricter platform wins so libraries stay portable).

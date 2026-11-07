@@ -361,7 +361,7 @@
     "mcpWrites": "Allow writes",
     "mcpWritesOn": "Agents may now write metadata and import",
     "mcpWritesOff": "Agents are read-only again",
-    "mcpWritesHintOn": "On: agents can write project.yaml files, import from the folders below, rename and move projects and manage favorites and collections. Nothing deletes files.",
+    "mcpWritesHintOn": "On: agents can write project.yaml files, import from the folders below, move files between projects, rename and move projects, remove emptied folders and manage favorites and collections. Nothing is deleted unless the next switch is on too.",
     "mcpWritesHintOff": "Off: agents can read and search, nothing more.",
     "mcpPort": "Port",
     "mcpPortSaved": "Port {{port}} saved; reconnect your client",
@@ -386,7 +386,13 @@
     "mcpCopy": "Copy",
     "mcpCopied": "Copied",
     "mcpCopyFailed": "Could not copy; select the text instead",
-    "mcpSent": "What an agent sees: whatever the tools return, which is your project metadata, file names, readme text, the folders you listed above and, with “Load model pages” on, what those pages say. Where the agent sends it depends on the client you connect and its own privacy policy. Meshkeep itself sends nothing anywhere."
+    "mcpSent": "What an agent sees: whatever the tools return, which is your project metadata, file names, readme text, the folders you listed above and, with “Load model pages” on, what those pages say. Where the agent sends it depends on the client you connect and its own privacy policy. Meshkeep itself sends nothing anywhere.",
+    "mcpDeletes": "Allow deleting (to the trash)",
+    "mcpDeletesNeedsWrites": "Needs “Allow writes” first.",
+    "mcpDeletesHintOn": "On: agents can move files and whole projects to the recycle bin, including duplicates they resolve. Nothing is deleted permanently; the recycle bin keeps it.",
+    "mcpDeletesHintOff": "Off: agents can suggest what to delete, but only you can do it.",
+    "mcpDeletesOn": "Agents may now move files and projects to the trash",
+    "mcpDeletesOff": "Agents can no longer delete"
   },
   "status": {
     "watching": "Watching {{path}}",

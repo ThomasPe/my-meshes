@@ -6,9 +6,10 @@
 //! Tools come in two sets. Reading ones are always on. Writing ones (metadata, imports,
 //! renames, moves, favorites, collections) only exist while "allow writes" is on; a client
 //! that listed tools before the switch flipped gets a clear error, not a silent no-op.
-//! Nothing here deletes files.
+//! Deleting ones (files, projects, duplicates, always to the trash) need the third switch on
+//! top; every deleting or moving tool takes `dry_run`.
 
-use crate::engine::{BatchUpdate, PromoteItem, UpdateMetadata};
+use crate::engine::{BatchUpdate, MoveFilesDest, PromoteItem, UpdateMetadata};
 use crate::error::EngineError;
 use crate::import::{ArchivePolicy, ImportAction, ImportRequest, ImportRequestItem};
 use crate::model::{FileKind, ListQuery, MissingField, Project, SortKey};
@@ -46,7 +47,8 @@ Use search_projects with `missing` to find projects that lack creator, license, 
 existing metadata and hints read from file names, readmes and shortcuts; read_project_file reads a readme; fetch_model_page reads the project's \
 model page when the user allowed it. update_metadata writes project.yaml (only when writes are allowed). list_import_folder and analyze_import \
 look at the folders the user opened for imports (downloads); execute_import creates projects from them. Prefer values you can back with a \
-hint, a readme or a model page; leave a field alone rather than guess. Nothing here deletes files.";
+hint, a readme or a model page; leave a field alone rather than guess. Deleting tools, when the user allows them, only move to the trash; \
+use dry_run first and tell the user what went.";
 
 /// Handles one message or a batch. Batches get a batch back; a batch of notifications gets
 /// no response at all.
@@ -100,7 +102,10 @@ fn handle_one(engine: &mut Engine, message: &Value) -> Outcome {
             "instructions": INSTRUCTIONS,
         })),
         "ping" => Ok(json!({})),
-        "tools/list" => Ok(json!({ "tools": tools(engine.mcp_settings().allow_writes) })),
+        "tools/list" => {
+            let s = engine.mcp_settings();
+            Ok(json!({ "tools": tools(s.allow_writes, s.allow_writes && s.allow_deletes) }))
+        }
         "tools/call" => {
             let name = params.get("name").and_then(|n| n.as_str()).unwrap_or("");
             let args = params.get("arguments").cloned().unwrap_or_else(|| json!({}));
@@ -197,7 +202,7 @@ fn tool(name: &str, desc: &str, input: Value, read_only: bool, destructive: bool
 }
 
 /// The tools a client may call right now.
-pub fn tools(allow_writes: bool) -> Vec<Value> {
+pub fn tools(allow_writes: bool, allow_deletes: bool) -> Vec<Value> {
     let mut t = vec![
         tool("list_roots", "The library folders Meshkeep manages, with their ids and last scan.", schema(&[], &[]), true, false),
         tool("library_stats", "Project count, total size and favorites.", schema(&[], &[]), true, false),
@@ -386,6 +391,64 @@ pub fn tools(allow_writes: bool) -> Vec<Value> {
                 false,
                 false,
             ),
+            tool(
+                "move_files",
+                "Move files out of a project into a folder of a root: an existing project, or a new folder that becomes a project once a model is in it (e.g. to take a loose model out of a creator's collection). The destination must not lie inside another project. A source left without models and project.yaml is dropped. With dry_run nothing moves.",
+                schema(
+                    &[
+                        ("project_id", s("Project the files are in")),
+                        ("rel_paths", strings("Files relative to that project")),
+                        ("dest_root", s("Target root id (default: the project's root)")),
+                        ("dest_rel", s("Target folder relative to the root, e.g. Cinderwing3D/Baby Rose")),
+                        ("dry_run", b("Only report what would move")),
+                    ],
+                    &["project_id", "rel_paths", "dest_rel"],
+                ),
+                false,
+                false,
+            ),
+            tool(
+                "remove_empty_folders",
+                "Remove folders that hold nothing at all (after moves), deepest first; a folder with any file left stays, so do the root, the inbox and the app's folders. With dry_run only lists them.",
+                schema(
+                    &[("root_id", s("Library root id")), ("rel", s("Only below this folder (default: the whole root)")), ("dry_run", b("Only list the folders"))],
+                    &["root_id"],
+                ),
+                false,
+                false,
+            ),
+        ]);
+    }
+    if allow_deletes {
+        t.extend([
+            tool(
+                "delete_file",
+                "Move one file of a project to the trash (never project.yaml). A project left without models and project.yaml is dropped from the library. With dry_run nothing is deleted.",
+                schema(&[("project_id", s("Project id")), ("rel_path", s("File relative to the project")), ("dry_run", b("Only report"))], &["project_id", "rel_path"]),
+                false,
+                true,
+            ),
+            tool(
+                "delete_project",
+                "Move a whole project folder to the trash (never a library root). With dry_run nothing is deleted.",
+                schema(&[("project_id", s("Project id")), ("dry_run", b("Only report"))], &["project_id"]),
+                false,
+                true,
+            ),
+            tool(
+                "resolve_duplicates",
+                "Keep one project of a duplicate group and move the members it fully covers (every model of theirs exists in it, by content) to the trash; what the Duplicates view's \"keep\" does. Run find_duplicates first; `covers` there says what goes. With dry_run only reports.",
+                schema(&[("keep_project_id", s("The project to keep")), ("dry_run", b("Only report"))], &["keep_project_id"]),
+                false,
+                true,
+            ),
+            tool(
+                "remove_shared_files",
+                "Thin a project out: move the model files it shares (by content) with other projects to the trash, keeping the other projects; for a creator's collection whose loose models also exist as single, described projects. With dry_run only reports.",
+                schema(&[("project_id", s("The project to thin out")), ("dry_run", b("Only report"))], &["project_id"]),
+                false,
+                true,
+            ),
         ]);
     }
     t
@@ -450,23 +513,36 @@ fn arg_bool(args: &Value, key: &str) -> Option<bool> {
 // ---- tools --------------------------------------------------------------------------------
 
 fn call_tool(engine: &mut Engine, name: &str, args: &Value, changes: &mut Vec<Change>) -> ToolResult {
-    let writes = engine.mcp_settings().allow_writes;
-    let is_write = matches!(
+    let settings = engine.mcp_settings();
+    let is_delete = matches!(
         name,
-        "update_metadata"
-            | "batch_update"
-            | "execute_import"
-            | "promote_inbox"
-            | "rename_project"
-            | "move_projects"
-            | "set_favorite"
-            | "add_to_collection"
+        "delete_file" | "delete_project" | "resolve_duplicates" | "remove_shared_files"
     );
-    if is_write && !writes {
+    let is_write = is_delete
+        || matches!(
+            name,
+            "update_metadata"
+                | "batch_update"
+                | "execute_import"
+                | "promote_inbox"
+                | "rename_project"
+                | "move_projects"
+                | "set_favorite"
+                | "add_to_collection"
+                | "move_files"
+                | "remove_empty_folders"
+        );
+    if is_write && !settings.allow_writes {
         return Err(ToolError::Failed(format!(
             "{name} is not available: writes are off. The user can allow them in Settings → MCP server."
         )));
     }
+    if is_delete && !settings.allow_deletes {
+        return Err(ToolError::Failed(format!(
+            "{name} is not available: deleting is off. The user can allow it (to the trash) in Settings → MCP server."
+        )));
+    }
+    let dry_run = arg_bool(args, "dry_run").unwrap_or(false);
     match name {
         "list_roots" => {
             let roots = engine.roots()?;
@@ -597,7 +673,7 @@ fn call_tool(engine: &mut Engine, name: &str, args: &Value, changes: &mut Vec<Ch
                 "candidates": r.candidates, "hashed": r.hashed,
                 "groups": r.groups.iter().map(|g| json!({
                     "kind": g.kind, "files": g.files, "bytes": g.bytes,
-                    "members": g.members.iter().map(|m| json!({ "id": m.project.id, "title": m.project.title, "rel_path": m.project.rel_path, "shared_files": m.shared_files, "model_files": m.model_files, "covers": m.covers })).collect::<Vec<_>>(),
+                    "members": g.members.iter().map(|m| json!({ "id": m.project.id, "title": m.project.title, "rel_path": m.project.rel_path, "shared_files": m.shared_files, "model_files": m.model_files, "covers": m.covers, "shared": m.shared })).collect::<Vec<_>>(),
                 })).collect::<Vec<_>>(),
             }))
         }
@@ -757,6 +833,185 @@ fn call_tool(engine: &mut Engine, name: &str, args: &Value, changes: &mut Vec<Ch
             let p = engine.set_favorite(&id, fav)?;
             changes.push(Change::Project(id));
             Ok(json!({ "id": p.id, "favorite": p.favorite }))
+        }
+        "move_files" => {
+            let id = need_str(args, "project_id")?;
+            let rels = arg_strings(args, "rel_paths").unwrap_or_default();
+            if rels.is_empty() {
+                return Err("pass at least one file in rel_paths".to_string().into());
+            }
+            let p = engine.get_project(&id)?;
+            let dest = MoveFilesDest {
+                root_id: arg_str(args, "dest_root").unwrap_or_else(|| p.root_id.clone()),
+                rel: need_str(args, "dest_rel")?,
+            };
+            if dry_run {
+                let missing: Vec<&str> = rels
+                    .iter()
+                    .filter(|r| !p.files.iter().any(|f| &f.rel_path == *r))
+                    .map(|s| s.as_str())
+                    .collect();
+                if !missing.is_empty() {
+                    return Err(format!("not in the project: {}", missing.join(", ")).into());
+                }
+                return Ok(
+                    json!({ "dry_run": true, "would_move": rels, "from": engine.project_dir(&p).ok(), "to": format!("{}/{}", dest.root_id, dest.rel.trim_matches('/')) }),
+                );
+            }
+            let r = engine.move_files(&id, &rels, &dest)?;
+            changes.push(Change::Library {
+                root_id: Some(dest.root_id.clone()),
+                reason: "move".into(),
+            });
+            if r.source.is_none() {
+                changes.push(Change::Library {
+                    root_id: Some(p.root_id.clone()),
+                    reason: "delete".into(),
+                });
+            }
+            Ok(json!({
+                "moved": r.moved, "failed": r.failed,
+                "source": r.source.as_ref().map(|p| json!({ "id": p.id, "rel_path": p.rel_path, "model_count": p.model_count })),
+                "source_dropped": r.source.is_none(),
+                "dest": r.dest.as_ref().map(|p| json!({ "id": p.id, "rel_path": p.rel_path, "model_count": p.model_count, "folder": engine.project_dir(p).ok() })),
+            }))
+        }
+        "remove_empty_folders" => {
+            let root = need_str(args, "root_id")?;
+            let rel = arg_str(args, "rel");
+            let removed = engine.prune_empty_dirs(&root, rel.as_deref(), dry_run)?;
+            if !dry_run && !removed.is_empty() {
+                changes.push(Change::Library {
+                    root_id: Some(root),
+                    reason: "scan".into(),
+                });
+            }
+            Ok(json!({ "dry_run": dry_run, "folders": removed }))
+        }
+        "delete_file" => {
+            let id = need_str(args, "project_id")?;
+            let rel = need_str(args, "rel_path")?;
+            let p = engine.get_project(&id)?;
+            let path = engine.resolve_file(&id, &rel)?;
+            if dry_run {
+                let last_model = p.model_count <= 1 && p.files.iter().any(|f| f.rel_path == rel && f.kind == FileKind::Model);
+                return Ok(
+                    json!({ "dry_run": true, "would_trash": [path], "project_dropped": last_model && p.sidecar == crate::model::SidecarState::Missing }),
+                );
+            }
+            let after = engine.delete_file(&id, &rel)?;
+            changes.push(match &after {
+                Some(_) => Change::Project(id.clone()),
+                None => Change::Library {
+                    root_id: Some(p.root_id.clone()),
+                    reason: "delete".into(),
+                },
+            });
+            Ok(
+                json!({ "trashed": [path], "project_dropped": after.is_none(), "project": after.map(|p| json!({ "id": p.id, "model_count": p.model_count })) }),
+            )
+        }
+        "delete_project" => {
+            let id = need_str(args, "project_id")?;
+            let p = engine.get_project(&id)?;
+            let dir = engine.project_dir(&p)?;
+            if p.rel_path.is_empty() {
+                return Err("the library root itself cannot be deleted; remove it in settings"
+                    .to_string()
+                    .into());
+            }
+            if dry_run {
+                return Ok(json!({ "dry_run": true, "would_trash": [dir], "files": p.files.len() }));
+            }
+            engine.delete_project(&id)?;
+            changes.push(Change::Library {
+                root_id: Some(p.root_id.clone()),
+                reason: "delete".into(),
+            });
+            Ok(json!({ "trashed": [dir], "files": p.files.len() }))
+        }
+        "resolve_duplicates" => {
+            let keep = need_str(args, "keep_project_id")?;
+            let report = engine.find_duplicates(|_| {})?;
+            let member = report
+                .groups
+                .iter()
+                .flat_map(|g| g.members.iter())
+                .find(|m| m.project.id == keep)
+                .ok_or_else(|| ToolError::Failed(format!("{keep} is not part of any duplicate group")))?;
+            let covered = member.covers.clone();
+            if covered.is_empty() {
+                return Err(format!("{keep} covers no other project; every other member has a model it lacks").into());
+            }
+            let mut rows = Vec::new();
+            for id in &covered {
+                let p = engine.get_project(id)?;
+                rows.push(json!({ "id": id, "rel_path": p.rel_path, "folder": engine.project_dir(&p).ok(), "files": p.files.len() }));
+            }
+            if dry_run {
+                return Ok(json!({ "dry_run": true, "keep": keep, "would_trash": rows }));
+            }
+            let mut trashed = Vec::new();
+            let mut failed = Vec::new();
+            for (id, row) in covered.iter().zip(rows) {
+                match engine.delete_project(id) {
+                    Ok(()) => trashed.push(row),
+                    Err(e) => failed.push(json!({ "id": id, "message": e.to_string() })),
+                }
+            }
+            changes.push(Change::Library {
+                root_id: None,
+                reason: "delete".into(),
+            });
+            Ok(json!({ "keep": keep, "trashed": trashed, "failed": failed }))
+        }
+        "remove_shared_files" => {
+            let id = need_str(args, "project_id")?;
+            let report = engine.find_duplicates(|_| {})?;
+            let member = report
+                .groups
+                .iter()
+                .flat_map(|g| g.members.iter())
+                .find(|m| m.project.id == id)
+                .ok_or_else(|| ToolError::Failed(format!("{id} is not part of any duplicate group")))?;
+            let shared = member.shared.clone();
+            let p = engine.get_project(&id)?;
+            let dir = engine.project_dir(&p)?;
+            let rows: Vec<Value> = shared
+                .iter()
+                .map(|f| json!({ "rel_path": f.rel_path, "path": dir.join(&f.rel_path), "also_in": f.also_in }))
+                .collect();
+            let keeps_models = p.model_count as usize > shared.len();
+            if dry_run {
+                return Ok(
+                    json!({ "dry_run": true, "would_trash": rows, "project_dropped": !keeps_models && p.sidecar == crate::model::SidecarState::Missing }),
+                );
+            }
+            let mut trashed = Vec::new();
+            let mut failed = Vec::new();
+            let mut dropped = false;
+            for (f, row) in shared.iter().zip(rows) {
+                if dropped {
+                    failed.push(json!({ "rel_path": f.rel_path, "message": "the project was dropped before this file" }));
+                    continue;
+                }
+                match engine.delete_file(&id, &f.rel_path) {
+                    Ok(after) => {
+                        trashed.push(row);
+                        dropped = after.is_none();
+                    }
+                    Err(e) => failed.push(json!({ "rel_path": f.rel_path, "message": e.to_string() })),
+                }
+            }
+            changes.push(if dropped {
+                Change::Library {
+                    root_id: Some(p.root_id.clone()),
+                    reason: "delete".into(),
+                }
+            } else {
+                Change::Project(id.clone())
+            });
+            Ok(json!({ "trashed": trashed, "failed": failed, "project_dropped": dropped }))
         }
         "add_to_collection" => {
             let ids = arg_strings(args, "project_ids").unwrap_or_default();
@@ -960,9 +1215,230 @@ mod tests {
                 ..Default::default()
             })
             .unwrap();
-        assert_eq!(list(&mut engine), read_only + 8);
+        assert_eq!(list(&mut engine), read_only + 10);
         let (r, _) = call(&mut engine, 3, "no_such_tool", json!({}));
         assert_eq!(r["error"]["code"], -32602);
+        // deleting needs the third switch, which needs writes
+        let (r, _) = call(&mut engine, 4, "delete_project", json!({ "project_id": "x" }));
+        assert!(r["result"]["content"][0]["text"].as_str().unwrap().contains("deleting is off"));
+        engine
+            .set_mcp_settings(McpSettings {
+                allow_writes: false,
+                allow_deletes: true,
+                ..Default::default()
+            })
+            .unwrap();
+        assert!(!engine.mcp_settings().allow_deletes, "deletes never stay on without writes");
+        engine
+            .set_mcp_settings(McpSettings {
+                allow_writes: true,
+                allow_deletes: true,
+                ..Default::default()
+            })
+            .unwrap();
+        assert_eq!(list(&mut engine), read_only + 14);
+    }
+
+    /// The case from #57: a creator's collection holds loose models that also exist as
+    /// single, described projects; an old folder stays behind empty after a move.
+    #[test]
+    fn duplicates_files_and_empty_folders_can_be_cleaned_up_over_mcp() {
+        use crate::model::SyncMode;
+        let data = tempfile::tempdir().unwrap();
+        let lib = tempfile::tempdir().unwrap();
+        let w = |p: &str, bytes: &[u8]| {
+            let path = lib.path().join(p);
+            std::fs::create_dir_all(path.parent().unwrap()).unwrap();
+            std::fs::write(path, bytes).unwrap();
+        };
+        w("Cinderwing3D/_cinderwing/rose.stl", b"ROSE-ROSE-ROSE");
+        w("Cinderwing3D/_cinderwing/snake.stl", b"SNAKE-SNAKE-SNAKE-SNAKE");
+        w("Cinderwing3D/_cinderwing/unique.stl", b"ONLY-HERE-ONLY-HERE");
+        w("Cinderwing3D/_cinderwing/README.txt", b"all my dragons");
+        w("Cinderwing3D/Baby Rose/rose.stl", b"ROSE-ROSE-ROSE");
+        w(
+            "Cinderwing3D/Baby Rose/project.yaml",
+            b"metadata:\n  creator: Cinderwing3D\n  source_url: https://www.printables.com/model/1-baby-rose\n",
+        );
+        w("Cinderwing3D/Cinder Snake/snake.stl", b"SNAKE-SNAKE-SNAKE-SNAKE");
+        w("Cinderwing3D/Cinder Snake/project.yaml", b"metadata:\n  creator: Cinderwing3D\n");
+        w("unsorted/unsorted 2/Vase/vase.stl", b"VASE-VASE-VASE");
+        w("unsorted/keep me/notes.txt", b"not a project, but not empty either");
+        let mut engine = Engine::open(data.path()).unwrap();
+        engine.set_deleter(Box::new(|p: &Path| {
+            if p.is_dir() {
+                std::fs::remove_dir_all(p)
+            } else {
+                std::fs::remove_file(p)
+            }
+        }));
+        engine
+            .set_mcp_settings(McpSettings {
+                enabled: true,
+                allow_writes: true,
+                allow_deletes: true,
+                ..Default::default()
+            })
+            .unwrap();
+        let root = engine.add_root(lib.path(), SyncMode::Manual).unwrap();
+        engine.scan_root(&root.id, |_| {}).unwrap();
+        let id = |rel: &str| format!("{}:{rel}", root.id);
+        let coll = id("Cinderwing3D/_cinderwing");
+
+        // the report names the shared files per member
+        let (r, _) = call(&mut engine, 1, "find_duplicates", json!({}));
+        let v = structured(&r);
+        assert_eq!(v["groups"].as_array().unwrap().len(), 1);
+        let members = v["groups"][0]["members"].as_array().unwrap();
+        let c = members.iter().find(|m| m["id"] == coll).unwrap();
+        assert_eq!(c["covers"].as_array().unwrap().len(), 2);
+        assert_eq!(c["shared"].as_array().unwrap().len(), 2);
+        assert_eq!(c["shared"][0]["rel_path"], "rose.stl");
+        assert_eq!(c["shared"][0]["also_in"], json!([id("Cinderwing3D/Baby Rose")]));
+
+        // dry runs change nothing
+        let (r, changes) = call(
+            &mut engine,
+            2,
+            "resolve_duplicates",
+            json!({ "keep_project_id": coll, "dry_run": true }),
+        );
+        assert_eq!(structured(&r)["would_trash"].as_array().unwrap().len(), 2);
+        assert!(changes.is_empty());
+        assert!(lib.path().join("Cinderwing3D/Baby Rose/rose.stl").is_file());
+        let (r, _) = call(
+            &mut engine,
+            3,
+            "resolve_duplicates",
+            json!({ "keep_project_id": id("Cinderwing3D/Baby Rose") }),
+        );
+        assert!(r["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("covers no other project"));
+
+        // thin the collection instead: the two shared files go, the unique one and the singles stay
+        let (r, _) = call(
+            &mut engine,
+            4,
+            "remove_shared_files",
+            json!({ "project_id": coll, "dry_run": true }),
+        );
+        let v = structured(&r);
+        assert_eq!(v["would_trash"].as_array().unwrap().len(), 2);
+        assert_eq!(v["project_dropped"], false);
+        let (r, changes) = call(&mut engine, 5, "remove_shared_files", json!({ "project_id": coll }));
+        let v = structured(&r);
+        assert_eq!(v["trashed"].as_array().unwrap().len(), 2);
+        assert_eq!(v["project_dropped"], false);
+        assert_eq!(changes, vec![Change::Project(coll.clone())]);
+        assert!(!lib.path().join("Cinderwing3D/_cinderwing/rose.stl").exists());
+        assert!(lib.path().join("Cinderwing3D/_cinderwing/unique.stl").is_file());
+        assert!(lib.path().join("Cinderwing3D/Baby Rose/rose.stl").is_file());
+        assert_eq!(engine.get_project(&coll).unwrap().model_count, 1);
+        let (r, _) = call(&mut engine, 6, "find_duplicates", json!({}));
+        assert_eq!(structured(&r)["groups"].as_array().unwrap().len(), 0);
+
+        // take the last loose model out into its own project; the collection is left without
+        // models and without a sidecar, so it is dropped
+        let (r, _) = call(
+            &mut engine,
+            7,
+            "move_files",
+            json!({ "project_id": coll, "rel_paths": ["unique.stl", "nope.stl"], "dest_rel": "Cinderwing3D/Unique", "dry_run": true }),
+        );
+        assert_eq!(r["result"]["isError"], true, "dry run checks the files exist");
+        let (r, _) = call(
+            &mut engine,
+            8,
+            "move_files",
+            json!({ "project_id": coll, "rel_paths": ["unique.stl"], "dest_rel": "Cinderwing3D/Baby Rose/inner" }),
+        );
+        assert!(r["result"]["content"][0]["text"]
+            .as_str()
+            .unwrap()
+            .contains("inside another project"));
+        let (r, changes) = call(
+            &mut engine,
+            9,
+            "move_files",
+            json!({ "project_id": coll, "rel_paths": ["unique.stl", "README.txt"], "dest_rel": "Cinderwing3D/Unique" }),
+        );
+        let v = structured(&r);
+        assert_eq!(v["moved"], json!(["unique.stl", "README.txt"]));
+        assert_eq!(v["source_dropped"], true);
+        assert_eq!(v["dest"]["rel_path"], "Cinderwing3D/Unique");
+        assert!(changes
+            .iter()
+            .any(|c| matches!(c, Change::Library { reason, .. } if reason == "delete")));
+        assert!(engine.get_project(&coll).is_err());
+        assert!(lib.path().join("Cinderwing3D/Unique/unique.stl").is_file());
+        assert_eq!(engine.get_project(&id("Cinderwing3D/Unique")).unwrap().model_count, 1);
+
+        // a single file to the trash, then the project; project.yaml and the root are refused
+        let (r, _) = call(
+            &mut engine,
+            10,
+            "delete_file",
+            json!({ "project_id": id("Cinderwing3D/Baby Rose"), "rel_path": "project.yaml" }),
+        );
+        assert_eq!(r["result"]["isError"], true);
+        let (r, _) = call(
+            &mut engine,
+            11,
+            "delete_file",
+            json!({ "project_id": id("Cinderwing3D/Unique"), "rel_path": "README.txt" }),
+        );
+        assert_eq!(structured(&r)["project_dropped"], false);
+        let (r, _) = call(
+            &mut engine,
+            12,
+            "delete_project",
+            json!({ "project_id": id("Cinderwing3D/Unique"), "dry_run": true }),
+        );
+        assert_eq!(structured(&r)["files"], 1);
+        assert!(lib.path().join("Cinderwing3D/Unique").is_dir());
+        let (r, _) = call(
+            &mut engine,
+            13,
+            "delete_project",
+            json!({ "project_id": id("Cinderwing3D/Unique") }),
+        );
+        assert!(structured(&r)["trashed"][0].as_str().unwrap().ends_with("Unique"));
+        assert!(!lib.path().join("Cinderwing3D/Unique").exists());
+
+        // moving the vase out leaves `unsorted/unsorted 2` empty; `keep me` has a file and stays
+        let (r, _) = call(
+            &mut engine,
+            14,
+            "move_projects",
+            json!({ "project_ids": [id("unsorted/unsorted 2/Vase")], "dest_root": root.id, "dest_rel": "Vases" }),
+        );
+        assert_eq!(structured(&r)["moved"][0]["rel_path"], "Vases/Vase");
+        let (r, _) = call(
+            &mut engine,
+            15,
+            "remove_empty_folders",
+            json!({ "root_id": root.id, "dry_run": true }),
+        );
+        // the emptied collection folder is listed too; `keep me` holds a file and is not
+        assert_eq!(
+            structured(&r)["folders"],
+            json!(["Cinderwing3D/_cinderwing", "unsorted/unsorted 2"])
+        );
+        assert!(lib.path().join("unsorted/unsorted 2").is_dir());
+        let (r, changes) = call(&mut engine, 16, "remove_empty_folders", json!({ "root_id": root.id }));
+        assert_eq!(
+            structured(&r)["folders"],
+            json!(["Cinderwing3D/_cinderwing", "unsorted/unsorted 2"])
+        );
+        assert!(!changes.is_empty());
+        assert!(!lib.path().join("Cinderwing3D/_cinderwing").exists());
+        assert!(lib.path().join("Cinderwing3D").is_dir(), "still holds projects");
+        assert!(!lib.path().join("unsorted/unsorted 2").exists());
+        assert!(lib.path().join("unsorted/keep me/notes.txt").is_file());
+        let (r, _) = call(&mut engine, 17, "remove_empty_folders", json!({ "root_id": root.id, "rel": "../" }));
+        assert_eq!(r["result"]["isError"], true);
     }
 
     #[test]

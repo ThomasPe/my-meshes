@@ -569,10 +569,20 @@ test('MCP server: off by default, enabling mints a token, snippets and import fo
   await expect(page.getByTestId('mcp-folder')).toContainText('Downloads');
   await page.getByTestId('mcp-folder-add').click();
   await expect(page.getByTestId('mcp-folder')).toHaveCount(2);
+  // deleting is a third step: locked until writes are on, and off again when writes go off (#57)
+  await expect(page.getByTestId('mcp-deletes')).toBeDisabled();
   await page.getByTestId('mcp-writes').click();
   await expect(page.getByText('Agents may now write metadata and import')).toBeVisible();
-  const saved = await page.evaluate(() => (window as unknown as { __mockMcp?: Array<{ enabled: boolean; allow_writes: boolean; import_dirs: string[] }> }).__mockMcp!.at(-1));
-  expect(saved).toMatchObject({ enabled: true, allow_writes: true, import_dirs: ['C:\\Users\\mock\\Downloads', 'E:\\More Models'] });
+  await expect(page.getByTestId('mcp-deletes')).toBeEnabled();
+  await page.getByTestId('mcp-deletes').click();
+  await expect(page.getByText('Agents may now move files and projects to the trash')).toBeVisible();
+  const saved = await page.evaluate(() => (window as unknown as { __mockMcp?: Array<{ enabled: boolean; allow_writes: boolean; allow_deletes: boolean; import_dirs: string[] }> }).__mockMcp!.at(-1));
+  expect(saved).toMatchObject({ enabled: true, allow_writes: true, allow_deletes: true, import_dirs: ['C:\\Users\\mock\\Downloads', 'E:\\More Models'] });
+  await page.getByTestId('mcp-writes').click();
+  await expect(page.getByTestId('mcp-deletes')).toBeDisabled();
+  await expect(page.getByTestId('mcp-deletes')).toHaveAttribute('data-state', 'unchecked');
+  await page.getByTestId('mcp-writes').click();
+  await expect(page.getByTestId('mcp-deletes')).toHaveAttribute('data-state', 'unchecked');
   // a port below 1024 is refused, a taken port shows up in the status line
   await page.getByTestId('mcp-port').fill('80');
   await page.getByTestId('mcp-port-save').click();

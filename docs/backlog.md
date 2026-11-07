@@ -230,6 +230,10 @@ cost estimate, import proposals in the staging dialog (see ADR-0003, features 4,
       configuration for Claude Desktop and Claude Code, and a plain statement of what an
       agent sees. Tests: engine tools without a socket, the socket once (token, Origin,
       JSON, change callback), the settings card in browser mode.
+- [x] **Deleting behind a third switch, moving files, pruning folders** (#57, ADR-0004
+      amendment). `delete_file`, `delete_project`, `resolve_duplicates`, `remove_shared_files`
+      (trash only) behind "Allow deleting"; `move_files` and `remove_empty_folders` behind
+      "Allow writes"; all with `dry_run`; `find_duplicates` names the shared files per member.
 - [ ] **Follow-ups.** Resources (`meshkeep://project/{id}`) for clients that browse;
       a tool for the in-app AI suggestion so an agent without its own eyes can use the
       thumbnail; progress notifications for long tools (duplicates, imports with pages);

@@ -361,7 +361,7 @@
     "mcpWrites": "Schreiben erlauben",
     "mcpWritesOn": "Agenten dürfen jetzt Metadaten schreiben und importieren",
     "mcpWritesOff": "Agenten sind wieder nur lesend",
-    "mcpWritesHintOn": "An: Agenten dürfen project.yaml-Dateien schreiben, aus den Ordnern unten importieren, Projekte umbenennen und verschieben sowie Favoriten und Sammlungen pflegen. Nichts löscht Dateien.",
+    "mcpWritesHintOn": "An: Agenten dürfen project.yaml-Dateien schreiben, aus den Ordnern unten importieren, Dateien zwischen Projekten verschieben, Projekte umbenennen und verschieben, geleerte Ordner entfernen sowie Favoriten und Sammlungen pflegen. Gelöscht wird nichts, solange der nächste Schalter aus ist.",
     "mcpWritesHintOff": "Aus: Agenten können lesen und suchen, mehr nicht.",
     "mcpPort": "Port",
     "mcpPortSaved": "Port {{port}} gespeichert; Client neu verbinden",
@@ -386,7 +386,13 @@
     "mcpCopy": "Kopieren",
     "mcpCopied": "Kopiert",
     "mcpCopyFailed": "Kopieren nicht möglich; markiere den Text stattdessen",
-    "mcpSent": "Was ein Agent sieht: alles, was die Werkzeuge zurückgeben, also deine Projekt-Metadaten, Dateinamen, Readme-Texte, die oben gelisteten Ordner und, mit „Modellseiten laden“, deren Inhalt. Wohin der Agent das schickt, hängt vom verbundenen Client und dessen Datenschutzregeln ab. Meshkeep selbst sendet nichts."
+    "mcpSent": "Was ein Agent sieht: alles, was die Werkzeuge zurückgeben, also deine Projekt-Metadaten, Dateinamen, Readme-Texte, die oben gelisteten Ordner und, mit „Modellseiten laden“, deren Inhalt. Wohin der Agent das schickt, hängt vom verbundenen Client und dessen Datenschutzregeln ab. Meshkeep selbst sendet nichts.",
+    "mcpDeletes": "Löschen erlauben (in den Papierkorb)",
+    "mcpDeletesNeedsWrites": "Braucht zuerst „Schreiben erlauben“.",
+    "mcpDeletesHintOn": "An: Agenten dürfen Dateien und ganze Projekte in den Papierkorb legen, auch Duplikate, die sie auflösen. Nichts wird endgültig gelöscht; der Papierkorb behält es.",
+    "mcpDeletesHintOff": "Aus: Agenten können vorschlagen, was weg kann, löschen kannst nur du.",
+    "mcpDeletesOn": "Agenten dürfen jetzt Dateien und Projekte in den Papierkorb legen",
+    "mcpDeletesOff": "Agenten dürfen nicht mehr löschen"
   },
   "status": {
     "watching": "Beobachte {{path}}",
