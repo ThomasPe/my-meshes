@@ -290,7 +290,7 @@ export function Viewer({ project, files, offline }: { project: Project; files: F
   };
 
   return (
-    <div className="relative h-[440px] overflow-hidden rounded-2xl bg-background shadow-[inset_0_0_0_1px_var(--border)]" data-testid="viewer">
+    <div className="relative h-[clamp(440px,calc(100vh-330px),1000px)] overflow-hidden rounded-2xl bg-background shadow-[inset_0_0_0_1px_var(--border)]" data-testid="viewer">
       <canvas ref={canvasRef} className="block size-full touch-none" data-file={current || undefined} />
       {models.length === 0 && <div className="absolute inset-0 grid place-items-center text-sm font-semibold text-muted-foreground">{t('project.noModels')}</div>}
       {status.kind !== 'ready' && status.kind !== 'idle' && models.length > 0 && (

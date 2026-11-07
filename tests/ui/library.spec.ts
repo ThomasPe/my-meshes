@@ -643,6 +643,23 @@ test('viewer: switching to a cached project swaps the model instead of keeping t
   expect(errors).toEqual([]);
 });
 
+test('project page uses the whole window on large screens (#52)', async ({ page }) => {
+  await page.setViewportSize({ width: 2400, height: 1300 });
+  await page.getByTestId('project-card').filter({ hasText: 'Robotic Arm v4' }).dblclick();
+  await expect(page.getByTestId('project-page')).toBeVisible();
+  const pageBox = (await page.getByTestId('project-page').boundingBox())!;
+  const viewer = (await page.getByTestId('viewer').boundingBox())!;
+  const form = (await page.getByTestId('metadata-form').boundingBox())!;
+  // viewer plus form span the page apart from the gutters; the viewer gets the lion's share
+  expect(viewer.x + viewer.width + 20 + form.width).toBeGreaterThan(pageBox.x + pageBox.width - 80);
+  expect(viewer.width).toBeGreaterThan(1300);
+  expect(form.width).toBeLessThanOrEqual(560);
+  // and it grows with the window height instead of staying 440 px tall
+  expect(viewer.height).toBeGreaterThan(900);
+  await page.setViewportSize({ width: 1400, height: 900 });
+  expect((await page.getByTestId('viewer').boundingBox())!.height).toBeLessThan(620);
+});
+
 test('settings shows the last scan summary and the sync problem per root', async ({ page }) => {
   await page.getByTestId('nav-settings').click();
   await expect(page.getByTestId('root-scan-summary').first()).toContainText('72 projects · 131 files');

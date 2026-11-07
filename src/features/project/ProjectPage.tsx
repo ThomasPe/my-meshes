@@ -27,7 +27,8 @@ export function ProjectPage({ id }: { id: string }) {
   return (
     <div className="h-full overflow-auto" data-testid="project-page">
       {dialogs}
-      <div className="mx-auto grid max-w-[1200px] gap-5 px-6 pb-10 pt-5">
+      {/* no maximum width (#52): the viewer takes what the window offers, the form keeps a readable width */}
+      <div className="grid gap-5 px-6 pb-10 pt-5">
         <div className="flex flex-wrap items-center gap-1.5 text-xs font-semibold text-muted-foreground">
           <a href={routeHref({ page: 'library' })} className="inline-flex items-center gap-1 hover:text-primary" data-testid="back"><ChevronLeft className="size-4" />{t('project.back')}</a>
           {root && <><span>/</span><span>{root.path}</span></>}
@@ -59,7 +60,7 @@ export function ProjectPage({ id }: { id: string }) {
             {p.files.some((f) => f.kind === 'image') && <TabsTrigger value="images" data-testid="tab-images">{t('project.images')} <span className="text-muted-foreground">{p.files.filter((f) => f.kind === 'image').length}</span></TabsTrigger>}
           </TabsList>
           <TabsContent value="overview" className="mt-4">
-            <div className="grid gap-5 lg:grid-cols-[minmax(0,1.5fr)_minmax(300px,1fr)]">
+            <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,32%)] 2xl:grid-cols-[minmax(0,1fr)_minmax(360px,520px)]">
               <Viewer project={p} files={p.files} offline={p.offline} />
               <div className="rounded-2xl bg-card p-5 shadow-card"><MetadataForm project={p} onReload={() => void project.refetch()} /></div>
             </div>
