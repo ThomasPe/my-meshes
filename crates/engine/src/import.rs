@@ -625,8 +625,15 @@ pub fn execute(
                         .projects
                         .push(target.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
                     // Only now, with the project in place and holding a model, may the source go.
+                    // The project is complete at this point, so a failure to trash or move the
+                    // archive is a warning, not a failed item: the project stays, the archive
+                    // stays where it was.
                     if is_archive(&item.source) {
-                        dispose_archive(root, &item.source, req.archive_policy, deleter)?;
+                        if let Err(e) = dispose_archive(root, &item.source, req.archive_policy, deleter) {
+                            report
+                                .warnings
+                                .push(format!("{}: project created, but the archive was left in place: {e}", item.name));
+                        }
                     }
                 }
             }
@@ -660,7 +667,10 @@ fn build_project(
     }
     std::fs::create_dir_all(&staging).map_err(io_err(&staging))?;
     let result = fill_project(source, &staging, policy).and_then(|_| {
-        if !scan::is_project_dir(&staging, ignore, root, opts) {
+        // The boundary rule alone also accepts a folder holding nothing but a project.yaml;
+        // a project the import creates must hold at least one model file as well.
+        let (models, _, _) = walk_folder(&staging);
+        if models == 0 || !scan::is_project_dir(&staging, ignore, root, opts) {
             return Err(EngineError::NotAllowed(
                 "the result holds no model files, so no project was created".into(),
             ));
@@ -1012,6 +1022,7 @@ mod tests {
         std::fs::create_dir_all(&src).unwrap();
         std::fs::write(src.join("bad.zip"), b"not a zip").unwrap();
         write_zip(&src.join("docs.zip"), &[("readme.txt", b"no models here")]);
+        write_zip(&src.join("Sidecar.zip"), &[("Sidecar/project.yaml", b"name: Sidecar\n")]);
         touch(&src.join("notes/readme.md"), 3);
         write_zip(&src.join("Good.zip"), &[("Good/part.stl", b"solid")]);
         // Something an interrupted earlier run left in the staging area is neither a project
@@ -1041,6 +1052,11 @@ mod tests {
                     name: "Notes".into(),
                 },
                 ImportRequestItem {
+                    source: src.join("Sidecar.zip"),
+                    action: ImportAction::Project,
+                    name: "Sidecar".into(),
+                },
+                ImportRequestItem {
                     source: src.join("Good.zip"),
                     action: ImportAction::Project,
                     name: "Good".into(),
@@ -1049,14 +1065,15 @@ mod tests {
         };
         let report = execute(&root, &req, &remover(), &ScanOptions::default(), |_| {}).unwrap();
         assert_eq!(report.projects, vec!["Good"]);
-        assert_eq!(report.errors.len(), 3, "{:?}", report.errors);
+        assert_eq!(report.errors.len(), 4, "{:?}", report.errors);
         assert!(report.errors[0].starts_with("Bad: "), "{:?}", report.errors);
-        assert!(report.errors[1].contains("no model files"), "{:?}", report.errors);
-        assert!(report.errors[2].contains("no model files"), "{:?}", report.errors);
-        for name in ["Bad", "Docs", "Notes"] {
+        for e in &report.errors[1..] {
+            assert!(e.contains("no model files"), "{:?}", report.errors);
+        }
+        for name in ["Bad", "Docs", "Notes", "Sidecar"] {
             assert!(!root.join(name).exists(), "{name}: no half-made folder stays behind");
         }
-        for file in ["bad.zip", "docs.zip"] {
+        for file in ["bad.zip", "docs.zip", "Sidecar.zip"] {
             assert!(src.join(file).is_file(), "{file}: a failed item never trashes its source");
         }
         assert!(src.join("notes/readme.md").is_file());
@@ -1067,6 +1084,29 @@ mod tests {
             "the good archive was trashed after its project was in place"
         );
         assert!(!root.join(STAGING_DIR).exists());
+
+        // When the trash refuses the archive, the finished project stays and the report
+        // carries a warning instead of counting the item as failed.
+        write_zip(&src.join("Stuck.zip"), &[("Stuck/part.stl", b"solid")]);
+        let failing: Deleter = Box::new(|_: &Path| Err(std::io::Error::other("recycle bin unavailable")));
+        let req = ImportRequest {
+            root_id: "r".into(),
+            archive_policy: ArchivePolicy::Trash,
+            apply_hints: false,
+            fetch_pages: false,
+            items: vec![ImportRequestItem {
+                source: src.join("Stuck.zip"),
+                action: ImportAction::Project,
+                name: "Stuck".into(),
+            }],
+        };
+        let report = execute(&root, &req, &failing, &ScanOptions::default(), |_| {}).unwrap();
+        assert_eq!(report.projects, vec!["Stuck"]);
+        assert!(report.errors.is_empty(), "{:?}", report.errors);
+        assert_eq!(report.warnings.len(), 1, "{:?}", report.warnings);
+        assert!(report.warnings[0].contains("archive was left in place"), "{:?}", report.warnings);
+        assert!(root.join("Stuck/part.stl").is_file());
+        assert!(src.join("Stuck.zip").is_file());
     }
 
     #[test]
