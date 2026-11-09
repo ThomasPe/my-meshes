@@ -153,7 +153,9 @@ reference along.
   mtime; when they change the thumbnail counts as stale and the project re-enters the queue.
   A full content hash was rejected for this: it would mean reading every model twice.
 - Source priority: the image named by `thumbnail:` in the sidecar, else a 3MF with an
-  embedded preview (extracted, no rendering), else the largest previewable model (STL,
+  embedded preview (extracted, no rendering; a Bambu Studio project from MakerWorld
+  carries the model page's cover photo in `Auxiliaries/.thumbnails/`, which wins over the
+  slicer's plate rendering), else the largest previewable model (STL,
   OBJ, 3MF) rendered off-thread, else the first image in the project. Failures are
   recorded per source state and not retried until the file changes.
 - Alternative location (user setting, implemented): `<project>/.cache/thumbs/<key>.png` for

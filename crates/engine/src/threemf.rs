@@ -15,7 +15,11 @@ pub struct ThreeMfInfo {
     pub thumbnail_entry: Option<String>,
 }
 
+// Bambu Studio projects from MakerWorld carry the model page's cover photo (680 x 510, and a
+// 240 x 180 copy); it comes before the slicer's rendering of the first plate.
 const THUMB_CANDIDATES: &[&str] = &[
+    "Auxiliaries/.thumbnails/thumbnail_middle.png",
+    "Auxiliaries/.thumbnails/thumbnail_3mf.png",
     "Metadata/thumbnail.png",
     "Metadata/plate_1.png",
     "Metadata/Thumbnail.png",
@@ -163,6 +167,31 @@ pub(crate) mod tests {
         let info = inspect(&bambu).unwrap();
         assert_eq!(info.slicer.as_deref(), Some("Bambu Studio / OrcaSlicer"));
         assert_eq!(info.thumbnail_entry.as_deref(), Some("Metadata/plate_1.png"));
+    }
+
+    #[test]
+    fn makerworld_cover_photo_wins_over_the_plate_rendering() {
+        // entry names of a real MakerWorld download
+        let names = |list: &[&str]| list.iter().map(|n| n.to_string()).collect::<Vec<_>>();
+        let info = classify(&names(&[
+            "Auxiliaries/Model Pictures/IMG_5973.webp",
+            "Auxiliaries/.thumbnails/thumbnail_3mf.png",
+            "Auxiliaries/.thumbnails/thumbnail_middle.png",
+            "Auxiliaries/.thumbnails/thumbnail_small.png",
+            "Metadata/project_settings.config",
+            "Metadata/plate_1.png",
+        ]));
+        assert_eq!(info.slicer.as_deref(), Some("Bambu Studio / OrcaSlicer"));
+        assert_eq!(
+            info.thumbnail_entry.as_deref(),
+            Some("Auxiliaries/.thumbnails/thumbnail_middle.png")
+        );
+
+        let small_only = classify(&names(&["Auxiliaries/.thumbnails/thumbnail_3mf.png", "Metadata/plate_1.png"]));
+        assert_eq!(
+            small_only.thumbnail_entry.as_deref(),
+            Some("Auxiliaries/.thumbnails/thumbnail_3mf.png")
+        );
     }
 
     #[test]
