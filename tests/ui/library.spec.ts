@@ -277,6 +277,8 @@ test('rename via context menu: validation, collision, success', async ({ page })
 });
 
 test('delete moves a project to the trash after confirmation; Delete key works too', async ({ page }) => {
+  // the count is 0 until the first page of projects arrived
+  await expect(page.getByTestId('project-card').first()).toBeVisible();
   const before = Number(await page.getByTestId('result-count').textContent());
   const card = page.getByTestId('project-card').filter({ hasText: 'Dice Tower' });
   await card.click({ button: 'right' });
