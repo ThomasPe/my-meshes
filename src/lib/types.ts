@@ -367,3 +367,13 @@ export function isAppError(e: unknown): e is AppError {
 }
 
 export type LibraryChanged = { rootId: string | null; report: ScanReport | null; reason: 'scan' | 'watch' | 'poll' | 'root_removed' | 'rename' | 'delete' | 'thumbs_cleared' | 'import' | 'move'; error?: string; oldId?: string; newId?: string; oldIds?: string[] };
+
+/** A photo stored inside one of the project's 3MF files (MakerWorld downloads). */
+export interface EmbeddedPicture {
+  /** The 3MF, relative to the project directory. */
+  file: string;
+  /** Zip entry name inside it. */
+  entry: string;
+  name: string;
+  size: number;
+}

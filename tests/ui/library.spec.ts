@@ -511,6 +511,24 @@ test('image viewer: images tab shows tiles, lightbox navigates', async ({ page }
   await expect(page.getByText('1 of 1')).toBeVisible();
 });
 
+test('image viewer: pictures stored inside a 3MF show in the gallery, read-only', async ({ page }) => {
+  // the Dice Tower has no image files; its 3MF plays a MakerWorld download with two model pictures
+  await page.getByTestId('project-card').filter({ hasText: 'Dice Tower' }).dblclick();
+  await expect(page.getByTestId('tab-images')).toContainText('2');
+  await page.getByTestId('tab-images').click();
+  const tiles = page.getByTestId('image-tile');
+  await expect(tiles).toHaveCount(2);
+  await expect(tiles.first().locator('img')).toBeVisible();
+  await expect(tiles.first().getByTestId('embedded-badge')).toHaveText('From tower.3mf');
+  await expect(tiles.first().getByTestId('use-as-thumbnail')).toHaveCount(0);
+  await tiles.first().locator('button').first().click();
+  await expect(page.getByTestId('lightbox-img')).toBeVisible();
+  await expect(page.getByTestId('lightbox-name')).toHaveText('cover.webp');
+  await expect(page.getByText('1 of 2')).toBeVisible();
+  await page.getByTestId('lightbox-next').click();
+  await expect(page.getByTestId('lightbox-name')).toHaveText('printed.webp');
+});
+
 test('preview: a project image or the current view becomes the thumbnail, automatic again on request', async ({ page }) => {
   await page.getByTestId('project-card').filter({ hasText: 'Gridfinity Baseplates' }).dblclick();
   await page.getByTestId('tab-images').click();

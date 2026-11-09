@@ -2,7 +2,8 @@
 //! whether a slicer wrote it and whether it carries an embedded preview image, without
 //! touching the geometry. Geometry is parsed in the frontend (worker) for the viewer.
 
-use crate::error::{io_err, Result};
+use crate::error::{io_err, EngineError, Result};
+use serde::Serialize;
 use std::fs::File;
 use std::io::Read;
 use std::path::Path;
@@ -25,6 +26,69 @@ const THUMB_CANDIDATES: &[&str] = &[
     "Metadata/Thumbnail.png",
     "Thumbnails/thumbnail.png",
 ];
+
+/// Where Bambu Studio keeps the photos of the model page (MakerWorld downloads).
+const PICTURES_DIR: &str = "Auxiliaries/Model Pictures/";
+const PICTURE_MAX: u64 = 32 << 20;
+
+/// A photo stored inside a 3MF: shown in the project's gallery, never unpacked to disk.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize)]
+pub struct EmbeddedPicture {
+    /// The 3MF, relative to the project directory.
+    pub file: String,
+    /// Zip entry name inside it.
+    pub entry: String,
+    pub name: String,
+    pub size: u64,
+}
+
+fn picture_name(entry: &str) -> Option<&str> {
+    let name = entry.strip_prefix(PICTURES_DIR)?;
+    let ext = name.rsplit_once('.')?.1.to_ascii_lowercase();
+    (!name.contains(['/', '\\']) && matches!(ext.as_str(), "jpg" | "jpeg" | "png" | "webp")).then_some(name)
+}
+
+/// The model pictures of one archive, in archive order. Reads the central directory only.
+pub fn pictures(path: &Path, rel: &str) -> Result<Vec<EmbeddedPicture>> {
+    let mut archive = open(path)?;
+    let mut out = Vec::new();
+    for i in 0..archive.len() {
+        let Ok(f) = archive.by_index_raw(i) else { continue };
+        let Ok(entry) = f.name() else { continue };
+        if let Some(name) = picture_name(&entry) {
+            out.push(EmbeddedPicture {
+                file: rel.to_string(),
+                entry: entry.to_string(),
+                name: name.to_string(),
+                size: f.size(),
+            });
+        }
+    }
+    Ok(out)
+}
+
+/// The pictures of several archives; one that cannot be read contributes nothing.
+pub fn pictures_of(files: &[(String, std::path::PathBuf)]) -> Vec<EmbeddedPicture> {
+    files
+        .iter()
+        .flat_map(|(rel, path)| pictures(path, rel).unwrap_or_default())
+        .collect()
+}
+
+/// Bytes of one model picture. Only entries `pictures` would list can be read this way.
+pub fn read_picture(path: &Path, entry: &str) -> Result<Vec<u8>> {
+    if picture_name(entry).is_none() {
+        return Err(EngineError::NotAllowed(format!("{entry} is not a model picture")));
+    }
+    let mut archive = open(path)?;
+    let file = archive.by_name(entry).map_err(|e| EngineError::Io {
+        path: path.to_path_buf(),
+        source: std::io::Error::new(std::io::ErrorKind::NotFound, format!("{entry}: {e}")),
+    })?;
+    let mut out = Vec::new();
+    file.take(PICTURE_MAX).read_to_end(&mut out).map_err(io_err(path))?;
+    Ok(out)
+}
 
 fn open(path: &Path) -> Result<zip::ZipArchive<File>> {
     let f = File::open(path).map_err(io_err(path))?;
@@ -192,6 +256,42 @@ pub(crate) mod tests {
             small_only.thumbnail_entry.as_deref(),
             Some("Auxiliaries/.thumbnails/thumbnail_3mf.png")
         );
+    }
+
+    #[test]
+    fn model_pictures_are_listed_and_read_and_nothing_else_is() {
+        let t = tempfile::tempdir().unwrap();
+        let p = t.path().join("mw.3mf");
+        write_3mf(
+            &p,
+            &[
+                ("Auxiliaries/Model Pictures/IMG_5973.webp", b"webp-bytes"),
+                ("Auxiliaries/Model Pictures/front.JPG", b"jpg"),
+                ("Auxiliaries/Model Pictures/notes.txt", b"text"),
+                ("Auxiliaries/Profile Pictures/print.webp", b"profile"),
+                ("Auxiliaries/.thumbnails/thumbnail_middle.png", TINY_PNG),
+                ("Metadata/plate_1.png", TINY_PNG),
+            ],
+        );
+        let list = pictures(&p, "files/mw.3mf").unwrap();
+        assert_eq!(
+            list.iter().map(|x| x.name.as_str()).collect::<Vec<_>>(),
+            ["IMG_5973.webp", "front.JPG"]
+        );
+        assert_eq!(list[0].file, "files/mw.3mf");
+        assert_eq!(list[0].entry, "Auxiliaries/Model Pictures/IMG_5973.webp");
+        assert_eq!(list[0].size, 10);
+        assert_eq!(read_picture(&p, &list[0].entry).unwrap(), b"webp-bytes");
+        // other entries of the archive are not reachable through the picture reader
+        assert!(read_picture(&p, "3D/3dmodel.model").is_err());
+        assert!(read_picture(&p, "Metadata/plate_1.png").is_err());
+        assert!(read_picture(&p, "Auxiliaries/Model Pictures/../../3D/3dmodel.model").is_err());
+        assert!(read_picture(&p, "Auxiliaries/Model Pictures/missing.png").is_err());
+        // a broken archive next to a good one does not hide the good one's pictures
+        let bad = t.path().join("bad.3mf");
+        std::fs::write(&bad, b"not a zip").unwrap();
+        let all = pictures_of(&[("bad.3mf".into(), bad), ("mw.3mf".into(), p)]);
+        assert_eq!(all.len(), 2);
     }
 
     #[test]

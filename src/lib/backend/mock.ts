@@ -381,6 +381,16 @@ export function createMockBackend(): Backend {
       if (file.kind === 'image') return generateImage(seed);
       throw err('mock', 'no file contents in browser mode');
     },
+    // Browser mode: the Dice Tower's 3MF plays a MakerWorld download with two model pictures.
+    async embeddedPictures(projectId) {
+      const file = find(projectId).files.find((x) => x.rel_path === 'tower.3mf');
+      if (!file) return [];
+      return ['cover.webp', 'printed.webp'].map((name) => ({ file: file.rel_path, entry: `Auxiliaries/Model Pictures/${name}`, name, size: 80_000 }));
+    },
+    async readEmbeddedPicture(projectId, relPath, entry) {
+      if (!find(projectId).files.some((x) => x.rel_path === relPath) || !entry.startsWith('Auxiliaries/Model Pictures/')) throw err('not_found', entry);
+      return generateImage([...entry].reduce((a, c) => a + c.charCodeAt(0), 0));
+    },
     async updateMetadata(projectId, u: UpdateMetadata) {
       await delay(120);
       const p = find(projectId);

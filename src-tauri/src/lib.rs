@@ -97,6 +97,8 @@ pub fn run() {
             commands::folder_tree,
             commands::library_stats,
             commands::read_project_file,
+            commands::embedded_pictures,
+            commands::read_embedded_picture,
             commands::update_metadata,
             commands::reveal_project,
             commands::reveal_folder,

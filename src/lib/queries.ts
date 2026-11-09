@@ -13,6 +13,7 @@ export const keys = {
   roots: ['roots'] as const,
   projects: (q: ListQuery) => ['projects', q] as const,
   project: (id: string) => ['project', id] as const,
+  pictures: (id: string) => ['project', id, 'pictures'] as const,
   tags: (rootId: string | null) => ['tags', rootId] as const,
   facets: (rootId: string | null) => ['facets', rootId] as const,
   thumbLocation: ['thumbLocation'] as const,
@@ -35,6 +36,8 @@ export const useAppInfo = () => useQuery({ queryKey: keys.appInfo, queryFn: asyn
 export const useRoots = () => useQuery({ queryKey: keys.roots, queryFn: async () => (await getBackend()).getRoots() });
 export const useProjects = (q: ListQuery) => useQuery({ queryKey: keys.projects(q), queryFn: async () => (await getBackend()).listProjects(q), placeholderData: (prev) => prev });
 export const useProject = (id: string | null) => useQuery({ queryKey: keys.project(id ?? ''), queryFn: async () => (await getBackend()).getProject(id!), enabled: !!id });
+/** Photos inside the project's 3MF files; asked only when there is a 3MF to look into. */
+export const useEmbeddedPictures = (p: Project | null | undefined) => useQuery({ queryKey: keys.pictures(p?.id ?? ''), queryFn: async () => (await getBackend()).embeddedPictures(p!.id), enabled: !!p && !p.offline && p.files.some((f) => /\.3mf$/i.test(f.rel_path)) });
 export const useTagCounts = (rootId: string | null = null) => useQuery({ queryKey: keys.tags(rootId), queryFn: async () => (await getBackend()).tagCounts(rootId) });
 export const useFacets = (rootId: string | null = null) => useQuery({ queryKey: keys.facets(rootId), queryFn: async () => (await getBackend()).facets(rootId) });
 export const useThumbLocation = () => useQuery({ queryKey: keys.thumbLocation, queryFn: async () => (await getBackend()).getThumbLocation() });

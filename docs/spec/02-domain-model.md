@@ -166,6 +166,10 @@ reference along.
   (`thumbnail:`): any image of the project, or the viewer's current view, which the app
   saves as `.meshkeep/preview.png` inside the project. That one file is the only thing
   inside an app folder the scanner indexes, and only while the sidecar points at it.
+- Photos inside a 3MF (implemented): a Bambu Studio project from MakerWorld stores the model
+  page's pictures under `Auxiliaries/Model Pictures/`. The project's gallery lists them next
+  to the image files and reads them straight from the archive; nothing is unpacked, indexed
+  or written, and only entries of that folder can be read this way.
 
 ## Index (cache database)
 

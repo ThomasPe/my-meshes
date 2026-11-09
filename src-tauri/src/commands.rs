@@ -10,6 +10,7 @@ use meshkeep_engine::model::{
     ThumbStats,
 };
 use meshkeep_engine::settings::{McpSettings, NetworkSettings};
+use meshkeep_engine::threemf::{self, EmbeddedPicture};
 use meshkeep_engine::{
     BatchReport, BatchUpdate, CreatorSuggestions, DuplicateReport, EngineError, MoveReport, PromoteItem, PromoteReport, UpdateMetadata,
 };
@@ -307,6 +308,37 @@ pub async fn read_project_file(app: AppHandle, project_id: String, rel_path: Str
             .resolve_file(&project_id, &rel_path)?
     };
     let bytes = tauri::async_runtime::spawn_blocking(move || std::fs::read(path))
+        .await
+        .map_err(|e| AppError {
+            code: "shell",
+            message: e.to_string(),
+        })??;
+    Ok(Response::new(bytes))
+}
+
+/// Photos stored inside the project's 3MF files (MakerWorld downloads), for the gallery.
+#[tauri::command]
+pub async fn embedded_pictures(app: AppHandle, project_id: String) -> CmdResult<Vec<EmbeddedPicture>> {
+    let files = { app.state::<AppState>().engine.lock().unwrap().threemf_files(&project_id)? };
+    tauri::async_runtime::spawn_blocking(move || threemf::pictures_of(&files))
+        .await
+        .map_err(|e| AppError {
+            code: "shell",
+            message: e.to_string(),
+        })
+}
+
+/// Raw bytes of one of those photos, read straight from the archive.
+#[tauri::command]
+pub async fn read_embedded_picture(app: AppHandle, project_id: String, rel_path: String, entry: String) -> CmdResult<Response> {
+    let path = {
+        app.state::<AppState>()
+            .engine
+            .lock()
+            .unwrap()
+            .resolve_file(&project_id, &rel_path)?
+    };
+    let bytes = tauri::async_runtime::spawn_blocking(move || threemf::read_picture(&path, &entry))
         .await
         .map_err(|e| AppError {
             code: "shell",

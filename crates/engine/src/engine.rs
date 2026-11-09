@@ -1048,6 +1048,24 @@ impl Engine {
     }
 
     /// Absolute path of a file inside a project. Refuses anything that escapes the project.
+    /// The 3MF files of a project (relative and absolute path), for listing the pictures
+    /// stored inside them off the caller's thread. Empty while the root is offline.
+    pub fn threemf_files(&self, project_id: &str) -> Result<Vec<(String, PathBuf)>> {
+        let p = self
+            .index
+            .project(project_id)?
+            .ok_or_else(|| EngineError::ProjectNotFound(project_id.to_string()))?;
+        if p.offline {
+            return Ok(Vec::new());
+        }
+        let dir = self.project_dir(&p)?;
+        Ok(p.files
+            .iter()
+            .filter(|f| f.kind == FileKind::Model && f.rel_path.to_ascii_lowercase().ends_with(".3mf"))
+            .map(|f| (f.rel_path.clone(), dir.join(&f.rel_path)))
+            .collect())
+    }
+
     pub fn resolve_file(&self, project_id: &str, rel: &str) -> Result<PathBuf> {
         let p = self
             .index

@@ -224,6 +224,7 @@
     "thumbnailIs": "Preview image: {{name}}",
     "chooseAutomatically": "Choose automatically",
     "viewCapture": "View from the viewer",
+    "embeddedIn": "From {{file}}",
     "setViewThumbnail": "Use this view as preview",
     "thumbnailSet": "Preview chosen; rendering it now…",
     "thumbnailAuto": "Preview is chosen automatically again"
