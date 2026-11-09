@@ -40,6 +40,9 @@ pub enum SourceKind {
 pub enum ImportAction {
     /// Becomes a project directory named `name` directly below the root.
     Project,
+    /// Zip archives only (LIB-9): the archive itself goes into a new project directory named
+    /// `name`, unextracted, next to a project.yaml that names it as the packed archive.
+    Packed,
     /// Copied into `<root>/_Inbox`.
     Inbox,
     Skip,
@@ -106,6 +109,9 @@ pub struct ImportReport {
     pub root_id: String,
     /// Relative paths (below the root) of the project directories created.
     pub projects: Vec<String>,
+    /// The ones among them that were created packed (LIB-9).
+    #[serde(default)]
+    pub packed: Vec<String>,
     pub inbox_files: u32,
     pub skipped: u32,
     pub errors: Vec<String>,
@@ -545,7 +551,7 @@ fn copy_dir(src: &Path, dst: &Path) -> Result<u32> {
 }
 
 /// A name that does not collide in `dir`: `name`, `name (2)`, `name (3)`, ...
-fn unique_file_name(dir: &Path, name: &str) -> PathBuf {
+pub(crate) fn unique_file_name(dir: &Path, name: &str) -> PathBuf {
     let candidate = dir.join(name);
     if !candidate.exists() {
         return candidate;
@@ -580,7 +586,7 @@ pub fn execute(
     let mut seen: Vec<String> = Vec::new();
     for item in &req.items {
         match item.action {
-            ImportAction::Project => {
+            ImportAction::Project | ImportAction::Packed => {
                 let t = project_target(root, &item.name)?;
                 let key = item.name.trim().to_lowercase();
                 if seen.contains(&key) {
@@ -617,6 +623,16 @@ pub fn execute(
                     let dst = unique_file_name(&inbox, name);
                     std::fs::copy(&item.source, &dst).map_err(io_err(&dst))?;
                     report.inbox_files += 1;
+                }
+                ImportAction::Packed => {
+                    let target = target.expect("validated above");
+                    let note = build_packed(root, &item.source, &target, req.archive_policy, deleter)?;
+                    let name = target.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+                    report.projects.push(name.clone());
+                    report.packed.push(name);
+                    if let Some(note) = note {
+                        report.warnings.push(format!("{}: {note}", item.name));
+                    }
                 }
                 ImportAction::Project => {
                     let target = target.expect("validated above");
@@ -684,6 +700,70 @@ fn build_project(
         }
     }
     result
+}
+
+/// A packed project (LIB-9): the zip goes into a new project folder as it is, next to a
+/// project.yaml naming it; nothing is extracted. The archive must hold at least one model.
+/// With the policies that take the archive away from its source folder (trash, originals) it
+/// is moved, otherwise copied. Returns a note when the project is fine but the source could
+/// not be removed. A failure puts a moved archive back and removes the staging folder.
+fn build_packed(root: &Path, source: &Path, target: &Path, policy: ArchivePolicy, deleter: &Deleter) -> Result<Option<String>> {
+    if source.is_dir() || ext_of(source) != "zip" {
+        return Err(EngineError::NotAllowed(
+            "only zip archives can stay packed; folders, 7z archives and loose files are copied or extracted".into(),
+        ));
+    }
+    let entries = crate::packed::list_entries(source)?;
+    if !entries.iter().any(|e| is_model(&e.name)) {
+        return Err(EngineError::NotAllowed(
+            "the archive holds no model files, so no project was created".into(),
+        ));
+    }
+    let staging = root.join(STAGING_DIR).join(target.file_name().unwrap_or_default());
+    if staging.exists() {
+        std::fs::remove_dir_all(&staging).map_err(io_err(&staging))?;
+    }
+    std::fs::create_dir_all(&staging).map_err(io_err(&staging))?;
+    let archive_name = source.file_name().and_then(|n| n.to_str()).unwrap_or("models.zip").to_string();
+    let dst = staging.join(&archive_name);
+    let take = matches!(policy, ArchivePolicy::Trash | ArchivePolicy::Originals);
+    let mut renamed = false;
+    let result = (|| -> Result<()> {
+        let sidecar = crate::model::Sidecar {
+            packed: Some(archive_name.clone()),
+            ..Default::default()
+        };
+        crate::sidecar::write(&staging, &sidecar, None)?;
+        if take && std::fs::rename(source, &dst).is_ok() {
+            renamed = true;
+        } else {
+            std::fs::copy(source, &dst).map_err(io_err(&dst))?;
+        }
+        move_dir(&staging, target)
+    })();
+    if let Err(e) = result {
+        if renamed {
+            // the archive was moved into the staging folder: it goes back where it was
+            let from = if target.join(&archive_name).is_file() {
+                target.join(&archive_name)
+            } else {
+                dst
+            };
+            let _ = std::fs::rename(&from, source);
+        }
+        let _ = std::fs::remove_dir_all(&staging);
+        if target.exists() {
+            let _ = std::fs::remove_dir_all(target);
+        }
+        return Err(e);
+    }
+    if take && !renamed {
+        // copied across volumes: the project holds the archive, the source may go now
+        if let Err(e) = deleter(source) {
+            return Ok(Some(format!("project created, but the archive was left in place: {e}")));
+        }
+    }
+    Ok(None)
 }
 
 /// Copies or extracts `source` into the (empty) `dir`.

@@ -46,7 +46,7 @@ pub struct Hints {
     pub source_url: Vec<Hint>,
 }
 
-const MAX_TEXT: u64 = 64 << 10;
+pub(crate) const MAX_TEXT: u64 = 64 << 10;
 /// Words that are common first words of file names but never a creator.
 const GENERIC: &[&str] = &[
     "model", "models", "part", "parts", "file", "files", "print", "stl", "new", "my", "the", "body", "base", "top", "bottom", "left",
@@ -56,12 +56,30 @@ const GENERIC: &[&str] = &[
 /// Hints for one project folder. `known_creators` are the creators already in the library,
 /// used to settle spelling (a hint that matches one is reported in that spelling).
 pub fn detect(dir: &Path, files: &[FileEntry], known_creators: &[String]) -> Hints {
+    detect_from(
+        dir.file_name().and_then(|n| n.to_str()),
+        files,
+        known_creators,
+        &|f| read_text(&dir.join(&f.rel_path)),
+        &|f| threemf_metadata(&dir.join(&f.rel_path)),
+    )
+}
+
+/// `detect` with the file access supplied by the caller, so files inside a packed archive
+/// can be read as well: `text` returns the head of a small text file, `threemf` the
+/// metadata pairs of a 3MF (empty when it cannot be read cheaply).
+pub fn detect_from(
+    folder_name: Option<&str>,
+    files: &[FileEntry],
+    known_creators: &[String],
+    text: &dyn Fn(&FileEntry) -> Option<String>,
+    threemf: &dyn Fn(&FileEntry) -> Vec<(String, String)>,
+) -> Hints {
     let mut h = Hints::default();
     for f in files {
-        let path = dir.join(&f.rel_path);
         match f.kind {
             FileKind::Model if f.name.to_ascii_lowercase().ends_with(".3mf") => {
-                for (key, value) in threemf_metadata(&path) {
+                for (key, value) in threemf(f) {
                     match key.to_ascii_lowercase().as_str() {
                         "designer" | "creator" | "author" => push(&mut h.creator, value, HintSource::ThreeMf, 90),
                         "license" | "licenseterms" | "creativecommonslicense" | "licence" => {
@@ -89,7 +107,7 @@ pub fn detect(dir: &Path, files: &[FileEntry], known_creators: &[String]) -> Hin
                 if !(is_shortcut || is_text) {
                     continue;
                 }
-                let Some(text) = read_text(&path) else { continue };
+                let Some(text) = text(f) else { continue };
                 let source = if is_shortcut { HintSource::Shortcut } else { HintSource::Readme };
                 for url in model_urls(&text) {
                     push(&mut h.source_url, url, source, if is_shortcut { 90 } else { 75 });
@@ -115,7 +133,7 @@ pub fn detect(dir: &Path, files: &[FileEntry], known_creators: &[String]) -> Hin
     if let Some(p) = shared_prefix(&stems) {
         push(&mut h.creator, p, HintSource::FileNames, 55);
     }
-    if let Some(name) = dir.file_name().and_then(|n| n.to_str()) {
+    if let Some(name) = folder_name {
         for (c, conf) in folder_creators(name) {
             push(&mut h.creator, c, HintSource::FolderName, conf);
         }

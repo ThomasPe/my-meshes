@@ -72,6 +72,8 @@ export interface Project {
   added: string;
   thumb: string | null;
   slicer: string | null;
+  /** Packed project (LIB-9): the zip (relative to the project folder) that holds the models; its entries are listed in `files` as `<archive>/<entry>`. */
+  packed: string | null;
 }
 
 export interface ProjectSummary {
@@ -92,7 +94,14 @@ export interface ProjectSummary {
   added: string;
   thumb: string | null;
   slicer: string | null;
+  /** The packed archive when the project is packed (LIB-9). */
+  packed: string | null;
 }
+
+/** Progress of packing or unpacking one project (LIB-9). */
+export interface PackProgress { project_id: string; phase: 'pack' | 'verify' | 'unpack'; index: number; total: number; name: string }
+/** Outcome of packing or unpacking several projects; the byte counts cover the ones that worked. */
+export interface PackReport { projects: Project[]; failed: Array<{ project_id: string; message: string }>; bytes_before: number; bytes_after: number; warnings: string[] }
 
 export interface ListQuery {
   root_id?: string | null;
@@ -232,7 +241,8 @@ export interface SmartCollection {
 }
 
 export type SourceKind = 'archive' | 'folder' | 'file';
-export type ImportAction = 'project' | 'inbox' | 'skip';
+/** `packed` (zip archives only, LIB-9): the archive goes into the project unextracted. */
+export type ImportAction = 'project' | 'packed' | 'inbox' | 'skip';
 export type ArchivePolicy = 'keep' | 'originals' | 'trash' | 'leave';
 
 export interface ImportItem {
@@ -264,6 +274,8 @@ export interface ImportRequest {
 export interface ImportReport {
   root_id: string;
   projects: string[];
+  /** The ones among them that were created packed (LIB-9). */
+  packed?: string[];
   inbox_files: number;
   skipped: number;
   errors: string[];
@@ -366,4 +378,4 @@ export function isAppError(e: unknown): e is AppError {
   return typeof e === 'object' && e !== null && 'code' in e && 'message' in e;
 }
 
-export type LibraryChanged = { rootId: string | null; report: ScanReport | null; reason: 'scan' | 'watch' | 'poll' | 'root_removed' | 'rename' | 'delete' | 'thumbs_cleared' | 'import' | 'move'; error?: string; oldId?: string; newId?: string; oldIds?: string[] };
+export type LibraryChanged = { rootId: string | null; report: ScanReport | null; reason: 'scan' | 'watch' | 'poll' | 'root_removed' | 'rename' | 'delete' | 'thumbs_cleared' | 'import' | 'move' | 'pack'; error?: string; oldId?: string; newId?: string; oldIds?: string[] };

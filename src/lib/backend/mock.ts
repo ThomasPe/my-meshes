@@ -2,7 +2,7 @@
 // the Tauri commands, including error codes, so UI tests exercise real flows.
 import type { Backend, Unlisten } from './index';
 import { generate3mf, generateObj, generateStl } from '@/lib/mesh/generate';
-import type { AppError, Collection, FacetCount, FileEntry, FileKind, ThumbLocation, FolderNode, ImportItem, ImportProgress, InboxFile, LibraryChanged, LibraryRoot, ListQuery, Project, ProjectSummary, ScanProgress, SidecarStamp, SmartCollection, TagCount, ThumbJob, UpdateMetadata, HashProgress, AiSettingsView, MetadataSuggestion, Hints, CreatorSuggestion, EnrichProgress, McpSettings, ConventionDeviation } from '@/lib/types';
+import type { AppError, Collection, FacetCount, FileEntry, FileKind, ThumbLocation, FolderNode, ImportItem, ImportProgress, InboxFile, LibraryChanged, LibraryRoot, ListQuery, Project, ProjectSummary, ScanProgress, SidecarStamp, SmartCollection, TagCount, ThumbJob, UpdateMetadata, HashProgress, AiSettingsView, MetadataSuggestion, Hints, CreatorSuggestion, EnrichProgress, McpSettings, ConventionDeviation, PackProgress, PackReport, ImportReport } from '@/lib/types';
 
 const kindOf = (name: string): FileKind => {
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
@@ -48,6 +48,7 @@ function mk(root_id: string, rel_path: string, title: string, o: Partial<MockPro
     added: new Date(Date.now() - ((o.daysAgo ?? 7) + 30) * 864e5).toISOString(),
     thumb: null,
     slicer: files.find((x) => x.slicer)?.slicer ?? null,
+    packed: o.packed ?? null,
   };
 }
 
@@ -117,6 +118,7 @@ export function createMockBackend(): Backend {
   const network = { fetch_model_pages: false };
   const mcp: McpSettings = { enabled: false, port: 7340, token: '', allow_writes: false, allow_deletes: false, import_dirs: [] };
   const conventions = new Map<string, string>();
+  const ownPacks = new Set<string>(); // projects packed here (their archives keep the project's layout)
   const STARTER_CONVENTIONS = `# Library conventions for this folder (Meshkeep reads this file, agents receive it).\nversion: 1\nlayout:\n  pattern: "{creator}/{title}"\n  shared_folder: Misc\n  shared_threshold: 2\n  unknown_creator: Misc\ntitles:\n  strip: [thingiverse_id, date_suffix]\nmetadata:\n  tags: { language: en, case: lower, separator: "-" }\n  license_default: Personal use\n  licenses: [CC0-1.0, CC-BY-4.0, CC-BY-NC-SA-4.0, Personal use]\nnotes: |\n  Link the original model as the source, not a later remake.\n`;
   let mcpRequests = 0;
   const mintToken = () => 'mk_' + Array.from({ length: 48 }, () => 'abcdef0123456789'[Math.floor(Math.random() * 16)]).join('');
@@ -142,7 +144,7 @@ export function createMockBackend(): Backend {
   const dismissedHints = new Map<string, string[]>();
   const pageCache = new Set<string>();
   const pageHints = new Map<string, { creator: string | null; license: string | null }>();
-  const listeners = { enrich: new Set<(p: EnrichProgress) => void>(), dup: new Set<(p: HashProgress) => void>(), scan: new Set<(p: ScanProgress) => void>(), lib: new Set<(e: LibraryChanged) => void>(), proj: new Set<(e: { projectId: string }) => void>(), imp: new Set<(p: ImportProgress) => void>(), coll: new Set<() => void>(), inbox: new Set<(e: { rootId: string }) => void>() };
+  const listeners = { enrich: new Set<(p: EnrichProgress) => void>(), dup: new Set<(p: HashProgress) => void>(), scan: new Set<(p: ScanProgress) => void>(), lib: new Set<(e: LibraryChanged) => void>(), proj: new Set<(e: { projectId: string }) => void>(), imp: new Set<(p: ImportProgress) => void>(), pack: new Set<(p: PackProgress) => void>(), coll: new Set<() => void>(), inbox: new Set<(e: { rootId: string }) => void>() };
   const collections: Collection[] = [{ id: 'c_desk', name: 'Desk setup', projects: ['r1:Projects/Desk/Phone Stand', 'r1:Projects/Desk/Cable Clips'] }];
   const smart: SmartCollection[] = [{ id: 's_grid', name: 'Gridfinity PLA', query: { tags: ['gridfinity'], sort: 'title' } }];
   const inbox = new Map<string, InboxFile[]>([['r1', [{ name: 'quick_download.stl', kind: 'model', size: 2.2 * MB, modified: new Date(Date.now() - 864e5).toISOString() }, { name: 'reference.jpg', kind: 'image', size: 0.4 * MB, modified: new Date(Date.now() - 2 * 864e5).toISOString() }]]]);
@@ -166,7 +168,7 @@ export function createMockBackend(): Backend {
     return list;
   };
   const sub = <T>(set: Set<(x: T) => void>, cb: (x: T) => void): Promise<Unlisten> => { set.add(cb); return Promise.resolve(() => set.delete(cb)); };
-  const summary = (p: MockProject): ProjectSummary => ({ id: p.id, root_id: p.root_id, rel_path: p.rel_path, title: p.title, creator: p.creator, tags: p.tags, thumbnail: p.thumbnail, file_count: p.files.length, model_count: p.model_count, total_bytes: p.total_bytes, modified: p.modified, has_sidecar: p.has_sidecar, offline: p.offline, favorite: p.favorite, added: p.added, thumb: p.thumb, slicer: p.slicer });
+  const summary = (p: MockProject): ProjectSummary => ({ id: p.id, root_id: p.root_id, rel_path: p.rel_path, title: p.title, creator: p.creator, tags: p.tags, thumbnail: p.thumbnail, file_count: p.files.length, model_count: p.model_count, total_bytes: p.total_bytes, modified: p.modified, has_sidecar: p.has_sidecar, offline: p.offline, favorite: p.favorite, added: p.added, thumb: p.thumb, slicer: p.slicer, packed: p.packed });
   const delay = (ms = 30) => new Promise((r) => setTimeout(r, ms));
   const find = (id: string) => { const p = projects.find((x) => x.id === id); if (!p) throw err('not_found', `project not found: ${id}`); return p; };
 
@@ -407,7 +409,9 @@ export function createMockBackend(): Backend {
     async logTail(lines) { return Array.from({ length: Math.min(lines, 5) }, (_, i) => `[2026-10-20][12:00:0${i}][INFO][meshkeep_engine::scan] mock log line ${i + 1} ~/3D Models`).join('\n'); },
     async openUrl(url) { const w = window as unknown as { __mockOpened?: string[] }; (w.__mockOpened ??= []).push(url); },
     async revealFolder(rootId, relPath) { const w = window as unknown as { __mockRevealed?: string[] }; (w.__mockRevealed ??= []).push(`${rootId}:${relPath}`); },
-    async openProjectFile() {},
+    async openProjectFile(projectId, relPath) {
+      const w = window as unknown as { __mockOpenedFiles?: string[] }; (w.__mockOpenedFiles ??= []).push(`${projectId}/${relPath}`);
+    },
     async setFavorite(projectId, favorite) { const p = find(projectId); p.favorite = favorite; listeners.proj.forEach((cb) => cb({ projectId })); return { ...p }; },
     async renameProject(projectId, newName) {
       await delay(80);
@@ -462,6 +466,7 @@ export function createMockBackend(): Backend {
       await delay(60);
       const p = find(projectId);
       if (relPath.endsWith('project.yaml')) throw err('not_allowed', 'project.yaml is managed by the app');
+      if (p.packed && (relPath === p.packed || relPath.startsWith(`${p.packed}/`))) throw err('not_allowed', `${relPath} is inside the packed archive; unpack the project first`);
       const i = p.files.findIndex((x) => x.rel_path === relPath);
       if (i < 0) throw err('not_found', relPath);
       p.files.splice(i, 1);
@@ -519,8 +524,8 @@ export function createMockBackend(): Backend {
     async executeImport(req) {
       const root = roots.find((r) => r.id === req.root_id);
       if (!root) throw err('not_found', req.root_id);
-      const report = { root_id: req.root_id, projects: [] as string[], inbox_files: 0, skipped: 0, errors: [] as string[], metadata_written: 0, pages_read: 0, warnings: [] as string[] };
-      for (const it of req.items.filter((x) => x.action === 'project')) {
+      const report: ImportReport = { root_id: req.root_id, projects: [], packed: [], inbox_files: 0, skipped: 0, errors: [], metadata_written: 0, pages_read: 0, warnings: [] };
+      for (const it of req.items.filter((x) => x.action === 'project' || x.action === 'packed')) {
         if (!it.name.trim() || /[\\/:*?"<>|]/.test(it.name)) throw err('invalid_name', `invalid name: ${it.name}`);
         if (projects.some((p) => p.root_id === req.root_id && p.rel_path.toLowerCase() === it.name.trim().toLowerCase())) throw err('already_exists', `a file or folder named ${it.name} already exists`);
       }
@@ -529,6 +534,19 @@ export function createMockBackend(): Backend {
         listeners.imp.forEach((cb) => cb({ index: i, total: req.items.length, name: it.name, phase: 'copy' }));
         if (it.action === 'skip') { report.skipped++; continue; }
         if (it.action === 'inbox') { const list = inbox.get(req.root_id) ?? []; list.unshift({ name: it.source.split(/[\\/]/).pop()!, kind: kindOf(it.source), size: 1.1 * MB, modified: new Date().toISOString() }); inbox.set(req.root_id, list); report.inbox_files++; continue; }
+        if (it.action === 'packed') {
+          // LIB-9: the zip itself becomes the project's content; its entries are listed below it
+          if (!it.source.toLowerCase().endsWith('.zip')) { report.errors.push(`${it.name}: not allowed: only zip archives can stay packed`); continue; }
+          const zip = it.source.split(/[\\/]/).pop()!;
+          const wrap = zip.replace(/\.zip$/i, '');
+          const inside = [f('part_a.stl', 2 * MB, 0), f('part_b.stl', 2.2 * MB, 0), f('README.md', 1024, 0)].map((x) => ({ ...x, rel_path: `${zip}/${wrap}/${x.rel_path}` }));
+          const p = mk(req.root_id, it.name.trim(), it.name.trim(), { files: [f(zip, 2.6 * MB, 0), ...inside], daysAgo: 0, has_sidecar: true, packed: zip });
+          p.total_bytes = 2.6 * MB;
+          projects.unshift(p);
+          report.projects.push(it.name.trim());
+          (report.packed ??= []).push(it.name.trim());
+          continue;
+        }
         const files = [f('part_a.stl', 2 * MB, 0), f('part_b.stl', 2.2 * MB, 0), f('README.md', 1024, 0)];
         if (req.archive_policy === 'keep' && it.source.endsWith('.zip')) files.push(f(it.source.split(/[\\/]/).pop()!, 4.2 * MB, 0));
         projects.unshift(mk(req.root_id, it.name.trim(), it.name.trim(), { files, daysAgo: 0, has_sidecar: false }));
@@ -587,6 +605,58 @@ export function createMockBackend(): Backend {
     async deleteSmartCollection(id) { const i = smart.findIndex((x) => x.id === id); if (i < 0) throw err('not_found', id); smart.splice(i, 1); collChanged(); },
     async listSmartCollection(id, overrides) { const s = smart.find((x) => x.id === id); if (!s) throw err('not_found', id); return applyQuery(projects.slice(), { ...s.query, sort: overrides?.sort ?? s.query.sort, text: overrides?.text ?? s.query.text }).map(summary); },
     onImportProgress: (cb) => sub(listeners.imp, cb),
+    onPackProgress: (cb) => sub(listeners.pack, cb),
+    // LIB-9 in browser mode: the file list changes the way the engine's does; a packed zip is ~60 % of its models
+    async packProjects(ids) {
+      const report: PackReport = { projects: [], failed: [], bytes_before: 0, bytes_after: 0, warnings: [] };
+      for (const id of ids) {
+        const p = projects.find((x) => x.id === id);
+        const models = p?.files.filter((x) => x.kind === 'model') ?? [];
+        if (!p || p.packed || models.length === 0) { report.failed.push({ project_id: id, message: !p ? 'not found' : p.packed ? 'not allowed: the project is packed already' : 'not allowed: the project has no model files to pack' }); continue; }
+        const zip = `${p.rel_path.split('/').pop()}.zip`;
+        for (const [i, m] of models.entries()) { await delay(40); listeners.pack.forEach((cb) => cb({ project_id: id, phase: 'pack', index: i, total: models.length, name: m.rel_path })); }
+        listeners.pack.forEach((cb) => cb({ project_id: id, phase: 'verify', index: models.length, total: models.length, name: zip }));
+        report.bytes_before += p.total_bytes;
+        const zipSize = Math.round(models.reduce((a, x) => a + x.size, 0) * 0.6);
+        p.files = [f(zip, zipSize, 0), ...p.files.map((x) => (x.kind === 'model' ? { ...x, rel_path: `${zip}/${x.rel_path}` } : x))].sort((a, b) => a.rel_path.localeCompare(b.rel_path));
+        p.packed = zip; ownPacks.add(id);
+        p.total_bytes = p.files.filter((x) => !x.rel_path.startsWith(`${zip}/`)).reduce((a, x) => a + x.size, 0);
+        if (p.thumb) thumbs.delete(p.thumb);
+        p.thumb = null; failed.delete(id);
+        p.has_sidecar = true; p.sidecar = { state: 'ok' }; p.sidecar_stamp = { mtime_unix_nanos: String(Date.now() * 1e6), size: 230 };
+        report.bytes_after += p.total_bytes;
+        report.projects.push({ ...p });
+      }
+      listeners.lib.forEach((cb) => cb({ rootId: null, report: null, reason: 'pack' }));
+      return report;
+    },
+    async unpackProjects(ids, keepArchive) {
+      const report: PackReport = { projects: [], failed: [], bytes_before: 0, bytes_after: 0, warnings: [] };
+      for (const id of ids) {
+        const p = projects.find((x) => x.id === id);
+        if (!p || !p.packed) { report.failed.push({ project_id: id, message: !p ? 'not found' : 'not allowed: the project is not packed' }); continue; }
+        const zip = p.packed;
+        const inside = p.files.filter((x) => x.rel_path.startsWith(`${zip}/`));
+        // a download bundle's single wrapper folder is stripped; an archive the app packed keeps its layout
+        const inner = inside.map((x) => x.rel_path.slice(zip.length + 1));
+        const top = inner.every((n) => n.includes('/')) ? new Set(inner.map((n) => n.split('/')[0])) : new Set<string>();
+        const strip = !ownPacks.has(id) && top.size === 1 ? `${[...top][0]}/` : '';
+        for (const [i, e] of inside.entries()) { await delay(40); listeners.pack.forEach((cb) => cb({ project_id: id, phase: 'unpack', index: i, total: inside.length, name: e.rel_path })); }
+        report.bytes_before += p.total_bytes;
+        p.files = p.files
+          .filter((x) => keepArchive || x.rel_path !== zip)
+          .map((x) => (x.rel_path.startsWith(`${zip}/`) ? { ...x, rel_path: x.rel_path.slice(zip.length + 1).slice(strip.length) } : x))
+          .sort((a, b) => a.rel_path.localeCompare(b.rel_path));
+        p.packed = null; ownPacks.delete(id);
+        p.total_bytes = p.files.reduce((a, x) => a + x.size, 0);
+        if (p.thumb) thumbs.delete(p.thumb);
+        p.thumb = null; failed.delete(id);
+        report.bytes_after += p.total_bytes;
+        report.projects.push({ ...p });
+      }
+      listeners.lib.forEach((cb) => cb({ rootId: null, report: null, reason: 'pack' }));
+      return report;
+    },
     onCollectionsChanged: (cb) => sub(listeners.coll, cb),
     onInboxChanged: (cb) => sub(listeners.inbox, cb),
     async onWatchError() { return () => {}; },

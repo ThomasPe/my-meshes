@@ -1,4 +1,4 @@
-import { Check, CloudOff, FileBox, Star } from 'lucide-react';
+import { Archive, Check, CloudOff, FileBox, Star } from 'lucide-react';
 import { memo } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
@@ -51,6 +51,7 @@ export const ProjectCard = memo(function ProjectCard({ project: p, selected, sel
           <span className="absolute right-2.5 top-2.5 flex gap-1">
             {p.offline && <Badge variant="outline"><CloudOff />{t('library.offline')}</Badge>}
             {p.slicer && <Badge variant="accent" title={p.slicer} data-testid="slicer-badge">{t('library.slicerProject')}</Badge>}
+            {p.packed && <Badge variant="outline" className="bg-card/90" title={t('library.packedHint')} data-testid="packed-badge"><Archive />{t('library.packed')}</Badge>}
             {p.file_count > 1 && <Badge><FileBox />{p.file_count}</Badge>}
           </span>
         </Thumb>

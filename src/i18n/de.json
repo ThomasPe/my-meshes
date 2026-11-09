@@ -88,7 +88,9 @@
     "less": "weniger",
     "showProjects": "Projekte anzeigen",
     "duplicates": "Duplikate",
-    "creatorSuggestions": "Creator-Vorschläge"
+    "creatorSuggestions": "Creator-Vorschläge",
+    "packed": "gepackt",
+    "packedHint": "Die Modelle bleiben in einem Zip im Projektordner; Meshkeep liest sie von dort"
   },
   "inspector": {
     "open": "Öffnen",
@@ -226,7 +228,9 @@
     "viewCapture": "Ansicht aus dem Viewer",
     "setViewThumbnail": "Diese Ansicht als Vorschau verwenden",
     "thumbnailSet": "Vorschau gewählt, wird jetzt gerendert…",
-    "thumbnailAuto": "Vorschau wird wieder automatisch gewählt"
+    "thumbnailAuto": "Vorschau wird wieder automatisch gewählt",
+    "packedHint": "Dateien in {{archive}} werden direkt aus dem Archiv gelesen und lassen sich öffnen (für das andere Programm wird eine Kopie angelegt). Um einzelne Dateien zu ändern oder zu entfernen, entpacke das Projekt.",
+    "packedNoDelete": "Im gepackten Archiv: zuerst das Projekt entpacken"
   },
   "settings": {
     "title": "Einstellungen",
@@ -504,7 +508,36 @@
     "rerenderN_one": "Vorschau neu erzeugen",
     "rerenderN_other": "{{count}} Vorschauen neu erzeugen",
     "deleteN_one": "Löschen",
-    "deleteN_other": "{{count}} Projekte löschen"
+    "deleteN_other": "{{count}} Projekte löschen",
+    "pack": "Packen",
+    "unpack": "Entpacken",
+    "packN_one": "Modelle in ein Zip packen",
+    "packN_other": "{{count}} Projekte packen",
+    "unpackN_one": "Entpacken",
+    "unpackN_other": "{{count}} Projekte entpacken",
+    "packTitle_one": "„{{name}}“ packen?",
+    "packTitle_other": "{{count}} Projekte packen?",
+    "packBody": "Die Modelldateien kommen in ein Zip im jeweiligen Projektordner. Meshkeep zeigt, rendert und durchsucht sie weiter; andere Programme sehen das Zip. Das Archiv wird gegen die Dateien geprüft, bevor die losen Kopien in den Papierkorb wandern; der Platz ist frei, sobald du ihn leerst.",
+    "unpackTitle_one": "„{{name}}“ entpacken?",
+    "unpackTitle_other": "{{count}} Projekte entpacken?",
+    "unpackBody": "Die Dateien werden zurück in den Projektordner entpackt. Nichts wird überschrieben. Das Zip wandert in den Papierkorb, wenn du es nicht behältst.",
+    "unpackKeep": "Das Zip zusätzlich im Projekt behalten",
+    "packing_one": "Packe…",
+    "packing_other": "Packe {{count}} Projekte…",
+    "unpacking_one": "Entpacke…",
+    "unpacking_other": "Entpacke {{count}} Projekte…",
+    "packPhase": {
+      "pack": "Packe {{name}} · {{index}}/{{total}}",
+      "verify": "Prüfe {{name}}…",
+      "unpack": "Entpacke {{name}} · {{index}}/{{total}}"
+    },
+    "packed_one": "{{count}} Projekt gepackt: {{before}} → {{after}}",
+    "packed_other": "{{count}} Projekte gepackt: {{before}} → {{after}}",
+    "packedHint": "Die losen Dateien liegen im Papierkorb; leere ihn, um den Platz freizugeben.",
+    "unpacked_one": "{{count}} Projekt entpackt: {{before}} → {{after}}",
+    "unpacked_other": "{{count}} Projekte entpackt: {{before}} → {{after}}",
+    "packFailed_one": "{{count}} Projekt konnte nicht geändert werden",
+    "packFailed_other": "{{count}} Projekte konnten nicht geändert werden"
   },
   "import": {
     "title": "Importieren",
@@ -518,7 +551,8 @@
     "actions": {
       "project": "Neues Projekt",
       "inbox": "Posteingang",
-      "skip": "Überspringen"
+      "skip": "Überspringen",
+      "packed": "Gepacktes Projekt"
     },
     "toInbox": "nach _Inbox kopiert",
     "models_one": "{{count}} Modell",
@@ -527,10 +561,10 @@
     "intoRoot": "In Bibliothek",
     "archivePolicy": "Original-Archive",
     "policy": {
-      "keep": "Im Projekt behalten (+{{size}})",
+      "keep": "Dort lassen und eine Kopie im Projekt behalten (+{{size}})",
       "originals": "Nach _Originals verschieben (+{{size}})",
-      "trash": "Nach dem Entpacken in den Papierkorb",
-      "leave": "Am Ursprungsort belassen"
+      "trash": "Aus dem Quellordner entfernen (Papierkorb)",
+      "leave": "Dort lassen, wo es liegt"
     },
     "summary": {
       "projects_one": "{{count}} Projekt",
@@ -555,7 +589,16 @@
     "notes_other": "{{count}} Hinweise aus dem Import",
     "noRoot": "Noch kein Bibliotheksordner",
     "rootsOffline": "Gerade ist kein Bibliotheksordner erreichbar",
-    "noRootHint": "Importe landen in einem Bibliotheksordner. Wähle zuerst einen; er wird gescannt und dann hier ausgewählt."
+    "noRootHint": "Importe landen in einem Bibliotheksordner. Wähle zuerst einen; er wird gescannt und dann hier ausgewählt.",
+    "zipMode": "Zip-Archive",
+    "zipUnpack": "Entpacken",
+    "zipPacked": "Gepackt lassen",
+    "zipUnpackHint": "Die Dateien werden in den neuen Projektordner entpackt.",
+    "zipPackedHint": "Das Zip kommt so, wie es ist, in das Projekt. Meshkeep zeigt, rendert und durchsucht die Modelle darin; entpacke ein Projekt, wenn du die losen Dateien brauchst. Kleiner auf der Platte, viel weniger Dateien zum Synchronisieren.",
+    "policyPackedMove": "Gepackte Projekte: Das Archiv selbst wandert in das Projekt.",
+    "policyPackedCopy": "Gepackte Projekte: Eine Kopie kommt in das Projekt, das Original bleibt, wo es ist.",
+    "donePacked_one": "{{count}} gepackt gelassen",
+    "donePacked_other": "{{count}} gepackt gelassen"
   },
   "inbox": {
     "title": "Posteingang",

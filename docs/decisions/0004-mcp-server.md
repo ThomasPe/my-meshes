@@ -107,3 +107,14 @@ offers `get_conventions` and `check_conventions` as reading tools and `organize`
 starter set is one click away in Settings); `organize` lives behind "Allow writes" only,
 the window shows the deviations and leaves fixing to an agent for now; placeholders stay
 at `{creator}` and `{title}` until a case asks for more.
+
+## Amendment 2026-11-09: packed projects (LIB-9)
+
+`execute_import` takes the action `packed` for zip archives (the archive goes into the
+project unextracted), and two tools behind "Allow writes" change how a project is stored:
+`pack_projects` (loose models into `<folder>.zip`, verified, loose copies to the trash) and
+`unpack_projects` (extract again, the zip to the trash unless kept). Both take `dry_run`.
+They use the trash but lose no content, which is why they sit with the writing tools and
+not behind "Allow deleting". `get_project` reports `packed` and lists archive entries as
+`<archive>/<path>`; `read_project_file` reads them; `move_files`, `delete_file` and
+`remove_shared_files` refuse them and say to unpack first.

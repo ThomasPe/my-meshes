@@ -88,7 +88,9 @@
     "less": "less",
     "showProjects": "Show projects",
     "duplicates": "Duplicates",
-    "creatorSuggestions": "Creator suggestions"
+    "creatorSuggestions": "Creator suggestions",
+    "packed": "packed",
+    "packedHint": "The models stay inside a zip in the project folder; Meshkeep reads them from there"
   },
   "inspector": {
     "open": "Open",
@@ -226,7 +228,9 @@
     "viewCapture": "View from the viewer",
     "setViewThumbnail": "Use this view as preview",
     "thumbnailSet": "Preview chosen; rendering it now…",
-    "thumbnailAuto": "Preview is chosen automatically again"
+    "thumbnailAuto": "Preview is chosen automatically again",
+    "packedHint": "Files inside {{archive}} are read straight from the archive and can be opened (a copy is made for the other program). To change or remove single files, unpack the project.",
+    "packedNoDelete": "Inside the packed archive: unpack the project first"
   },
   "settings": {
     "title": "Settings",
@@ -504,7 +508,36 @@
     "rerenderN_one": "Re-render preview",
     "rerenderN_other": "Re-render {{count}} previews",
     "deleteN_one": "Delete",
-    "deleteN_other": "Delete {{count}} projects"
+    "deleteN_other": "Delete {{count}} projects",
+    "pack": "Pack",
+    "unpack": "Unpack",
+    "packN_one": "Pack models into a zip",
+    "packN_other": "Pack {{count}} projects",
+    "unpackN_one": "Unpack",
+    "unpackN_other": "Unpack {{count}} projects",
+    "packTitle_one": "Pack “{{name}}”?",
+    "packTitle_other": "Pack {{count}} projects?",
+    "packBody": "The model files go into one zip inside each project folder. Meshkeep keeps showing, previewing and searching them; other programs see the zip. The archive is checked against the files before the loose copies move to the recycle bin, so the space is free once you empty it.",
+    "unpackTitle_one": "Unpack “{{name}}”?",
+    "unpackTitle_other": "Unpack {{count}} projects?",
+    "unpackBody": "The files are extracted back into the project folder. Nothing is overwritten. The zip goes to the recycle bin unless you keep it.",
+    "unpackKeep": "Keep the zip in the project as well",
+    "packing_one": "Packing…",
+    "packing_other": "Packing {{count}} projects…",
+    "unpacking_one": "Unpacking…",
+    "unpacking_other": "Unpacking {{count}} projects…",
+    "packPhase": {
+      "pack": "Packing {{name}} · {{index}}/{{total}}",
+      "verify": "Checking {{name}}…",
+      "unpack": "Unpacking {{name}} · {{index}}/{{total}}"
+    },
+    "packed_one": "{{count}} project packed: {{before}} → {{after}}",
+    "packed_other": "{{count}} projects packed: {{before}} → {{after}}",
+    "packedHint": "The loose files are in the recycle bin; empty it to free the space.",
+    "unpacked_one": "{{count}} project unpacked: {{before}} → {{after}}",
+    "unpacked_other": "{{count}} projects unpacked: {{before}} → {{after}}",
+    "packFailed_one": "{{count}} project could not be changed",
+    "packFailed_other": "{{count}} projects could not be changed"
   },
   "import": {
     "title": "Import",
@@ -518,7 +551,8 @@
     "actions": {
       "project": "New project",
       "inbox": "Inbox",
-      "skip": "Skip"
+      "skip": "Skip",
+      "packed": "Packed project"
     },
     "toInbox": "copied to _Inbox",
     "models_one": "{{count}} model",
@@ -527,9 +561,9 @@
     "intoRoot": "Into library",
     "archivePolicy": "Original archives",
     "policy": {
-      "keep": "Keep inside the project (+{{size}})",
+      "keep": "Leave it and keep a copy in the project (+{{size}})",
       "originals": "Move to _Originals (+{{size}})",
-      "trash": "Move to trash after extracting",
+      "trash": "Remove from the source folder (trash)",
       "leave": "Leave where it is"
     },
     "summary": {
@@ -555,7 +589,16 @@
     "notes_other": "{{count}} notes from the import",
     "noRoot": "No library folder yet",
     "rootsOffline": "No library folder is reachable right now",
-    "noRootHint": "Imports go into a library folder. Choose one first; it is scanned and then selected here."
+    "noRootHint": "Imports go into a library folder. Choose one first; it is scanned and then selected here.",
+    "zipMode": "Zip archives",
+    "zipUnpack": "Unpack",
+    "zipPacked": "Keep packed",
+    "zipUnpackHint": "The files are extracted into the new project folder.",
+    "zipPackedHint": "The zip goes into the project as it is. Meshkeep shows, previews and searches the models inside; unpack a project when you need the loose files. Smaller on disk, far fewer files to sync.",
+    "policyPackedMove": "Packed projects: the archive itself moves into the project.",
+    "policyPackedCopy": "Packed projects: a copy goes into the project, the original stays where it is.",
+    "donePacked_one": "{{count}} kept packed",
+    "donePacked_other": "{{count}} kept packed"
   },
   "inbox": {
     "title": "Inbox",

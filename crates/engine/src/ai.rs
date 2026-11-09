@@ -481,6 +481,7 @@ pub fn prepare(
     thumbnail: Option<&Path>,
     tag_counts: &[TagCount],
     model: &str,
+    read_doc: &dyn Fn(&crate::model::FileEntry) -> Option<String>,
 ) -> Result<PreparedSuggestion> {
     let subject = folder_name(project, project_dir);
     let mut text = String::new();
@@ -542,14 +543,13 @@ pub fn prepare(
         if docs >= MAX_DOCS {
             break;
         }
-        let path = project_dir.join(&f.rel_path);
-        match std::fs::read_to_string(&path) {
-            Ok(body) => {
+        match read_doc(f) {
+            Some(body) => {
                 text.push_str(&format!("\n--- {} ---\n{}\n", f.rel_path, clip(body.trim(), MAX_DOC_CHARS)));
                 sent.documents.push(f.rel_path.clone());
                 docs += 1;
             }
-            Err(e) => tracing::debug!("ai: skip {}: {e}", path.display()),
+            None => tracing::debug!("ai: skip {}", f.rel_path),
         }
     }
 

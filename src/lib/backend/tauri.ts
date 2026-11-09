@@ -3,7 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 import type { Backend } from './index';
-import type { EnrichProgress, HashProgress, ImportProgress, LibraryChanged, Project, ScanProgress } from '@/lib/types';
+import type { EnrichProgress, HashProgress, ImportProgress, LibraryChanged, Project, ScanProgress, PackProgress } from '@/lib/types';
 
 export function createTauriBackend(): Backend {
   return {
@@ -78,6 +78,9 @@ export function createTauriBackend(): Backend {
     deleteSmartCollection: (id) => invoke('delete_smart_collection', { id }),
     listSmartCollection: (id, overrides) => invoke('list_smart_collection', { id, overrides: overrides ?? null }),
     onImportProgress: (cb) => listen<ImportProgress>('import://progress', (e) => cb(e.payload)),
+    packProjects: (projectIds) => invoke('pack_projects', { projectIds }),
+    unpackProjects: (projectIds, keepArchive) => invoke('unpack_projects', { projectIds, keepArchive }),
+    onPackProgress: (cb) => listen<PackProgress>('pack://progress', (e) => cb(e.payload)),
     getNetworkSettings: () => invoke('get_network_settings'),
     getMcpSettings: () => invoke('get_mcp_settings'),
     setMcpSettings: (settings) => invoke('set_mcp_settings', { settings }),

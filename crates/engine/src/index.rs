@@ -21,7 +21,7 @@ pub struct Index {
     conn: Connection,
 }
 
-const SCHEMA_VERSION: i64 = 4;
+const SCHEMA_VERSION: i64 = 5;
 
 /// (project id, rel path) -> (size, modified, sha256), see `Index::file_hashes`.
 pub type HashCache = HashMap<(String, String), (u64, String, String)>;
@@ -34,7 +34,7 @@ CREATE TABLE IF NOT EXISTS projects (
   thumbnail TEXT, total_bytes INTEGER NOT NULL, file_count INTEGER NOT NULL, model_count INTEGER NOT NULL,
   modified TEXT NOT NULL, added TEXT NOT NULL, sidecar_state TEXT NOT NULL, sidecar_message TEXT, warnings TEXT NOT NULL,
   offline INTEGER NOT NULL DEFAULT 0, favorite INTEGER NOT NULL DEFAULT 0, slicer TEXT,
-  thumb_source TEXT, thumb_kind TEXT
+  thumb_source TEXT, thumb_kind TEXT, packed TEXT
 );
 CREATE INDEX IF NOT EXISTS projects_root ON projects(root_id, rel_path);
 CREATE INDEX IF NOT EXISTS projects_added ON projects(added);
@@ -148,9 +148,19 @@ impl Index {
                     params![pid, rel, ext_of(&name)],
                 )?;
             }
-        } else if version != SCHEMA_VERSION && version != 3 {
+        } else if !(3..=SCHEMA_VERSION).contains(&version) {
             // v3 -> v4 only adds file_hashes (created below); anything else starts over
             conn.execute_batch(DROP)?;
+        }
+        if (2..=4).contains(&version) {
+            // v4 -> v5 adds projects.packed (LIB-9); in place, so cached thumbnails survive
+            let has: bool = conn
+                .query_row("SELECT 1 FROM pragma_table_info('projects') WHERE name = 'packed'", [], |_| Ok(()))
+                .optional()?
+                .is_some();
+            if !has {
+                conn.execute_batch("ALTER TABLE projects ADD COLUMN packed TEXT;")?;
+            }
         }
         conn.execute_batch(SCHEMA)?;
         conn.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION};"))?;
@@ -197,8 +207,8 @@ impl Index {
         };
         let thumb = thumbs::choose_source(&p.files, p.thumbnail.as_deref());
         tx.execute(
-            "INSERT INTO projects (id, root_id, rel_path, title, creator, license, source_url, description, material, supports_required, thumbnail, total_bytes, file_count, model_count, modified, added, sidecar_state, sidecar_message, warnings, offline, favorite, slicer, thumb_source, thumb_kind)
-             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24)",
+            "INSERT INTO projects (id, root_id, rel_path, title, creator, license, source_url, description, material, supports_required, thumbnail, total_bytes, file_count, model_count, modified, added, sidecar_state, sidecar_message, warnings, offline, favorite, slicer, thumb_source, thumb_kind, packed)
+             VALUES (?1,?2,?3,?4,?5,?6,?7,?8,?9,?10,?11,?12,?13,?14,?15,?16,?17,?18,?19,?20,?21,?22,?23,?24,?25)",
             params![
                 p.id,
                 p.root_id,
@@ -224,6 +234,7 @@ impl Index {
                 p.slicer,
                 thumb.as_ref().map(|(rel, _)| rel.clone()),
                 thumb.as_ref().map(|(_, k)| thumb_kind_str(*k)),
+                p.packed,
             ],
         )?;
         let mut fs_stmt = tx.prepare_cached(
@@ -290,7 +301,7 @@ impl Index {
 
     pub fn project(&self, id: &str) -> Result<Option<Project>> {
         let sql = format!(
-            "SELECT p.id, p.root_id, p.rel_path, p.title, p.creator, p.license, p.source_url, p.description, p.material, p.supports_required, p.thumbnail, p.total_bytes, p.model_count, p.modified, p.sidecar_state, p.sidecar_message, p.warnings, p.offline, p.favorite, p.added, p.slicer, CASE WHEN {THUMB_VALID} THEN t.key END FROM projects p{THUMB_JOIN} WHERE p.id = ?1"
+            "SELECT p.id, p.root_id, p.rel_path, p.title, p.creator, p.license, p.source_url, p.description, p.material, p.supports_required, p.thumbnail, p.total_bytes, p.model_count, p.modified, p.sidecar_state, p.sidecar_message, p.warnings, p.offline, p.favorite, p.added, p.slicer, CASE WHEN {THUMB_VALID} THEN t.key END, p.packed FROM projects p{THUMB_JOIN} WHERE p.id = ?1"
         );
         let row = self
             .conn
@@ -327,6 +338,7 @@ impl Index {
                     added: parse_ts(&r.get::<_, String>(19)?),
                     slicer: r.get(20)?,
                     thumb: r.get(21)?,
+                    packed: r.get(22)?,
                 })
             })
             .optional()?;
@@ -351,6 +363,44 @@ impl Index {
         Ok(Some(p))
     }
 
+    /// What the index remembers of a packed archive: the archive's own size and modified
+    /// stamp as last seen, and the entries listed then. While both still match the file on
+    /// disk the archive does not have to be opened again (LIB-9).
+    pub fn packed_listing(&self, project_id: &str, archive_rel: &str) -> Result<Option<(u64, String, Vec<FileEntry>)>> {
+        let seen: Option<(i64, String)> = self
+            .conn
+            .query_row(
+                "SELECT size, modified FROM files WHERE project_id = ?1 AND rel_path = ?2",
+                params![project_id, archive_rel],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?;
+        let Some((size, modified)) = seen else { return Ok(None) };
+        let prefix = format!("{archive_rel}/");
+        let mut st = self.conn.prepare_cached(
+            "SELECT rel_path, name, kind, size, modified, slicer, embedded_thumbnail FROM files WHERE project_id = ?1 AND substr(rel_path, 1, ?3) = ?2 ORDER BY rel_path",
+        )?;
+        let entries = st
+            .query_map(params![project_id, prefix, prefix.chars().count() as i64], |r| {
+                Ok(FileEntry {
+                    rel_path: r.get(0)?,
+                    name: r.get(1)?,
+                    kind: kind_parse(&r.get::<_, String>(2)?),
+                    size: r.get::<_, i64>(3)? as u64,
+                    modified: parse_ts(&r.get::<_, String>(4)?),
+                    slicer: r.get(5)?,
+                    embedded_thumbnail: r.get::<_, i32>(6)? != 0,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        Ok(Some((size as u64, modified, entries)))
+    }
+
+    /// The stamp format the index stores for file times (for comparing with `packed_listing`).
+    pub fn stamp(t: &OffsetDateTime) -> String {
+        ts(t)
+    }
+
     fn tags_of(&self, id: &str) -> Result<Vec<String>> {
         let mut st = self
             .conn
@@ -363,7 +413,7 @@ impl Index {
 
     /// `collection`: member ids in collection order when the query is scoped to a collection.
     pub fn list(&self, q: &ListQuery, collection: Option<&[String]>) -> Result<Vec<ProjectSummary>> {
-        let mut sql = format!("SELECT p.id, p.root_id, p.rel_path, p.title, p.creator, p.thumbnail, p.file_count, p.model_count, p.total_bytes, p.modified, p.sidecar_state, p.offline, p.favorite, p.added, p.slicer, CASE WHEN {THUMB_VALID} THEN t.key END FROM projects p{THUMB_JOIN}");
+        let mut sql = format!("SELECT p.id, p.root_id, p.rel_path, p.title, p.creator, p.thumbnail, p.file_count, p.model_count, p.total_bytes, p.modified, p.sidecar_state, p.offline, p.favorite, p.added, p.slicer, CASE WHEN {THUMB_VALID} THEN t.key END, p.packed FROM projects p{THUMB_JOIN}");
         let mut where_: Vec<String> = Vec::new();
         let mut args: Vec<Box<dyn rusqlite::ToSql>> = Vec::new();
         if let Some(text) = q.text.as_deref().map(str::trim).filter(|t| !t.is_empty()) {
@@ -474,6 +524,7 @@ impl Index {
                     added: parse_ts(&r.get::<_, String>(13)?),
                     slicer: r.get(14)?,
                     thumb: r.get(15)?,
+                    packed: r.get(16)?,
                 })
             })?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -822,6 +873,7 @@ mod tests {
             added: OffsetDateTime::UNIX_EPOCH,
             thumb: None,
             slicer: None,
+            packed: None,
         }
     }
 
@@ -1058,5 +1110,38 @@ mod tests {
             .len(),
             1
         );
+    }
+    #[test]
+    fn v4_gains_the_packed_column_in_place() {
+        let t = tempfile::tempdir().unwrap();
+        let p = t.path().join("index.sqlite");
+        {
+            // a v4 database: the schema before LIB-9, with a project and its thumbnail record
+            let c = Connection::open(&p).unwrap();
+            let v4 = SCHEMA.replace(
+                "thumb_source TEXT, thumb_kind TEXT, packed TEXT",
+                "thumb_source TEXT, thumb_kind TEXT",
+            );
+            assert!(!v4.contains("packed"));
+            c.execute_batch(&v4).unwrap();
+            c.execute_batch("PRAGMA user_version = 4;").unwrap();
+            c.execute("INSERT INTO projects (id, root_id, rel_path, title, total_bytes, file_count, model_count, modified, added, sidecar_state, warnings, thumb_source, thumb_kind) VALUES ('r1:A','r1','A','A',10,1,1,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z','missing','[]','a.stl','render')", []).unwrap();
+            c.execute("INSERT INTO files (project_id, rel_path, name, kind, size, modified, ext) VALUES ('r1:A','a.stl','a.stl','model',10,'2026-01-01T00:00:00Z','stl')", []).unwrap();
+            c.execute("INSERT INTO thumbs (project_id, source_rel, source_size, source_mtime, key, updated) VALUES ('r1:A','a.stl',10,'2026-01-01T00:00:00Z','abcdefabcdefabcdefabcdef.png','2026-01-02T00:00:00Z')", []).unwrap();
+        }
+        let ix = Index::open(&p).unwrap();
+        let version: i64 = ix.conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(version, SCHEMA_VERSION);
+        let a = ix.project("r1:A").unwrap().unwrap();
+        assert_eq!(a.packed, None);
+        assert_eq!(
+            a.thumb.as_deref(),
+            Some("abcdefabcdefabcdefabcdef.png"),
+            "the cached preview survives"
+        );
+        assert_eq!(ix.list(&ListQuery::default(), None).unwrap()[0].packed, None);
+        // opening again is a no-op
+        drop(ix);
+        assert!(Index::open(&p).is_ok());
     }
 }

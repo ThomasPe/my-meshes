@@ -11,7 +11,8 @@ use meshkeep_engine::model::{
 };
 use meshkeep_engine::settings::{McpSettings, NetworkSettings};
 use meshkeep_engine::{
-    BatchReport, BatchUpdate, CreatorSuggestions, DuplicateReport, EngineError, MoveReport, PromoteItem, PromoteReport, UpdateMetadata,
+    BatchReport, BatchUpdate, CreatorSuggestions, DuplicateReport, EngineError, MoveReport, PackProgress, PackReport, PromoteItem,
+    PromoteReport, UpdateMetadata,
 };
 use serde::Serialize;
 use std::path::PathBuf;
@@ -299,14 +300,9 @@ pub fn library_stats(state: State<AppState>, root_id: Option<String>) -> CmdResu
 /// Raw bytes of a file inside a project (models for the viewer, images). No JSON, no base64.
 #[tauri::command]
 pub async fn read_project_file(app: AppHandle, project_id: String, rel_path: String) -> CmdResult<Response> {
-    let path = {
-        app.state::<AppState>()
-            .engine
-            .lock()
-            .unwrap()
-            .resolve_file(&project_id, &rel_path)?
-    };
-    let bytes = tauri::async_runtime::spawn_blocking(move || std::fs::read(path))
+    // on disk or inside the project's packed archive (LIB-9); read outside the engine lock
+    let located = { app.state::<AppState>().engine.lock().unwrap().locate(&project_id, &rel_path)? };
+    let bytes = tauri::async_runtime::spawn_blocking(move || located.read())
         .await
         .map_err(|e| AppError {
             code: "shell",
@@ -362,9 +358,21 @@ pub fn reveal_project(app: AppHandle, state: State<AppState>, project_id: String
     })
 }
 
+/// Opens a project file with the system's default app. A file inside a packed archive is
+/// copied to the app's cache first (LIB-9), so a slicer can open it without unpacking.
 #[tauri::command]
-pub fn open_project_file(app: AppHandle, state: State<AppState>, project_id: String, rel_path: String) -> CmdResult<()> {
-    let path = { state.engine.lock().unwrap().resolve_file(&project_id, &rel_path)? };
+pub async fn open_project_file(app: AppHandle, project_id: String, rel_path: String) -> CmdResult<()> {
+    let (located, cache) = {
+        let state = app.state::<AppState>();
+        let engine = state.engine.lock().unwrap();
+        (engine.locate(&project_id, &rel_path)?, engine.opened_cache_dir())
+    };
+    let path = tauri::async_runtime::spawn_blocking(move || located.materialize(&cache))
+        .await
+        .map_err(|e| AppError {
+            code: "shell",
+            message: e.to_string(),
+        })??;
     app.opener()
         .open_path(path.to_string_lossy().into_owned(), None::<&str>)
         .map_err(|e| AppError {
@@ -756,6 +764,45 @@ pub async fn execute_import(app: AppHandle, request: ImportRequest) -> CmdResult
     let _ = app.emit(
         "library://changed",
         serde_json::json!({ "rootId": report.root_id, "report": serde_json::Value::Null, "reason": "import" }),
+    );
+    Ok(report)
+}
+
+/// LIB-9: pack or unpack projects. Long-running: runs on a blocking thread, streams
+/// `pack://progress`, ends with `library://changed`.
+#[tauri::command]
+pub async fn pack_projects(app: AppHandle, project_ids: Vec<String>) -> CmdResult<PackReport> {
+    run_pack(app, move |engine, progress| engine.pack_projects(&project_ids, progress)).await
+}
+
+#[tauri::command]
+pub async fn unpack_projects(app: AppHandle, project_ids: Vec<String>, keep_archive: bool) -> CmdResult<PackReport> {
+    run_pack(app, move |engine, progress| {
+        engine.unpack_projects(&project_ids, keep_archive, progress)
+    })
+    .await
+}
+
+async fn run_pack(
+    app: AppHandle,
+    work: impl FnOnce(&mut meshkeep_engine::Engine, &mut dyn FnMut(PackProgress)) -> PackReport + Send + 'static,
+) -> CmdResult<PackReport> {
+    let handle = app.clone();
+    let report = tauri::async_runtime::spawn_blocking(move || {
+        let state = handle.state::<AppState>();
+        let mut engine = state.engine.lock().unwrap();
+        work(&mut engine, &mut |p| {
+            let _ = handle.emit("pack://progress", &p);
+        })
+    })
+    .await
+    .map_err(|e| AppError {
+        code: "shell",
+        message: e.to_string(),
+    })?;
+    let _ = app.emit(
+        "library://changed",
+        serde_json::json!({ "rootId": serde_json::Value::Null, "report": serde_json::Value::Null, "reason": "pack" }),
     );
     Ok(report)
 }

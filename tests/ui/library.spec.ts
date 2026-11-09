@@ -706,6 +706,95 @@ test('library conventions: starter set, validation, check with deviations (#58)'
   await expect(r1).toHaveAttribute('data-state', 'none');
 });
 
+test('packed projects: a zip stays packed on import, is read in place, unpacked and packed again (LIB-9)', async ({ page }) => {
+  await page.getByTestId('import-open').click();
+  const dialog = page.getByTestId('import-dialog');
+  // the default policy: the archive leaves its source folder instead of being copied into the project
+  await expect(dialog.getByTestId('import-policy')).toContainText('Remove from the source folder (trash)');
+  const zipRow = dialog.getByTestId('import-item').filter({ hasText: 'Cable Clip.zip' });
+  await expect(dialog.getByTestId('import-zip-mode')).toHaveAttribute('data-mode', 'unpack');
+  await expect(zipRow.getByTestId('import-action')).toContainText('New project');
+  await expect(dialog.getByTestId('import-policy-packed')).toHaveCount(0);
+  await dialog.getByTestId('import-zip-packed').click();
+  await expect(zipRow.getByTestId('import-action')).toContainText('Packed project');
+  await expect(zipRow.getByTestId('import-name')).toHaveValue('Cable Clip');
+  // a 7z cannot stay packed, so its row does not offer it
+  await dialog.getByTestId('import-item').filter({ hasText: 'notes.7z' }).getByTestId('import-action').click();
+  await expect(page.getByRole('option', { name: 'Packed project' })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await expect(dialog.getByTestId('import-policy-packed')).toContainText('the archive itself moves into the project');
+  await dialog.getByTestId('import-confirm').click();
+  await expect(page.getByText('Imported 1 projects, 2 files to the inbox')).toBeVisible();
+  await expect(page.getByText(/1 kept packed/)).toBeVisible();
+  const card = page.getByTestId('project-card').filter({ hasText: 'Cable Clip' }).first();
+  await expect(card.getByTestId('packed-badge')).toBeVisible();
+  await card.dblclick();
+  await expect(page.getByTestId('project-page').getByTestId('packed-badge')).toBeVisible();
+  // the viewer loads the model from inside the archive
+  await expect(page.getByTestId('viewer').locator('canvas')).toHaveAttribute('data-file', 'Cable Clip.zip/Cable Clip/part_a.stl');
+  await expect(page.getByTestId('viewer-triangles')).toBeVisible({ timeout: 30_000 });
+  await page.getByRole('tab', { name: /Files/ }).click();
+  await expect(page.locator('[data-testid="file-row"][data-packed]')).toHaveCount(3);
+  await expect(page.getByTestId('packed-hint')).toContainText('Cable Clip.zip');
+  const inner = page.getByTestId('file-row').filter({ hasText: 'part_a.stl' });
+  await expect(inner.getByTestId('file-delete')).toBeDisabled();
+  await expect(page.getByTestId('file-row').filter({ hasText: /^Cable Clip\.zip/ }).first().getByTestId('file-delete')).toBeDisabled();
+  await inner.getByRole('button', { name: 'Open with default app' }).click();
+  expect(await page.evaluate(() => (window as unknown as { __mockOpenedFiles?: string[] }).__mockOpenedFiles)).toEqual(['r1:Cable Clip/Cable Clip.zip/Cable Clip/part_a.stl']);
+
+  // unpack: the wrapper folder of the download is stripped, the zip goes
+  await page.getByTestId('project-unpack').click();
+  await expect(page.getByTestId('pack-dialog')).toHaveAttribute('data-mode', 'unpack');
+  await expect(page.getByTestId('unpack-keep-archive')).not.toBeChecked();
+  await page.getByTestId('pack-confirm').click();
+  await expect(page.getByText(/1 project unpacked/)).toBeVisible();
+  await expect(page.getByTestId('project-page').getByTestId('packed-badge')).toHaveCount(0);
+  await expect(page.getByTestId('file-row')).toHaveCount(3);
+  await expect(page.locator('[data-testid="file-row"][data-packed]')).toHaveCount(0);
+  await expect(page.getByTestId('file-row').filter({ hasText: 'part_a.stl' }).getByTestId('file-delete')).toBeEnabled();
+
+  // pack again: only the models go into the zip, the readme stays loose
+  await page.getByTestId('project-pack').click();
+  await expect(page.getByTestId('pack-dialog')).toHaveAttribute('data-mode', 'pack');
+  await page.getByTestId('pack-confirm').click();
+  await expect(page.getByText(/1 project packed: .* → /)).toBeVisible();
+  await expect(page.getByTestId('project-page').getByTestId('packed-badge')).toBeVisible();
+  await expect(page.getByTestId('file-row')).toHaveCount(4);
+  await expect(page.locator('[data-testid="file-row"][data-packed]')).toHaveCount(2);
+  await page.getByRole('tab', { name: 'Overview' }).click();
+  await expect(page.getByTestId('viewer').locator('canvas')).toHaveAttribute('data-file', 'Cable Clip.zip/part_a.stl');
+  await expect(page.getByTestId('viewer-triangles')).toBeVisible({ timeout: 30_000 });
+
+  // the zip mode is remembered for the next import
+  await page.getByTestId('back').click();
+  await page.getByTestId('import-open').click();
+  await expect(page.getByTestId('import-zip-mode')).toHaveAttribute('data-mode', 'packed');
+  await expect(page.getByTestId('import-item').filter({ hasText: 'Cable Clip.zip' }).getByTestId('import-action')).toContainText('Packed project');
+});
+
+test('packed projects: packing from the context menu, for a selection (LIB-9)', async ({ page }) => {
+  await page.getByTestId('search').fill('clip');
+  const card = page.getByTestId('project-card').filter({ hasText: 'Cable Clips' });
+  await card.click({ button: 'right' });
+  await page.getByTestId('menu-pack').click();
+  await expect(page.getByTestId('pack-dialog')).toContainText('Pack “Cable Clips”?');
+  await page.getByTestId('pack-confirm').click();
+  await expect(page.getByText(/1 project packed/)).toBeVisible();
+  await expect(card.getByTestId('packed-badge')).toBeVisible();
+  // a packed project offers unpacking instead, and keeps the zip on request
+  await card.click({ button: 'right' });
+  await expect(page.getByTestId('menu-pack')).toHaveCount(0);
+  await page.getByTestId('menu-unpack').click();
+  await page.getByTestId('unpack-keep-archive').check();
+  await page.getByTestId('pack-confirm').click();
+  await expect(page.getByText(/1 project unpacked/)).toBeVisible();
+  await expect(card.getByTestId('packed-badge')).toHaveCount(0);
+  await card.dblclick();
+  await page.getByRole('tab', { name: /Files/ }).click();
+  await expect(page.getByTestId('file-row').filter({ hasText: 'Cable Clips.zip' })).toHaveCount(1);
+  await expect(page.locator('[data-testid="file-row"][data-packed]')).toHaveCount(0);
+});
+
 test('settings shows the last scan summary and the sync problem per root', async ({ page }) => {
   await page.getByTestId('nav-settings').click();
   await expect(page.getByTestId('root-scan-summary').first()).toContainText('72 projects · 131 files');

@@ -3,6 +3,15 @@ import { getBackend } from '@/lib/backend';
 import { reportError } from '@/lib/errors';
 import type { ImportItem, ImportProgress } from '@/lib/types';
 
+/** A zip archive: the only kind of source that can become a packed project (LIB-9). */
+export const isZipItem = (it: Pick<ImportItem, 'kind' | 'source'>) => it.kind === 'archive' && /\.zip$/i.test(it.source);
+export type ZipMode = 'unpack' | 'packed';
+export const loadZipMode = (): ZipMode => { try { return localStorage.getItem('mm.import.zip') === 'packed' ? 'packed' : 'unpack'; } catch { return 'unpack'; } };
+export const saveZipMode = (m: ZipMode) => { try { localStorage.setItem('mm.import.zip', m); } catch { /* ignore */ } };
+/** Applies the zip mode to the proposals: zips that would become projects are unpacked or kept packed. */
+export const withZipMode = (items: ImportItem[], mode: ZipMode): ImportItem[] =>
+  items.map((it) => (isZipItem(it) && (it.action === 'project' || it.action === 'packed') ? { ...it, action: mode === 'packed' ? 'packed' : 'project' } : it));
+
 /**
  * Import staging state (IMP-1). Opened by a native file drop or the picker; the dialog
  * edits the proposals and confirms. One global instance so a drop works on every page.
@@ -30,7 +39,7 @@ export const useImport = create<ImportState>((set) => ({
     set({ open: true, analyzing: true, items: [], progress: null, dragging: false });
     try {
       const b = await getBackend();
-      set({ items: await b.analyzeImport(paths), analyzing: false });
+      set({ items: withZipMode(await b.analyzeImport(paths), loadZipMode()), analyzing: false });
     } catch (e) {
       reportError(e);
       set({ open: false, analyzing: false });

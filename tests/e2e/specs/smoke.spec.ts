@@ -171,11 +171,18 @@ describe('Meshkeep D3 (import, inbox, collections)', () => {
     const names = await $$('[data-testid="import-item"]').map((r) => r.getText());
     expect(names.join('\n')).toContain('Cable Clip.zip');
     expect(names.join('\n')).toContain('loose_hook.stl');
+    // The default policy sends the archive to the trash. The picked zip is a checked-in
+    // fixture, so this run chooses the last option: leave it and keep a copy in the project.
+    await $('[data-testid="import-policy"]').click();
+    await browser.waitUntil(async () => (await $$('[role="option"]')).length === 4, { timeout: 5000 });
+    const policies = await $$('[role="option"]');
+    await policies[3]!.click();
     await $('[data-testid="import-confirm"]').click();
     await browser.waitUntil(async () => !(await $('[data-testid="import-dialog"]').isDisplayed()), { timeout: 30000 });
     const project = path.join(fixture(), 'Cable Clip');
     await browser.waitUntil(() => fs.existsSync(path.join(project, 'files/clip_6mm.stl')), { timeout: 10000, timeoutMsg: 'archive was not extracted' });
-    expect(fs.existsSync(path.join(project, 'Cable Clip.zip'))).toBe(true); // kept as attachment (default policy)
+    expect(fs.existsSync(path.join(project, 'Cable Clip.zip'))).toBe(true); // a copy in the project (policy "keep")
+    expect(fs.existsSync(process.env.MESHKEEP_PICK_FILES!.split(';')[0]!)).toBe(true); // and the source was left alone
     expect(fs.existsSync(path.join(fixture(), '_Inbox/loose_hook.stl'))).toBe(true);
     await findCard('Cable Clip');
     await clearSearch();

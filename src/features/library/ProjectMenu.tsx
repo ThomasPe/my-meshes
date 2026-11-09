@@ -1,4 +1,4 @@
-import { Eye, FolderHeart, FolderInput, FolderMinus, FolderOpen, ImageUp, Pencil, Plus, Star, StarOff, Trash2 } from 'lucide-react';
+import { Archive, Eye, FolderHeart, FolderInput, FolderMinus, FolderOpen, ImageUp, PackageOpen, Pencil, Plus, Star, StarOff, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuSeparator, ContextMenuSub, ContextMenuSubContent, ContextMenuSubTrigger, ContextMenuTrigger } from '@/components/ui/context-menu';
 import type { Collection, ProjectSummary } from '@/lib/types';
@@ -12,6 +12,9 @@ export interface ProjectActions {
   reveal: (p: ProjectSummary) => void;
   /** Opens the "Move to…" folder picker for one or several projects. */
   move: (ps: ProjectSummary[]) => void;
+  /** LIB-9: pack the loose models of these projects into a zip each, or extract packed ones again. */
+  pack: (ps: ProjectSummary[]) => void;
+  unpack: (ps: ProjectSummary[]) => void;
   /** Throws the cached preview away and lets the queue render it again. */
   rerenderThumbnail: (p: ProjectSummary) => void;
   /** Add to an existing collection (or `null` to create a new one first). */
@@ -39,6 +42,8 @@ export function ProjectMenu({ project: p, selection = [], actions, children }: {
   const n = targets.length;
   const movable = targets.filter((x) => !x.offline && x.rel_path !== '');
   const allFav = targets.every((x) => x.favorite);
+  const packable = movable.filter((x) => !x.packed && x.model_count > 0);
+  const unpackable = targets.filter((x) => !x.offline && x.packed);
   return (
     <ContextMenu>
       <ContextMenuTrigger asChild>{children}</ContextMenuTrigger>
@@ -58,6 +63,8 @@ export function ProjectMenu({ project: p, selection = [], actions, children }: {
         <ContextMenuItem disabled={movable.length === 0} onSelect={() => actions.move(movable)} data-testid="menu-move"><FolderInput />{t('actions.moveN', { count: n })}</ContextMenuItem>
         {!many && <ContextMenuItem disabled={p.offline} onSelect={() => actions.reveal(p)}><FolderOpen />{t('inspector.reveal')}</ContextMenuItem>}
         <ContextMenuItem disabled={targets.every((x) => x.offline)} onSelect={() => { for (const x of targets) if (!x.offline) actions.rerenderThumbnail(x); }} data-testid="menu-rethumb"><ImageUp />{t('actions.rerenderN', { count: n })}</ContextMenuItem>
+        {packable.length > 0 && <ContextMenuItem onSelect={() => actions.pack(packable)} data-testid="menu-pack"><Archive />{t('actions.packN', { count: packable.length })}</ContextMenuItem>}
+        {unpackable.length > 0 && <ContextMenuItem onSelect={() => actions.unpack(unpackable)} data-testid="menu-unpack"><PackageOpen />{t('actions.unpackN', { count: unpackable.length })}</ContextMenuItem>}
         <ContextMenuSeparator />
         <ContextMenuItem variant="destructive" disabled={movable.length === 0} onSelect={() => (many ? actions.removeMany(movable) : actions.remove(p))} data-testid="menu-delete"><Trash2 />{t('actions.deleteN', { count: n })}</ContextMenuItem>
       </ContextMenuContent>

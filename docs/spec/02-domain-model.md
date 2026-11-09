@@ -44,7 +44,7 @@ that contains model files and, optionally, a metadata sidecar `project.yaml`.
 | Model | `.stl`, `.obj`, `.3mf` (previewable); `.step`/`.stp`, `.ply`, `.amf` (indexed as models, preview later) | Indexed, thumbnail source. 3MF geometry and embedded thumbnails are extracted; a 3MF produced by a slicer (Bambu, Prusa) is a model with a "slicer project" badge derived from its metadata, not a separate concept (Q11). |
 | Image | `.jpg`, `.png`, `.webp` | Indexed, shown in the built-in image viewer, candidate for project thumbnail |
 | Document | `.pdf`, `.txt`, `.md`, `.scad`, `.blend`, `.f3d` | Indexed, opened with the OS default application |
-| Attachment | `.zip`, `.7z`, `.rar` found *inside* a project | Cataloged as opaque attachments. Never mounted or extracted |
+| Attachment | `.zip`, `.7z`, `.rar` found *inside* a project | Cataloged as opaque attachments. Never mounted or extracted, except the one zip a packed project names in its sidecar (see Packed project) |
 | Ignored | `.gcode`, `.git/`, `__MACOSX/`, `.DS_Store`, … | Excluded via a user-editable global ignore list (glob patterns) |
 
 ### Inbox (Unsorted)
@@ -60,9 +60,31 @@ project folder replaces it. Paths that would escape the target (zip-slip) are sk
 with a warning. 7z and rar are not extracted yet. Dropped archives or scanned input folders
 are analyzed and the app proposes a project structure; single files are proposed for the
 inbox. Nothing is written to the library until the user confirms (Q6). After extracting
-an archive into a new project, the original archive is **kept as an attachment inside the
-project by default**; the import dialog can instead move it to `_Originals` below the root, leave it untouched where it came from, or send
-it to the Recycle Bin. The import dialog shows the space each choice costs (Q7).
+an archive into a new project, the original archive **goes to the Recycle Bin by default**
+(since 2026-11-09; before that a copy was kept inside the project, which doubled the
+space a download takes); the import dialog can instead move it to `_Originals` below the
+root, leave it untouched where it came from, or leave it and keep a copy in the project.
+The import dialog shows the space each choice costs (Q7). A zip does not have to be
+extracted at all: it can become a packed project (below).
+
+### Packed project
+A project whose models stay inside a zip archive in the project folder (LIB-9). The
+sidecar names the archive (`packed: "Cable Clip.zip"`); the archive's entries are the
+project's files, listed as `<archive>/<path inside>`, with their uncompressed size and
+the archive's modification time. Everything that needs a file's bytes reads the entry
+from the archive: viewer, previews, hints from readme files, content hashes for duplicate
+detection. Nothing is extracted until asked: opening a file with another program copies
+that one entry into the app's cache, "Unpack" extracts everything back into the folder
+(a download's single wrapper folder is stripped, nothing is overwritten), "Pack" does the
+reverse for a project's loose model files (deflate, read back and compared before the
+loose copies go to the trash; images and readmes stay loose). The project's size is what
+its folder holds on disk. Single files of a packed project cannot be deleted or moved.
+
+Why zip only: its directory gives random access to single entries. 7z archives are
+usually solid (one compressed stream), so one model would cost decompressing everything
+before it. The scanner does not open an archive again while its size and time are
+unchanged; the entry listing is kept in the index, which matters on shares and in cloud
+folders where opening a file downloads it.
 
 ### Collection
 A user-defined, ordered set of projects independent of the folder structure.
@@ -102,6 +124,7 @@ files:                                    # optional per-file annotations
     quantity: 4
 
 thumbnail: ".meshkeep/preview.png"        # relative path; absent = auto-generated
+packed: "Gridfinity Bins.zip"             # packed project: the zip holding the models; absent = loose files
 ```
 
 Decided (Q4): the file name stays `project.yaml`; `schema` stays; the printing block is

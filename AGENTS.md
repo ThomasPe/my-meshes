@@ -92,6 +92,11 @@ mode. The endpoint itself lives in `src-tauri/src/mcp_host.rs`; the tools in
 `dry_run`). Library conventions (`crates/engine/src/conventions.rs`) are per root in
 `.meshkeep/conventions.yaml`; a rule the engine enforces belongs in `check_conventions`.
 
+A project file is not always a file on disk: in a packed project (LIB-9) it is an entry of
+the project's zip. Code that needs a file's bytes goes through `Engine::locate` (then
+`Located::read`, `read_head`, `sha256` or `materialize`); `resolve_file` is only for
+operations that need a real path and refuses packed entries.
+
 ## Test mode (real app)
 
 `--test-mode` or `MESHKEEP_TEST_MODE=1` isolates app data (`MESHKEEP_DATA_DIR` or a temp

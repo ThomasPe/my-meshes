@@ -19,6 +19,11 @@ pub fn sha256_file(path: &Path) -> Result<String> {
     Ok(format!("{:x}", hasher.finalize()))
 }
 
+/// Hash many files, on disk or inside packed archives, on all cores; one result per source.
+pub fn sha256_located(sources: &[crate::packed::Located]) -> Vec<Result<String>> {
+    sources.par_iter().map(|s| s.sha256()).collect()
+}
+
 /// Hash many files on all cores. Errors are returned per file, not fatal for the batch.
 pub fn sha256_many(paths: &[PathBuf]) -> Vec<(PathBuf, Result<String>)> {
     paths.par_iter().map(|p| (p.clone(), sha256_file(p))).collect()

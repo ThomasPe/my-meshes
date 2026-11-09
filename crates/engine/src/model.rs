@@ -119,7 +119,7 @@ pub enum SidecarState {
 }
 
 /// `project.yaml`. Unknown keys are preserved on write via the `extra` maps.
-#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Sidecar {
     #[serde(default = "default_schema")]
     pub schema: u32,
@@ -131,12 +131,30 @@ pub struct Sidecar {
     pub files: Vec<SidecarFile>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub thumbnail: Option<String>,
+    /// Packed project (LIB-9): the zip in the project folder that holds the models; its
+    /// entries are read in place instead of being extracted.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub packed: Option<String>,
     #[serde(flatten)]
     pub extra: BTreeMap<String, serde_yaml_ng::Value>,
 }
 
 fn default_schema() -> u32 {
     1
+}
+
+impl Default for Sidecar {
+    fn default() -> Self {
+        Sidecar {
+            schema: default_schema(),
+            metadata: Metadata::default(),
+            printing: Printing::default(),
+            files: Vec::new(),
+            thumbnail: None,
+            packed: None,
+            extra: BTreeMap::new(),
+        }
+    }
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
@@ -281,6 +299,10 @@ pub struct Project {
     /// Slicer badge, derived from the first slicer-written 3MF in the project.
     #[serde(default)]
     pub slicer: Option<String>,
+    /// Packed project (LIB-9): the archive (relative to the project folder) whose entries
+    /// are listed in `files` as `<archive>/<entry>`.
+    #[serde(default)]
+    pub packed: Option<String>,
 }
 
 pub(crate) fn epoch() -> OffsetDateTime {
@@ -350,6 +372,9 @@ pub struct ProjectSummary {
     pub thumb: Option<String>,
     #[serde(default)]
     pub slicer: Option<String>,
+    /// The packed archive's path when the project is packed (LIB-9).
+    #[serde(default)]
+    pub packed: Option<String>,
 }
 
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]

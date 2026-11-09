@@ -13,7 +13,7 @@ file keeps the record of what was decided and when.
 | Q4 | Sidecar schema | `project.yaml` stays; `schema` stays; printing block = material, supports, notes; per-file `quantity` stays (2026-10-18). | `spec/02-domain-model.md` |
 | Q5 | Thumbnail default | **App data cache** by default; per-project `.cache` as an option (2026-10-18). | `spec/02-domain-model.md` Thumbnails |
 | Q6 | Inbox vs. staging | Staging is the review workflow; `_Inbox` is a folder below the root with its own view and promote action (2026-10-18). | `spec/02-domain-model.md`, `spec/03-features.md` IMP-3 |
-| Q7 | Archive after import | Keep as attachment by default; `_Originals` or Recycle Bin as settings (2026-10-18). | `spec/02-domain-model.md`, `spec/03-features.md` IMP-2 |
+| Q7 | Archive after import | Recycle Bin by default since 2026-11-09 (the copy inside the project doubled the space a download takes); `_Originals`, "leave where it is" or a copy in the project as choices. Was: keep as attachment by default (2026-10-18). Zips can stay packed instead (LIB-9). | `spec/02-domain-model.md`, `spec/03-features.md` IMP-2 |
 | Q8 | Enrichment sources | Printables and Thingiverse first (APIs), MakerWorld/Thangs via public page data only; `source_url` canonical plus optional `source {platform,id}` (2026-10-18). | `spec/02-domain-model.md`, `spec/03-features.md` META-7 |
 | Q9 | Collections location | App data (2026-10-18). | `spec/02-domain-model.md` Collections store |
 | Q10 | Project boundary | Option c: first directory with model files or sidecar; nested sidecars are notes. Extended for download bundles (`files/`, `stl/` … under a folder with images or a README count as one project; list configurable) (2026-10-18). | `spec/02-domain-model.md` Project |

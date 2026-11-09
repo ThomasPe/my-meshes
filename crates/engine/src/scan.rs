@@ -298,6 +298,21 @@ pub fn read_project(root_id: &str, root: &Path, project_dir: &Path, ignore: &Ign
             }
         }
     }
+    // A packed project names its archive in the sidecar. The entries are added by the engine
+    // (it remembers the listing while the archive is unchanged); here only the name is checked.
+    let packed = sidecar.as_ref().and_then(|s| s.packed.as_deref()).and_then(|rel| {
+        let rel = rel.trim().trim_start_matches("./").replace('\\', "/");
+        let ok =
+            !rel.is_empty() && crate::packed::is_zip_name(&rel) && Path::new(&rel).components().all(|c| matches!(c, Component::Normal(_)));
+        if !ok {
+            warnings.push(format!("packed: \"{rel}\" is not a zip inside the project folder"));
+            return None;
+        }
+        if !files.iter().any(|f| f.rel_path == rel) {
+            warnings.push(format!("packed archive {rel} is missing"));
+        }
+        Some(rel)
+    });
     let md = sidecar.as_ref().map(|s| s.metadata.clone()).unwrap_or_default();
     let pr = sidecar.as_ref().map(|s| s.printing.clone()).unwrap_or_default();
     let model_count = files.iter().filter(|f| f.kind == FileKind::Model).count() as u32;
@@ -339,6 +354,7 @@ pub fn read_project(root_id: &str, root: &Path, project_dir: &Path, ignore: &Ign
         added,
         thumb: None,
         slicer,
+        packed,
     })
 }
 

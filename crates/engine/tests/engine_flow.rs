@@ -994,3 +994,295 @@ fn a_chosen_image_or_a_captured_view_becomes_the_preview() {
     let text = fs::read_to_string(lib.path().join("Vase/project.yaml")).unwrap();
     assert!(!text.contains("thumbnail"), "{text}");
 }
+
+fn write_zip(path: &Path, entries: &[(&str, &[u8])]) {
+    use std::io::Write;
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    let mut zip = zip::ZipWriter::new(fs::File::create(path).unwrap());
+    let o = zip::write::SimpleFileOptions::default();
+    for (name, body) in entries {
+        zip.start_file(*name, o).unwrap();
+        zip.write_all(body).unwrap();
+    }
+    zip.finish().unwrap();
+}
+
+/// LIB-9: a zip download becomes a project without being extracted; the app reads the
+/// models from the archive, and the project can be unpacked and packed again.
+#[test]
+fn packed_projects_are_imported_read_unpacked_and_packed_again() {
+    use meshkeep_engine::import::{ArchivePolicy, ImportAction, ImportRequest, ImportRequestItem};
+    use meshkeep_engine::model::{FileKind, ThumbSource};
+    use meshkeep_engine::packed::Located;
+    let data = tempfile::tempdir().unwrap();
+    let lib = tempfile::tempdir().unwrap();
+    let downloads = tempfile::tempdir().unwrap();
+    let clip: Vec<u8> = b"solid clip ".iter().cycle().take(4000).copied().collect();
+    let big: Vec<u8> = b"solid big clip ".iter().cycle().take(9000).copied().collect();
+    let zip_path = downloads.path().join("Cable Clip.zip");
+    write_zip(
+        &zip_path,
+        &[
+            ("Cable Clip/files/clip.stl", &clip),
+            ("Cable Clip/files/clip_big.stl", &big),
+            (
+                "Cable Clip/README.txt",
+                b"Designed by PrintTools\nLicense: CC0\nhttps://www.printables.com/model/4242-cable-clip\n",
+            ),
+            ("Cable Clip/photo.jpg", b"jpegbytes"),
+            ("__MACOSX/Cable Clip/._clip.stl", b"junk"),
+        ],
+    );
+    write_zip(&downloads.path().join("Docs only.zip"), &[("readme.txt", b"no models here")]);
+    fs::write(downloads.path().join("loose.stl"), b"solid loose").unwrap();
+    // the same model already sits in the library, extracted
+    fs::create_dir_all(lib.path().join("Loose Clip")).unwrap();
+    fs::write(lib.path().join("Loose Clip/clip.stl"), &clip).unwrap();
+
+    let mut engine = Engine::open(data.path()).unwrap();
+    engine.set_deleter(Box::new(
+        |p: &Path| if p.is_dir() { fs::remove_dir_all(p) } else { fs::remove_file(p) },
+    ));
+    let root = engine.add_root(lib.path(), SyncMode::Manual).unwrap();
+    engine.scan_root(&root.id, |_| {}).unwrap();
+    let item = |source: &Path, action, name: &str| ImportRequestItem {
+        source: source.to_path_buf(),
+        action,
+        name: name.to_string(),
+    };
+    let request = |policy, items| ImportRequest {
+        root_id: root.id.clone(),
+        archive_policy: policy,
+        apply_hints: true,
+        fetch_pages: false,
+        items,
+    };
+
+    // only a zip with models can stay packed; a refused item leaves its source alone
+    let report = engine
+        .execute_import(
+            &request(
+                ArchivePolicy::Trash,
+                vec![
+                    item(&downloads.path().join("Docs only.zip"), ImportAction::Packed, "Docs only"),
+                    item(&downloads.path().join("loose.stl"), ImportAction::Packed, "Loose"),
+                ],
+            ),
+            |_| {},
+        )
+        .unwrap();
+    assert!(report.projects.is_empty());
+    assert_eq!(report.errors.len(), 2, "{:?}", report.errors);
+    assert!(report.errors[0].contains("holds no model files"));
+    assert!(report.errors[1].contains("only zip archives"));
+    assert!(downloads.path().join("Docs only.zip").is_file());
+    assert!(!lib.path().join("Docs only").exists());
+    assert!(!lib.path().join(".meshkeep-import").exists());
+
+    // the real one: moved into the library as it is, described from the readme inside
+    let report = engine
+        .execute_import(
+            &request(ArchivePolicy::Trash, vec![item(&zip_path, ImportAction::Packed, "Cable Clip")]),
+            |_| {},
+        )
+        .unwrap();
+    assert_eq!(report.projects, vec!["Cable Clip"]);
+    assert_eq!(report.packed, vec!["Cable Clip"]);
+    assert_eq!(report.errors, Vec::<String>::new());
+    assert_eq!(report.metadata_written, 1, "{:?}", report.warnings);
+    assert!(!zip_path.exists(), "the archive moved into the project");
+    let dir = lib.path().join("Cable Clip");
+    let mut on_disk: Vec<String> = fs::read_dir(&dir)
+        .unwrap()
+        .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
+        .collect();
+    on_disk.sort();
+    assert_eq!(on_disk, vec!["Cable Clip.zip", "project.yaml"], "nothing was extracted");
+    let yaml = fs::read_to_string(dir.join("project.yaml")).unwrap();
+    assert!(yaml.contains("packed: Cable Clip.zip"), "{yaml}");
+    assert!(yaml.contains("schema: 1"), "{yaml}");
+
+    let id = format!("{}:Cable Clip", root.id);
+    let p = engine.get_project(&id).unwrap();
+    assert_eq!(p.packed.as_deref(), Some("Cable Clip.zip"));
+    assert_eq!(p.creator.as_deref(), Some("PrintTools"));
+    assert_eq!(p.license.as_deref(), Some("CC0-1.0"));
+    assert_eq!(p.source_url.as_deref(), Some("https://www.printables.com/model/4242-cable-clip"));
+    assert_eq!(p.model_count, 2);
+    let rels: Vec<&str> = p.files.iter().map(|f| f.rel_path.as_str()).collect();
+    assert_eq!(
+        rels,
+        vec![
+            "Cable Clip.zip",
+            "Cable Clip.zip/Cable Clip/README.txt",
+            "Cable Clip.zip/Cable Clip/files/clip.stl",
+            "Cable Clip.zip/Cable Clip/files/clip_big.stl",
+            "Cable Clip.zip/Cable Clip/photo.jpg",
+        ]
+    );
+    let entry = p.files.iter().find(|f| f.name == "clip_big.stl").unwrap();
+    assert_eq!((entry.kind, entry.size), (FileKind::Model, 9000), "the uncompressed size");
+    assert_eq!(
+        p.total_bytes,
+        fs::metadata(dir.join("Cable Clip.zip")).unwrap().len(),
+        "what the folder holds on disk"
+    );
+    let summary = engine
+        .list_projects(&ListQuery::default())
+        .unwrap()
+        .into_iter()
+        .find(|s| s.id == id)
+        .unwrap();
+    assert_eq!(summary.packed.as_deref(), Some("Cable Clip.zip"));
+
+    // bytes come straight from the archive: for the viewer, the preview queue and other programs
+    let big_rel = "Cable Clip.zip/Cable Clip/files/clip_big.stl";
+    let loc = engine.locate(&id, big_rel).unwrap();
+    assert!(matches!(loc, Located::Packed { .. }));
+    assert_eq!(loc.read().unwrap(), big);
+    let opened = loc.materialize(&engine.opened_cache_dir()).unwrap();
+    assert_eq!(fs::read(&opened).unwrap(), big);
+    assert!(opened.starts_with(data.path()));
+    let job = engine.thumb_queue(10).unwrap().into_iter().find(|j| j.project_id == id).unwrap();
+    assert_eq!(
+        (job.rel_path.as_str(), job.source),
+        (big_rel, ThumbSource::Render),
+        "the largest model"
+    );
+    assert!(engine.locate(&id, "Cable Clip.zip/../../secret").is_err());
+    assert!(engine.locate(&id, "Cable Clip.zip/nope.stl").unwrap().read().is_err());
+    // an entry has no path of its own: no deleting or moving single files of a packed project
+    assert!(matches!(engine.resolve_file(&id, big_rel), Err(EngineError::NotAllowed(_))));
+    assert!(matches!(engine.delete_file(&id, big_rel), Err(EngineError::NotAllowed(_))));
+    assert!(matches!(engine.delete_file(&id, "Cable Clip.zip"), Err(EngineError::NotAllowed(_))));
+    assert!(dir.join("Cable Clip.zip").is_file());
+    // the readme inside the archive still feeds the hints
+    let h = engine.project_hints(&id).unwrap();
+    assert!(h.creator.iter().any(|c| c.value == "PrintTools"));
+
+    // a packed model and its extracted twin are found as duplicates
+    let dup = engine.find_duplicates(|_| {}).unwrap();
+    assert_eq!(dup.groups.len(), 1);
+    let ids: Vec<&str> = dup.groups[0].members.iter().map(|m| m.project.id.as_str()).collect();
+    assert!(ids.contains(&id.as_str()) && ids.contains(&format!("{}:Loose Clip", root.id).as_str()));
+
+    // a rescan does not open an unchanged archive: garbage with the old size and time still lists
+    let archive = dir.join("Cable Clip.zip");
+    let original = fs::read(&archive).unwrap();
+    let stamp = fs::metadata(&archive).unwrap().modified().unwrap();
+    fs::write(&archive, vec![0u8; original.len()]).unwrap();
+    fs::File::options().write(true).open(&archive).unwrap().set_modified(stamp).unwrap();
+    let scan = engine.scan_root(&root.id, |_| {}).unwrap();
+    assert_eq!(engine.get_project(&id).unwrap().model_count, 2, "{:?}", scan.warnings);
+    // once it changes, it is read again, and an unreadable archive is reported, not hidden
+    fs::File::options()
+        .write(true)
+        .open(&archive)
+        .unwrap()
+        .set_modified(stamp + std::time::Duration::from_secs(5))
+        .unwrap();
+    let scan = engine.scan_root(&root.id, |_| {}).unwrap();
+    assert!(scan.warnings.iter().any(|w| w.contains("could not be read")), "{:?}", scan.warnings);
+    assert_eq!(engine.get_project(&id).unwrap().model_count, 0);
+    fs::write(&archive, &original).unwrap();
+    engine.scan_root(&root.id, |_| {}).unwrap();
+    assert_eq!(engine.get_project(&id).unwrap().model_count, 2);
+
+    // unpack: nothing is overwritten
+    fs::create_dir_all(dir.join("files")).unwrap();
+    fs::write(dir.join("files/clip.stl"), b"in the way").unwrap();
+    engine.scan_root(&root.id, |_| {}).unwrap();
+    assert!(matches!(
+        engine.unpack_project(&id, false, &mut |_| {}),
+        Err(EngineError::AlreadyExists(_))
+    ));
+    assert_eq!(fs::read(dir.join("files/clip.stl")).unwrap(), b"in the way");
+    assert!(!dir.join("README.txt").exists(), "nothing was written before the refusal");
+    fs::remove_dir_all(dir.join("files")).unwrap();
+    engine.scan_root(&root.id, |_| {}).unwrap();
+
+    // unpack for real: the bundle's wrapper folder is stripped, the archive goes to the trash
+    let mut steps = Vec::new();
+    let (p, notes) = engine.unpack_project(&id, false, &mut |s| steps.push((s.phase, s.name))).unwrap();
+    assert!(notes.is_empty(), "{notes:?}");
+    assert_eq!(steps.len(), 4);
+    assert!(steps.iter().all(|(phase, _)| phase == "unpack"));
+    assert_eq!(p.packed, None);
+    assert_eq!(p.creator.as_deref(), Some("PrintTools"), "metadata stays");
+    let rels: Vec<&str> = p.files.iter().map(|f| f.rel_path.as_str()).collect();
+    assert_eq!(rels, vec!["README.txt", "files/clip.stl", "files/clip_big.stl", "photo.jpg"]);
+    assert_eq!(fs::read(dir.join("files/clip_big.stl")).unwrap(), big);
+    assert!(!archive.exists());
+    assert!(!dir.join(".meshkeep").exists(), "the staging folder is gone");
+    assert!(!fs::read_to_string(dir.join("project.yaml")).unwrap().contains("packed"));
+    assert!(matches!(
+        engine.unpack_project(&id, false, &mut |_| {}),
+        Err(EngineError::NotAllowed(_))
+    ));
+
+    // pack: models go into <folder>.zip, verified against the disk; other files stay loose
+    let before = p.total_bytes;
+    let mut phases = Vec::new();
+    let (p, notes) = engine.pack_project(&id, &mut |s| phases.push(s.phase)).unwrap();
+    assert!(notes.is_empty(), "{notes:?}");
+    assert_eq!(phases, vec!["pack", "pack", "verify"]);
+    assert_eq!(p.packed.as_deref(), Some("Cable Clip.zip"));
+    let rels: Vec<&str> = p.files.iter().map(|f| f.rel_path.as_str()).collect();
+    assert_eq!(
+        rels,
+        vec![
+            "Cable Clip.zip",
+            "Cable Clip.zip/files/clip.stl",
+            "Cable Clip.zip/files/clip_big.stl",
+            "README.txt",
+            "photo.jpg"
+        ]
+    );
+    assert!(!dir.join("files").exists(), "the emptied folder is gone");
+    assert!(p.total_bytes < before, "{} < {before}", p.total_bytes);
+    assert_eq!(engine.locate(&id, "Cable Clip.zip/files/clip.stl").unwrap().read().unwrap(), clip);
+    assert!(!dir.join("Cable Clip.zip.tmp").exists());
+    assert!(
+        matches!(engine.pack_project(&id, &mut |_| {}), Err(EngineError::NotAllowed(_))),
+        "packed already"
+    );
+
+    // and back, keeping the archive: the layout is the one it was packed from
+    let report = engine.unpack_projects(&[id.clone(), format!("{}:Loose Clip", root.id)], true, |_| {});
+    assert_eq!(report.projects.len(), 1);
+    assert_eq!(report.failed.len(), 1, "Loose Clip is not packed");
+    let p = &report.projects[0];
+    let rels: Vec<&str> = p.files.iter().map(|f| f.rel_path.as_str()).collect();
+    assert_eq!(
+        rels,
+        vec!["Cable Clip.zip", "README.txt", "files/clip.stl", "files/clip_big.stl", "photo.jpg"]
+    );
+    assert_eq!(p.packed, None);
+    assert_eq!(p.files[0].kind, FileKind::Attachment, "kept as an attachment");
+
+    // batch pack reports what it saved and what it could not do
+    fs::create_dir_all(lib.path().join("Docs")).unwrap();
+    fs::write(lib.path().join("Docs/project.yaml"), b"metadata:\n  title: Docs\n").unwrap();
+    engine.scan_root(&root.id, |_| {}).unwrap();
+    let report = engine.pack_projects(&[format!("{}:Loose Clip", root.id), format!("{}:Docs", root.id)], |_| {});
+    assert_eq!(report.projects.len(), 1);
+    assert_eq!(report.projects[0].packed.as_deref(), Some("Loose Clip.zip"));
+    assert!(report.bytes_after < report.bytes_before);
+    assert!(report.failed[0].message.contains("no model files"));
+
+    // a copy instead of a move when the archive is to stay where it is
+    write_zip(&downloads.path().join("Stay.zip"), &[("part.stl", b"solid part")]);
+    let report = engine
+        .execute_import(
+            &request(
+                ArchivePolicy::Leave,
+                vec![item(&downloads.path().join("Stay.zip"), ImportAction::Packed, "Stay")],
+            ),
+            |_| {},
+        )
+        .unwrap();
+    assert_eq!(report.packed, vec!["Stay"]);
+    assert!(downloads.path().join("Stay.zip").is_file());
+    assert!(lib.path().join("Stay/Stay.zip").is_file());
+    assert_eq!(engine.get_project(&format!("{}:Stay", root.id)).unwrap().model_count, 1);
+}

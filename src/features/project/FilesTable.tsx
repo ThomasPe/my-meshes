@@ -12,8 +12,10 @@ import { useDeleteFile } from '@/lib/queries';
 import { navigate } from '@/lib/router';
 import type { FileEntry } from '@/lib/types';
 
-export function FilesTable({ projectId, files, offline }: { projectId: string; files: FileEntry[]; offline: boolean }) {
+export function FilesTable({ projectId, files, offline, packed = null }: { projectId: string; files: FileEntry[]; offline: boolean; packed?: string | null }) {
   const { t, i18n } = useTranslation();
+  // LIB-9: files inside the packed archive can be opened (a copy is made), not deleted one by one
+  const inArchive = (f: FileEntry) => !!packed && (f.rel_path === packed || f.rel_path.startsWith(`${packed}/`));
   const open = (rel: string) => getBackend().then((b) => b.openProjectFile(projectId, rel)).catch(reportError);
   const del = useDeleteFile();
   const [deleting, setDeleting] = useState<FileEntry | null>(null);
@@ -31,20 +33,22 @@ export function FilesTable({ projectId, files, offline }: { projectId: string; f
         <thead><tr className="border-b border-border text-left text-[11px] font-bold uppercase tracking-wider text-muted-foreground"><th className="px-4 py-2.5">{t('library.columns.title')}</th><th className="px-3 py-2.5">{t('project.fileRole.other')}</th><th className="px-3 py-2.5 text-right">{t('library.columns.size')}</th><th className="px-3 py-2.5 text-right">{t('library.columns.modified')}</th><th /></tr></thead>
         <tbody>
           {files.map((f) => (
-            <tr key={f.rel_path} className="border-b border-border last:border-0 hover:bg-secondary/50" data-testid="file-row">
+            <tr key={f.rel_path} className="border-b border-border last:border-0 hover:bg-secondary/50" data-testid="file-row" data-packed={(inArchive(f) && f.rel_path !== packed) || undefined}>
               <td className="px-4 py-2.5"><div className="font-bold">{f.name} {f.slicer && <Badge variant="accent" className="ml-1">{f.slicer}</Badge>}</div>{f.rel_path !== f.name && <div className="font-mono text-[11px] text-muted-foreground">{f.rel_path}</div>}</td>
               <td className="px-3 py-2.5"><Badge variant={f.kind === 'model' ? 'accent' : f.kind === 'attachment' ? 'outline' : 'default'}>{t(`project.fileRole.${f.kind}`)}</Badge></td>
               <td className="px-3 py-2.5 text-right text-muted-foreground tabular">{formatBytes(f.size, i18n.language)}</td>
               <td className="px-3 py-2.5 text-right text-muted-foreground tabular">{formatDate(f.modified, i18n.language)}</td>
               <td className="px-3 py-2.5 text-right whitespace-nowrap">
                 <Button size="sm" variant="ghost" disabled={offline} onClick={() => void open(f.rel_path)} title={t('project.openInApp')}><ExternalLink />{t('project.openInApp')}</Button>
-                <Button size="icon-sm" variant="ghost" disabled={offline} onClick={() => setDeleting(f)} title={t('actions.delete')} aria-label={`${t('actions.delete')} ${f.name}`} data-testid="file-delete" className="text-muted-foreground hover:text-destructive"><Trash2 /></Button>
+                <Button size="icon-sm" variant="ghost" disabled={offline || inArchive(f)} onClick={() => setDeleting(f)} title={inArchive(f) ? t('project.packedNoDelete') : t('actions.delete')} aria-label={`${t('actions.delete')} ${f.name}`} data-testid="file-delete" className="text-muted-foreground hover:text-destructive"><Trash2 /></Button>
               </td>
             </tr>
           ))}
         </tbody>
       </table>
-      {files.some((f) => f.kind === 'attachment') && <p className="px-4 py-3 text-xs text-muted-foreground">{t('project.attachmentHint')}</p>}
+      {packed
+        ? <p className="px-4 py-3 text-xs text-muted-foreground" data-testid="packed-hint">{t('project.packedHint', { archive: packed })}</p>
+        : files.some((f) => f.kind === 'attachment') && <p className="px-4 py-3 text-xs text-muted-foreground">{t('project.attachmentHint')}</p>}
       <Dialog open={!!deleting} onOpenChange={(o) => !o && setDeleting(null)}>
         <DialogContent data-testid="delete-file-dialog">
           <DialogHeader><DialogTitle>{t('actions.deleteFileTitle', { name: deleting?.name })}</DialogTitle><DialogDescription>{t('actions.deleteFileBody')}</DialogDescription></DialogHeader>

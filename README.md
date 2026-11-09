@@ -18,6 +18,8 @@ in `docs/decisions/`). What works today:
   viewer with progressive loading and 3MF colours (materials, Bambu/Orca and PrusaSlicer
   painting), an image viewer
 - import with a staging step (zip, 7z, folders, loose files), inbox per root, drag and drop
+- packed projects: a zip download can stay a zip, the app reads models, previews and
+  duplicates straight from it; pack and unpack any project on request
 - settings for ignore patterns, bundle folders, preview location, notifications, theme and
   language (en/de); self-updater in private builds, Microsoft Store build without it
 - feedback from inside the app: bug reports and ideas open as prefilled GitHub issues with

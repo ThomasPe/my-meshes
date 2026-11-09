@@ -18,6 +18,7 @@ pub mod import;
 pub mod index;
 pub mod mcp;
 pub mod model;
+pub mod packed;
 pub mod roots;
 pub mod scan;
 pub mod settings;
@@ -29,7 +30,7 @@ pub mod watch;
 mod engine;
 pub use engine::{
     BatchFailure, BatchReport, BatchUpdate, CreatorSuggestion, CreatorSuggestions, Deleter, DuplicateGroup, DuplicateKind, DuplicateMember,
-    DuplicateReport, Engine, HashProgress, MoveFilesDest, MoveFilesReport, MoveReport, OrganizeReport, PromoteFailure, PromoteItem,
-    PromoteReport, ScanProgress, SharedFile, UpdateMetadata,
+    DuplicateReport, Engine, HashProgress, MoveFilesDest, MoveFilesReport, MoveReport, OrganizeReport, PackProgress, PackReport,
+    PromoteFailure, PromoteItem, PromoteReport, ScanProgress, SharedFile, UpdateMetadata,
 };
 pub use error::{EngineError, Result};

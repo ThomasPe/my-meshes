@@ -48,7 +48,9 @@ existing metadata and hints read from file names, readmes and shortcuts; read_pr
 model page when the user allowed it. update_metadata writes project.yaml (only when writes are allowed). list_import_folder and analyze_import \
 look at the folders the user opened for imports (downloads); execute_import creates projects from them. Prefer values you can back with a \
 hint, a readme or a model page; leave a field alone rather than guess. Deleting tools, when the user allows them, only move to the trash; \
-use dry_run first and tell the user what went.";
+use dry_run first and tell the user what went. A packed project (`packed` in get_project) keeps its models inside a zip in its folder: its files \
+are listed as `<archive>/<path>` and can be read, but not moved or deleted one by one; unpack_projects extracts them, pack_projects packs loose \
+models, and execute_import with action `packed` adds a zip download without extracting it (smaller on disk, far fewer files to sync).";
 
 /// Handles one message or a batch. Batches get a batch back; a batch of notifications gets
 /// no response at all.
@@ -353,11 +355,11 @@ pub fn tools(allow_writes: bool, allow_deletes: bool) -> Vec<Value> {
             ),
             tool(
                 "execute_import",
-                "Create projects from archives, folders or files in the import folders (see analyze_import for the items). Each item: source path, action (project | inbox | skip) and the project name. A zip or 7z is extracted into the new project folder; a folder is copied; a loose model file (stl, 3mf, obj, ...) is copied into the new folder as it is, never extracted. A failed item leaves nothing behind. With apply_hints the creator, license and link found in the files are written into each new project.yaml; with fetch_pages the model page is read too (needs the network setting). archive_policy applies to zip and 7z only, never to model files: keep (copy the archive into the project), originals (move it to <root>/_Originals), trash, or leave (leave it where it is).",
+                "Create projects from archives, folders or files in the import folders (see analyze_import for the items). Each item: source path, action (project | packed | inbox | skip) and the project name. With `packed` (zip only) the archive itself goes into the new project folder unextracted and the app reads the models from it; with archive_policy trash or originals it is moved there, otherwise copied. With `project` a zip or 7z is extracted into the new project folder; a folder is copied; a loose model file (stl, 3mf, obj, ...) is copied into the new folder as it is, never extracted. A failed item leaves nothing behind. With apply_hints the creator, license and link found in the files are written into each new project.yaml; with fetch_pages the model page is read too (needs the network setting). archive_policy applies to zip and 7z only, never to model files: keep (copy the archive into the project), originals (move it to <root>/_Originals), trash, or leave (leave it where it is).",
                 schema(
                     &[
                         ("root_id", s("Library root that receives the projects")),
-                        ("items", json!({ "type": "array", "items": { "type": "object", "properties": { "source": { "type": "string" }, "action": { "type": "string", "enum": ["project", "inbox", "skip"] }, "name": { "type": "string" } }, "required": ["source", "action"] }, "description": "What to import" })),
+                        ("items", json!({ "type": "array", "items": { "type": "object", "properties": { "source": { "type": "string" }, "action": { "type": "string", "enum": ["project", "packed", "inbox", "skip"] }, "name": { "type": "string" } }, "required": ["source", "action"] }, "description": "What to import" })),
                         ("archive_policy", json!({ "type": "string", "enum": ["keep", "originals", "trash", "leave"], "description": "What happens to archives after extraction (default leave)" })),
                         ("apply_hints", b("Write detected creator, license and link into the new projects (default true)")),
                         ("fetch_pages", b("Also read each new project's model page (default false)")),
@@ -409,6 +411,23 @@ pub fn tools(allow_writes: bool, allow_deletes: bool) -> Vec<Value> {
                 "Add projects to a manual collection, by id or by name (a new collection is created for an unknown name).",
                 schema(
                     &[("project_ids", strings("Project ids")), ("collection_id", s("Existing collection id")), ("name", s("Collection name, used when no id is given"))],
+                    &["project_ids"],
+                ),
+                false,
+                false,
+            ),
+            tool(
+                "pack_projects",
+                "Pack projects (LIB-9): the loose model files of each project go into <folder>.zip inside its folder (deflate, verified against the files on disk), project.yaml names the archive, and the loose models move to the trash. Images and readmes stay loose. The app keeps reading models, previews and duplicates from the archive. Saves space and, on synced folders, a lot of files. With dry_run only lists what would be packed.",
+                schema(&[("project_ids", strings("Project ids")), ("dry_run", b("Only report"))], &["project_ids"]),
+                false,
+                false,
+            ),
+            tool(
+                "unpack_projects",
+                "Extract packed projects back into their folders (nothing is overwritten; a download's single wrapper folder is stripped). With keep_archive the zip stays as an attachment, otherwise it goes to the trash. With dry_run only lists the files that would appear.",
+                schema(
+                    &[("project_ids", strings("Project ids")), ("keep_archive", b("Keep the zip in the project (default false)")), ("dry_run", b("Only report"))],
                     &["project_ids"],
                 ),
                 false,
@@ -562,6 +581,8 @@ fn call_tool(engine: &mut Engine, name: &str, args: &Value, changes: &mut Vec<Ch
                 | "move_files"
                 | "remove_empty_folders"
                 | "organize"
+                | "pack_projects"
+                | "unpack_projects"
         );
     if is_write && !settings.allow_writes {
         return Err(ToolError::Failed(format!(
@@ -627,7 +648,7 @@ fn call_tool(engine: &mut Engine, name: &str, args: &Value, changes: &mut Vec<Ch
                 "projects": items.iter().map(|p| json!({
                     "id": p.id, "title": p.title, "root_id": p.root_id, "rel_path": p.rel_path, "creator": p.creator, "tags": p.tags,
                     "model_count": p.model_count, "file_count": p.file_count, "total_bytes": p.total_bytes, "has_sidecar": p.has_sidecar,
-                    "favorite": p.favorite, "offline": p.offline,
+                    "favorite": p.favorite, "offline": p.offline, "packed": p.packed.is_some(),
                 })).collect::<Vec<_>>(),
                 "next_offset": if more { Some(offset + limit) } else { None },
             }))
@@ -649,17 +670,21 @@ fn call_tool(engine: &mut Engine, name: &str, args: &Value, changes: &mut Vec<Ch
         "read_project_file" => {
             let id = need_str(args, "project_id")?;
             let rel = need_str(args, "rel_path")?;
-            let path = engine.resolve_file(&id, &rel)?;
-            let meta = std::fs::metadata(&path).map_err(|e| e.to_string())?;
-            if meta.len() > MAX_TEXT_BYTES {
-                return Err(format!(
-                    "{rel} is {} bytes; only text files up to {} bytes are read",
-                    meta.len(),
-                    MAX_TEXT_BYTES
-                )
-                .into());
+            let located = engine.locate(&id, &rel)?;
+            let size = match &located {
+                crate::packed::Located::Disk(path) => std::fs::metadata(path).map_err(|e| e.to_string())?.len(),
+                crate::packed::Located::Packed { .. } => engine
+                    .get_project(&id)?
+                    .files
+                    .iter()
+                    .find(|f| f.rel_path == rel)
+                    .map(|f| f.size)
+                    .ok_or_else(|| ToolError::Failed(format!("{rel} is not in the packed archive")))?,
+            };
+            if size > MAX_TEXT_BYTES {
+                return Err(format!("{rel} is {size} bytes; only text files up to {MAX_TEXT_BYTES} bytes are read").into());
             }
-            let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+            let bytes = located.read()?;
             if bytes.iter().take(4096).filter(|b| **b == 0).count() > 0 {
                 return Err(format!("{rel} is not a text file").into());
             }
@@ -729,6 +754,50 @@ fn call_tool(engine: &mut Engine, name: &str, args: &Value, changes: &mut Vec<Ch
         "check_conventions" => {
             let root = need_str(args, "root_id")?;
             Ok(serde_json::to_value(engine.check_conventions(&root)?).unwrap_or_default())
+        }
+        "pack_projects" | "unpack_projects" => {
+            let ids = arg_strings(args, "project_ids").unwrap_or_default();
+            if ids.is_empty() {
+                return Err("pass at least one project id".to_string().into());
+            }
+            let packing = name == "pack_projects";
+            if dry_run {
+                let mut rows = Vec::new();
+                for id in &ids {
+                    let p = engine.get_project(id)?;
+                    rows.push(if packing {
+                        let models: Vec<&crate::model::FileEntry> = p.files.iter().filter(|f| f.kind == FileKind::Model).collect();
+                        json!({
+                            "id": id, "already_packed": p.packed.is_some(),
+                            "would_pack": models.iter().map(|f| f.rel_path.as_str()).collect::<Vec<_>>(),
+                            "bytes": models.iter().map(|f| f.size).sum::<u64>(),
+                        })
+                    } else {
+                        let prefix = p.packed.as_deref().map(|a| format!("{a}/"));
+                        json!({
+                            "id": id, "packed": p.packed,
+                            "entries": p.files.iter().filter(|f| prefix.as_deref().is_some_and(|x| f.rel_path.starts_with(x))).map(|f| f.rel_path.as_str()).collect::<Vec<_>>(),
+                            "bytes": p.files.iter().filter(|f| prefix.as_deref().is_some_and(|x| f.rel_path.starts_with(x))).map(|f| f.size).sum::<u64>(),
+                        })
+                    });
+                }
+                return Ok(json!({ "dry_run": true, "projects": rows }));
+            }
+            let r = if packing {
+                engine.pack_projects(&ids, |_| {})
+            } else {
+                engine.unpack_projects(&ids, arg_bool(args, "keep_archive").unwrap_or(false), |_| {})
+            };
+            if !r.projects.is_empty() {
+                changes.push(Change::Library {
+                    root_id: None,
+                    reason: "pack".into(),
+                });
+            }
+            Ok(json!({
+                "projects": r.projects.iter().map(|p| json!({ "id": p.id, "rel_path": p.rel_path, "packed": p.packed, "model_count": p.model_count, "total_bytes": p.total_bytes })).collect::<Vec<_>>(),
+                "failed": r.failed, "bytes_before": r.bytes_before, "bytes_after": r.bytes_after, "warnings": r.warnings,
+            }))
         }
         "organize" => {
             let root = need_str(args, "root_id")?;
@@ -807,9 +876,10 @@ fn call_tool(engine: &mut Engine, name: &str, args: &Value, changes: &mut Vec<Ch
                 let source = allowed_path(&dirs, Path::new(&need_str(&it, "source")?))?;
                 let action = match arg_str(&it, "action").as_deref() {
                     Some("project") => ImportAction::Project,
+                    Some("packed") => ImportAction::Packed,
                     Some("inbox") => ImportAction::Inbox,
                     Some("skip") => ImportAction::Skip,
-                    other => return Err(format!("unknown action {other:?}; use project, inbox or skip").into()),
+                    other => return Err(format!("unknown action {other:?}; use project, packed, inbox or skip").into()),
                 };
                 let name = arg_str(&it, "name")
                     .unwrap_or_else(|| source.file_stem().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default());
@@ -1035,6 +1105,12 @@ fn call_tool(engine: &mut Engine, name: &str, args: &Value, changes: &mut Vec<Ch
                 .ok_or_else(|| ToolError::Failed(format!("{id} is not part of any duplicate group")))?;
             let shared = member.shared.clone();
             let p = engine.get_project(&id)?;
+            if p.packed.is_some() {
+                return Err(format!(
+                    "{id} is packed: single files cannot be removed from the archive; unpack it first or use resolve_duplicates"
+                )
+                .into());
+            }
             let dir = engine.project_dir(&p)?;
             let rows: Vec<Value> = shared
                 .iter()
@@ -1116,6 +1192,7 @@ fn project_view(engine: &Engine, p: &Project) -> Value {
         "favorite": p.favorite,
         "sidecar": p.sidecar,
         "offline": p.offline,
+        "packed": p.packed,
         "files": p.files.iter().map(|f| json!({ "rel_path": f.rel_path, "kind": f.kind, "size": f.size })).collect::<Vec<_>>(),
     })
 }
@@ -1274,7 +1351,7 @@ mod tests {
                 ..Default::default()
             })
             .unwrap();
-        assert_eq!(list(&mut engine), read_only + 11);
+        assert_eq!(list(&mut engine), read_only + 13);
         let (r, _) = call(&mut engine, 3, "no_such_tool", json!({}));
         assert_eq!(r["error"]["code"], -32602);
         // deleting needs the third switch, which needs writes
@@ -1295,7 +1372,118 @@ mod tests {
                 ..Default::default()
             })
             .unwrap();
-        assert_eq!(list(&mut engine), read_only + 15);
+        assert_eq!(list(&mut engine), read_only + 17);
+    }
+
+    /// LIB-9 over MCP: a zip download is added packed, read in place, unpacked and packed again.
+    #[test]
+    fn packed_projects_over_mcp() {
+        use crate::model::SyncMode;
+        use std::io::Write;
+        let data = tempfile::tempdir().unwrap();
+        let lib = tempfile::tempdir().unwrap();
+        let downloads = tempfile::tempdir().unwrap();
+        touch(&lib.path().join("Existing/part.stl"), 10);
+        let zip_path = downloads.path().join("Cable Clip.zip");
+        let mut zip = zip::ZipWriter::new(std::fs::File::create(&zip_path).unwrap());
+        let o = zip::write::SimpleFileOptions::default();
+        for (name, body) in [
+            ("Cable Clip/clip.stl", &b"solid clip clip clip"[..]),
+            ("Cable Clip/README.md", b"by PrintTools\nCC0\n"),
+        ] {
+            zip.start_file(name, o).unwrap();
+            zip.write_all(body).unwrap();
+        }
+        zip.finish().unwrap();
+        let mut engine = Engine::open(data.path()).unwrap();
+        engine.set_deleter(Box::new(|p: &Path| {
+            if p.is_dir() {
+                std::fs::remove_dir_all(p)
+            } else {
+                std::fs::remove_file(p)
+            }
+        }));
+        engine
+            .set_mcp_settings(McpSettings {
+                enabled: true,
+                allow_writes: true,
+                import_dirs: vec![downloads.path().to_path_buf()],
+                ..Default::default()
+            })
+            .unwrap();
+        let root = engine.add_root(lib.path(), SyncMode::Manual).unwrap();
+        engine.scan_root(&root.id, |_| {}).unwrap();
+        let id = format!("{}:Cable Clip", root.id);
+
+        let (r, changes) = call(
+            &mut engine,
+            1,
+            "execute_import",
+            json!({ "root_id": root.id, "items": [{ "source": zip_path, "action": "packed", "name": "Cable Clip" }] }),
+        );
+        let v = structured(&r);
+        assert_eq!(v["packed"], json!(["Cable Clip"]));
+        assert_eq!(v["metadata_written"], 1);
+        assert!(!changes.is_empty());
+        assert!(zip_path.is_file(), "the default policy over MCP leaves the download where it is");
+        assert!(lib.path().join("Cable Clip/Cable Clip.zip").is_file());
+        assert!(!lib.path().join("Cable Clip/clip.stl").exists());
+
+        let (r, _) = call(&mut engine, 2, "get_project", json!({ "project_id": id }));
+        let v = structured(&r);
+        assert_eq!(v["packed"], "Cable Clip.zip");
+        assert_eq!(v["creator"], "PrintTools");
+        assert!(v["files"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|f| f["rel_path"] == "Cable Clip.zip/Cable Clip/clip.stl"));
+        let (r, _) = call(&mut engine, 3, "search_projects", json!({ "text": "clip" }));
+        assert_eq!(structured(&r)["projects"][0]["packed"], true);
+        let (r, _) = call(
+            &mut engine,
+            4,
+            "read_project_file",
+            json!({ "project_id": id, "rel_path": "Cable Clip.zip/Cable Clip/README.md" }),
+        );
+        assert!(structured(&r)["text"].as_str().unwrap().contains("PrintTools"));
+        let (r, _) = call(
+            &mut engine,
+            5,
+            "move_files",
+            json!({ "project_id": id, "rel_paths": ["Cable Clip.zip/Cable Clip/clip.stl"], "dest_rel": "Elsewhere" }),
+        );
+        assert!(
+            r["result"]["structuredContent"]["failed"][0]["message"]
+                .as_str()
+                .unwrap()
+                .contains("unpack the project first"),
+            "{r}"
+        );
+
+        let (r, changes) = call(&mut engine, 6, "unpack_projects", json!({ "project_ids": [id], "dry_run": true }));
+        assert_eq!(structured(&r)["projects"][0]["entries"].as_array().unwrap().len(), 2);
+        assert!(changes.is_empty());
+        let (r, _) = call(&mut engine, 7, "unpack_projects", json!({ "project_ids": [id] }));
+        let v = structured(&r);
+        assert!(v["projects"][0]["packed"].is_null());
+        assert!(lib.path().join("Cable Clip/clip.stl").is_file());
+        assert!(!lib.path().join("Cable Clip/Cable Clip.zip").exists());
+
+        let (r, _) = call(
+            &mut engine,
+            8,
+            "pack_projects",
+            json!({ "project_ids": [id, format!("{}:Existing", root.id)], "dry_run": true }),
+        );
+        assert_eq!(structured(&r)["projects"][0]["would_pack"], json!(["clip.stl"]));
+        let (r, changes) = call(&mut engine, 9, "pack_projects", json!({ "project_ids": [id] }));
+        let v = structured(&r);
+        assert_eq!(v["projects"][0]["packed"], "Cable Clip.zip");
+        assert_eq!(v["failed"], json!([]));
+        assert!(matches!(&changes[0], Change::Library { reason, .. } if reason == "pack"));
+        assert!(!lib.path().join("Cable Clip/clip.stl").exists());
+        assert!(lib.path().join("Cable Clip/README.md").is_file(), "only models are packed");
     }
 
     /// The case from #58: a library sorted by creator with a shared folder, ids in titles,

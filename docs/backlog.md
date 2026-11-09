@@ -151,6 +151,16 @@ submission is outside the code: Partner Center identity values, screenshots
 ## Phase 2: Quality of life
 
 ### Epic 7: Metadata & hygiene
+- [x] **Packed projects** (LIB-9). `packed:` in project.yaml names a zip in the project folder;
+      `packed.rs` lists, reads, hashes, extracts and writes archives; the engine expands the
+      entries into the project's files (listing cached in the index while the archive is
+      unchanged, schema v5) and resolves every read through `Engine::locate`. Import action
+      `packed` for zips (remembered toggle in the dialog), "Pack"/"Unpack" for one project or a
+      selection with a progress toast, "open with default app" via a cache copy, MCP
+      `pack_projects`/`unpack_projects` and `execute_import` with `packed`. The import's
+      default archive policy is now the trash (Q7). Not yet: packing other files than models,
+      re-using an original archive kept in a project instead of compressing again, progress
+      for MCP clients.
 - [x] **Duplicate detection** (LIB-8): size pre-filter, SHA-256 on all cores, hash cache in
       the index (schema v4, survives rescans and renames), identical/overlap groups, Duplicates
       view in the sidebar with keep-one resolution and automatic refresh after changes.

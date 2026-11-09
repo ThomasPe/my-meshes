@@ -146,6 +146,8 @@ pub fn run() {
             commands::pick_import_files,
             commands::analyze_import,
             commands::execute_import,
+            commands::pack_projects,
+            commands::unpack_projects,
             commands::list_inbox,
             commands::promote_inbox,
             commands::delete_inbox_file,

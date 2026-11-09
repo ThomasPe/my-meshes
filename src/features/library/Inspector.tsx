@@ -1,4 +1,4 @@
-import { Check, CloudOff, ExternalLink, Eye, FileBox, FolderHeart, FolderInput, FolderOpen, Globe, ImageUp, Layers, Pencil, Plus, Scale, Sparkles, Star, StarOff, Trash2, X } from 'lucide-react';
+import { Archive, Check, CloudOff, ExternalLink, Eye, FileBox, FolderHeart, FolderInput, FolderOpen, Globe, ImageUp, Layers, Pencil, Plus, Scale, Sparkles, Star, StarOff, Trash2, X } from 'lucide-react';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
@@ -101,7 +101,7 @@ export function Inspector({ selectedIds, visible, tagCounts, facets, filterTitle
   const root = roots.data?.find((r) => r.id === p.root_id);
   const dirPath = root ? `${root.path}${p.rel_path ? (root.path.includes('\\') ? '\\' : '/') + p.rel_path.replace(/\//g, root.path.includes('\\') ? '\\' : '/') : ''}` : p.rel_path;
   const sidecarBadge = p.sidecar.state === 'ok' ? <Badge variant="success" className="max-w-full" title={t('inspector.sidecarOk')}><span className="truncate">{t('inspector.sidecarOk')}</span></Badge> : p.sidecar.state === 'malformed' ? <Badge variant="warning" className="max-w-full" title={p.sidecar.message}><span className="truncate">{t('inspector.sidecarMalformed')}</span></Badge> : <Badge variant="outline" className="max-w-full" title={t('inspector.sidecarMissing')}><span className="truncate">{t('inspector.sidecarMissing')}</span></Badge>;
-  const summary: ProjectSummary = { id: p.id, root_id: p.root_id, rel_path: p.rel_path, title: p.title, creator: p.creator, tags: p.tags, thumbnail: p.thumbnail, file_count: p.files.length, model_count: p.model_count, total_bytes: p.total_bytes, modified: p.modified, has_sidecar: p.sidecar.state === 'ok', offline: p.offline, favorite: p.favorite, added: p.added, thumb: p.thumb, slicer: p.slicer };
+  const summary: ProjectSummary = { id: p.id, root_id: p.root_id, rel_path: p.rel_path, title: p.title, creator: p.creator, tags: p.tags, thumbnail: p.thumbnail, file_count: p.files.length, model_count: p.model_count, total_bytes: p.total_bytes, modified: p.modified, has_sidecar: p.sidecar.state === 'ok', offline: p.offline, favorite: p.favorite, added: p.added, thumb: p.thumb, slicer: p.slicer, packed: p.packed };
 
   const saveTags = (tags: string[]) => {
     update.mutate({ id: p.id, update: { tags, expected_stamp: p.sidecar_stamp ?? null } }, {
@@ -117,6 +117,7 @@ export function Inspector({ selectedIds, visible, tagCounts, facets, filterTitle
           <span className="absolute right-2.5 top-2.5 flex gap-1">
             {p.offline && <Badge variant="outline"><CloudOff />{t('library.offline')}</Badge>}
             {p.slicer && <Badge variant="accent" title={p.slicer}>{t('library.slicerProject')}</Badge>}
+            {p.packed && <Badge variant="outline" className="bg-card/90" title={t('library.packedHint')}><Archive />{t('library.packed')}</Badge>}
           </span>
         </Thumb>
         <div className="flex items-start gap-2">

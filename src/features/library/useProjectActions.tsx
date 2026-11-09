@@ -1,3 +1,4 @@
+import { useQueryClient } from '@tanstack/react-query';
 import { useCallback, useMemo, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { toast } from 'sonner';
@@ -7,9 +8,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import type { ProjectActions } from '@/features/library/ProjectMenu';
 import { getBackend } from '@/lib/backend';
+import { formatBytes } from '@/lib/format';
 import { reportError } from '@/lib/errors';
 import { useCollectionDialog } from '@/features/library/CollectionDialogs';
-import { useAddToCollection, useCollections, useDeleteProject, useRemoveFromCollection, useRenameProject, useSetFavorite } from '@/lib/queries';
+import { invalidateLibrary, useAddToCollection, useCollections, useDeleteProject, useRemoveFromCollection, useRenameProject, useSetFavorite } from '@/lib/queries';
 import { navigate } from '@/lib/router';
 import { MoveDialog } from '@/features/library/MoveDialog';
 import { kickThumbQueue, useThumbs } from '@/lib/thumbs/queue';
@@ -18,13 +20,14 @@ import { useUi } from '@/lib/store';
 import { isAppError, type ProjectSummary } from '@/lib/types';
 
 type Target = Pick<ProjectSummary, 'id' | 'title' | 'rel_path' | 'favorite' | 'offline'>;
+type PackJob = { mode: 'pack' | 'unpack'; targets: ProjectSummary[] };
 
 /**
  * Project-level actions (favorite, rename, delete, reveal, open) plus the dialogs they need.
  * Render `dialogs` once in the page; pass `actions` to cards, rows, menus and the inspector.
  */
 export function useProjectActions(opts: { onRenamed?: (oldId: string, newId: string) => void; onDeleted?: (id: string) => void; collectionId?: string | null } = {}) {
-  const { t } = useTranslation();
+  const { t, i18n } = useTranslation();
   const favorite = useSetFavorite();
   const collections = useCollections();
   const addTo = useAddToCollection();
@@ -38,6 +41,11 @@ export function useProjectActions(opts: { onRenamed?: (oldId: string, newId: str
   const [name, setName] = useState('');
   const [renameError, setRenameError] = useState<string | null>(null);
   const [deleting, setDeleting] = useState<Target | null>(null);
+  // LIB-9: pack / unpack, confirmed in a dialog, with a progress toast while it runs
+  const qc = useQueryClient();
+  const [packJob, setPackJob] = useState<PackJob | null>(null);
+  const [keepArchive, setKeepArchive] = useState(false);
+  const [packBusy, setPackBusy] = useState(false);
   const [deletingMany, setDeletingMany] = useState<Target[]>([]);
   const [moving, setMoving] = useState<Target[]>([]);
   const setCreator = useUi((s) => s.setCreator);
@@ -49,6 +57,8 @@ export function useProjectActions(opts: { onRenamed?: (oldId: string, newId: str
     remove: (p) => setDeleting(p),
     reveal: (p) => { getBackend().then((b) => b.revealProject(p.id)).catch(reportError); },
     move: (ps) => setMoving(ps.filter((p) => !p.offline && p.rel_path !== '')),
+    pack: (ps) => { const targets = ps.filter((p) => !p.offline && p.rel_path !== '' && !p.packed); if (targets.length) setPackJob({ mode: 'pack', targets }); },
+    unpack: (ps) => { const targets = ps.filter((p) => !p.offline && p.packed); if (targets.length) { setKeepArchive(false); setPackJob({ mode: 'unpack', targets }); } },
     rerenderThumbnail: (p) => {
       getBackend().then(async (b) => {
         await b.resetThumbnail(p.id);
@@ -112,8 +122,52 @@ export function useProjectActions(opts: { onRenamed?: (oldId: string, newId: str
     });
   }, [deleting, remove, select, t, opts]);
 
+  const confirmPack = useCallback(async () => {
+    if (!packJob) return;
+    const job = packJob;
+    const ids = job.targets.map((p) => p.id);
+    setPackBusy(true);
+    const id = toast.loading(t(job.mode === 'pack' ? 'actions.packing' : 'actions.unpacking', { count: ids.length }));
+    let off: (() => void) | null = null;
+    try {
+      const b = await getBackend();
+      off = await b.onPackProgress((p) => toast.loading(t(`actions.packPhase.${p.phase}`, { index: Math.min(p.index + 1, p.total), total: p.total, name: p.name.split('/').pop() }), { id }));
+      const report = job.mode === 'pack' ? await b.packProjects(ids) : await b.unpackProjects(ids, keepArchive);
+      // previews are rendered again from the new place of the model
+      for (const p of job.targets) { const key = p.thumb ?? useThumbs.getState().fresh[p.id]; if (key) forgetThumbnail(key); }
+      useThumbs.setState((s) => { const fresh = { ...s.fresh }; for (const pid of ids) delete fresh[pid]; return { fresh }; });
+      invalidateLibrary(qc);
+      void kickThumbQueue();
+      const sizes = { before: formatBytes(report.bytes_before, i18n.language), after: formatBytes(report.bytes_after, i18n.language) };
+      const notes = [...report.failed.map((f) => f.message), ...report.warnings];
+      if (report.projects.length) toast.success(t(job.mode === 'pack' ? 'actions.packed' : 'actions.unpacked', { count: report.projects.length, ...sizes }), { id, description: notes.length ? notes.slice(0, 3).join('\n') : job.mode === 'pack' ? t('actions.packedHint') : undefined });
+      else toast.error(t('actions.packFailed', { count: report.failed.length }), { id, description: notes.slice(0, 3).join('\n') });
+    } catch (e) {
+      toast.dismiss(id);
+      reportError(e);
+    } finally {
+      off?.();
+      setPackBusy(false);
+      setPackJob(null);
+    }
+  }, [packJob, keepArchive, qc, t, i18n.language]);
+
   const dialogs = (
     <>
+      <Dialog open={!!packJob} onOpenChange={(o) => { if (!o && !packBusy) setPackJob(null); }}>
+        <DialogContent data-testid="pack-dialog" data-mode={packJob?.mode}>
+          <DialogHeader>
+            <DialogTitle>{packJob?.mode === 'unpack' ? t('actions.unpackTitle', { count: packJob.targets.length, name: packJob.targets[0]?.title }) : t('actions.packTitle', { count: packJob?.targets.length ?? 0, name: packJob?.targets[0]?.title })}</DialogTitle>
+            <DialogDescription>{packJob?.mode === 'unpack' ? t('actions.unpackBody') : t('actions.packBody')}</DialogDescription>
+          </DialogHeader>
+          {(packJob?.targets.length ?? 0) > 1 && <ul className="max-h-40 overflow-auto text-sm font-semibold">{packJob?.targets.map((p) => <li key={p.id} className="truncate">{p.title}</li>)}</ul>}
+          {packJob?.mode === 'unpack' && <label className="flex items-center gap-2 text-sm"><input type="checkbox" className="size-4 accent-primary" checked={keepArchive} onChange={(e) => setKeepArchive(e.target.checked)} data-testid="unpack-keep-archive" />{t('actions.unpackKeep')}</label>}
+          <DialogFooter>
+            <Button variant="outline" disabled={packBusy} onClick={() => setPackJob(null)}>{t('common.cancel')}</Button>
+            <Button disabled={packBusy} onClick={() => void confirmPack()} data-testid="pack-confirm">{packJob?.mode === 'unpack' ? t('actions.unpack') : t('actions.pack')}</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
       <MoveDialog projects={moving} onClose={() => setMoving([])} onMoved={() => { setMoving([]); select([]); }} />
       <Dialog open={!!renaming} onOpenChange={(o) => !o && setRenaming(null)}>
         <DialogContent data-testid="rename-dialog">

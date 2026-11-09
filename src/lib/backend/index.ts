@@ -1,4 +1,4 @@
-import type { AppInfo, BatchReport, BatchUpdate, ConventionReport, ConventionsView, CreatorSuggestions, DuplicateReport, EnrichProgress, EnrichReport, Hints, McpSettings, McpStatus, NetworkSettings, PageSuggestion, HashProgress, MoveReport, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata, AiSettings, AiSettingsView, AiTestReport, MetadataSuggestion } from '@/lib/types';
+import type { AppInfo, PackProgress, PackReport, BatchReport, BatchUpdate, ConventionReport, ConventionsView, CreatorSuggestions, DuplicateReport, EnrichProgress, EnrichReport, Hints, McpSettings, McpStatus, NetworkSettings, PageSuggestion, HashProgress, MoveReport, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata, AiSettings, AiSettingsView, AiTestReport, MetadataSuggestion } from '@/lib/types';
 
 export type Unlisten = () => void;
 
@@ -90,6 +90,10 @@ export interface Backend {
   deleteSmartCollection(id: string): Promise<void>;
   listSmartCollection(id: string, overrides?: ListQuery): Promise<ProjectSummary[]>;
   onImportProgress(cb: (p: ImportProgress) => void): Promise<Unlisten>;
+  /** LIB-9: pack loose models into a zip per project, or extract a packed project again. */
+  packProjects(projectIds: string[]): Promise<PackReport>;
+  unpackProjects(projectIds: string[], keepArchive: boolean): Promise<PackReport>;
+  onPackProgress(cb: (p: PackProgress) => void): Promise<Unlisten>;
   onCollectionsChanged(cb: () => void): Promise<Unlisten>;
   onInboxChanged(cb: (e: { rootId: string }) => void): Promise<Unlisten>;
   onWatchError(cb: (e: { rootId: string; message: string }) => void): Promise<Unlisten>;

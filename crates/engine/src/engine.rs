@@ -11,9 +11,10 @@ use crate::hints;
 use crate::import::{self, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile};
 use crate::index::{Index, ThumbSourceState};
 use crate::model::{
-    Facets, FileKind, FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, RootStatus, ScanReport, ScanSummary, Sidecar,
+    Facets, FileEntry, FileKind, FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, RootStatus, ScanReport, ScanSummary, Sidecar,
     SidecarStamp, SyncMode, TagCount, ThumbJob, ThumbLocation, ThumbSource, ThumbStats,
 };
+use crate::packed::{self, Located};
 use crate::roots::RootsStore;
 use crate::scan::{self, IgnoreMatcher, ScanOptions};
 use crate::settings::{McpSettings, NetworkSettings, Settings, SettingsStore};
@@ -164,6 +165,28 @@ pub struct OrganizeReport {
     pub skipped: Vec<Deviation>,
 }
 
+/// Progress of packing or unpacking one project (LIB-9): file `index` of `total`.
+#[derive(Debug, Clone, Serialize)]
+pub struct PackProgress {
+    pub project_id: String,
+    /// "pack", "verify" or "unpack".
+    pub phase: String,
+    pub index: u32,
+    pub total: u32,
+    pub name: String,
+}
+
+/// Outcome of packing or unpacking several projects (LIB-9). The byte counts cover the
+/// projects that succeeded: what their folders held before and hold now.
+#[derive(Debug, Clone, Serialize, Default)]
+pub struct PackReport {
+    pub projects: Vec<Project>,
+    pub failed: Vec<BatchFailure>,
+    pub bytes_before: u64,
+    pub bytes_after: u64,
+    pub warnings: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Default)]
 pub struct MoveFilesReport {
     /// New relative paths (inside the destination project) of the files that moved.
@@ -266,6 +289,8 @@ impl Engine {
             ignore: settings.get().ignore.clone(),
             container_dirs: settings.get().container_dirs.clone(),
         };
+        // copies of packed entries handed to other programs in the last session (LIB-9)
+        let _ = std::fs::remove_dir_all(data_dir.join(OPENED_DIR));
         Ok(Engine {
             data_dir: data_dir.to_path_buf(),
             roots,
@@ -341,7 +366,7 @@ impl Engine {
             return Ok(Some(u.to_string()));
         }
         let dir = self.project_dir(&p)?;
-        Ok(hints::detect(&dir, &p.files, &[])
+        Ok(detect_hints(&p, &dir, &[])
             .source_url
             .into_iter()
             .map(|h| h.value)
@@ -791,7 +816,20 @@ impl Engine {
         let dir = self.project_dir(&p)?;
         let thumb = p.thumb.as_deref().and_then(|k| self.thumbnail_path(k).ok());
         let vocab = self.index.tag_counts(None)?;
-        ai::prepare(&self.data_dir, &p, &dir, thumb.as_deref(), &vocab, &self.ai_settings().model)
+        ai::prepare(
+            &self.data_dir,
+            &p,
+            &dir,
+            thumb.as_deref(),
+            &vocab,
+            &self.ai_settings().model,
+            &|f| {
+                located_in(&p, &dir, &f.rel_path)
+                    .read_head(256 << 10)
+                    .ok()
+                    .map(|b| String::from_utf8_lossy(&b).into_owned())
+            },
+        )
     }
 
     /// Prepare, call, validate and cache in one go. The shell splits this so the network
@@ -899,6 +937,20 @@ impl Engine {
         for p in &mut outcome.projects {
             p.favorite = self.collections.is_favorite(&p.id);
         }
+        // packed projects: the archive's entries become the project's files (LIB-9)
+        let mut packed_notes = Vec::new();
+        for p in outcome.projects.iter_mut().filter(|p| p.packed.is_some()) {
+            let dir = if p.rel_path.is_empty() {
+                root.path.clone()
+            } else {
+                root.path.join(&p.rel_path)
+            };
+            let (files_before, warnings_before) = (p.files.len(), p.warnings.len());
+            self.expand_packed(p, &dir);
+            outcome.files += (p.files.len() - files_before) as u32;
+            packed_notes.extend(p.warnings[warnings_before..].iter().map(|w| format!("{}: {w}", p.rel_path)));
+        }
+        outcome.warnings.extend(packed_notes);
         self.index.rebuild_root(id, &outcome.projects)?;
         let summary = ScanSummary {
             projects: outcome.projects.len() as u32,
@@ -1047,8 +1099,20 @@ impl Engine {
         Ok(full)
     }
 
-    /// Absolute path of a file inside a project. Refuses anything that escapes the project.
+    /// Absolute path of a file inside a project. Refuses anything that escapes the project,
+    /// and files that only exist inside a packed archive (they have no path of their own).
     pub fn resolve_file(&self, project_id: &str, rel: &str) -> Result<PathBuf> {
+        match self.locate(project_id, rel)? {
+            Located::Disk(path) => Ok(path),
+            Located::Packed { .. } => Err(EngineError::NotAllowed(format!(
+                "{rel} is inside the packed archive; unpack the project first"
+            ))),
+        }
+    }
+
+    /// Where a project file lives: on disk, or as an entry of the project's packed archive
+    /// (LIB-9). Refuses anything that escapes the project.
+    pub fn locate(&self, project_id: &str, rel: &str) -> Result<Located> {
         let p = self
             .index
             .project(project_id)?
@@ -1062,14 +1126,55 @@ impl Engine {
             return Err(EngineError::ProjectNotFound(format!("{project_id}/{rel}")));
         }
         let dir = self.project_dir(&p)?;
-        let full = dir.join(rel_path);
-        if !full.is_file() {
+        let located = located_in(&p, &dir, rel);
+        let on_disk = match &located {
+            Located::Disk(path) => path,
+            Located::Packed { archive, .. } => archive,
+        };
+        if !on_disk.is_file() {
             return Err(EngineError::Io {
-                path: full,
+                path: on_disk.clone(),
                 source: std::io::Error::new(std::io::ErrorKind::NotFound, "file not found"),
             });
         }
-        Ok(full)
+        Ok(located)
+    }
+
+    /// Where copies of packed entries go when another program has to open one.
+    pub fn opened_cache_dir(&self) -> PathBuf {
+        self.data_dir.join(OPENED_DIR)
+    }
+
+    /// Adds the entries of a packed project's archive to its files (LIB-9). The listing the
+    /// index kept is reused while the archive has the same size and time, so a rescan does
+    /// not open unchanged archives (which matters on shares and cloud folders).
+    fn expand_packed(&self, p: &mut Project, dir: &Path) {
+        let Some(rel) = p.packed.clone() else { return };
+        let Some(archive) = p.files.iter().find(|f| f.rel_path == rel).cloned() else {
+            return;
+        };
+        let cached = self
+            .index
+            .packed_listing(&p.id, &rel)
+            .ok()
+            .flatten()
+            .filter(|(size, modified, entries)| {
+                *size == archive.size && *modified == Index::stamp(&archive.modified) && !entries.is_empty()
+            });
+        let entries = match cached {
+            Some((_, _, entries)) => entries,
+            None => match packed::list_entries(&dir.join(&rel)) {
+                Ok(list) => packed::as_files(&rel, archive.modified, &list),
+                Err(e) => {
+                    p.warnings.push(format!("packed archive {rel} could not be read: {e}"));
+                    return;
+                }
+            },
+        };
+        p.files.extend(entries);
+        p.files.sort_by(|a, b| a.rel_path.cmp(&b.rel_path));
+        p.files.dedup_by(|a, b| a.rel_path == b.rel_path);
+        p.model_count = p.files.iter().filter(|f| f.kind == FileKind::Model).count() as u32;
     }
 
     // ---- favorites --------------------------------------------------------------------
@@ -1221,7 +1326,11 @@ impl Engine {
             {
                 continue;
             }
-            // a sidecar that arrived inside the archive wins; expected_stamp None means "none yet"
+            // a sidecar that arrived inside the archive wins; expected_stamp None means "none yet".
+            // A packed project's project.yaml was written by this import, so it is ours to fill.
+            if report.packed.contains(rel) {
+                upd.expected_stamp = self.get_project(&id).ok().and_then(|p| p.sidecar_stamp);
+            }
             match self.update_metadata(&id, upd) {
                 Ok(_) => report.metadata_written += 1,
                 Err(EngineError::SidecarConflict) => report
@@ -1605,6 +1714,7 @@ impl Engine {
         let mut out = scan::ScanOutcome::default();
         let mut fresh = scan::read_project(&root.id, &root.path, dir, &ignore, &mut out)?;
         fresh.favorite = self.collections.is_favorite(&fresh.id);
+        self.expand_packed(&mut fresh, dir);
         self.index.upsert_project(&fresh)?;
         fresh.sidecar_stamp = sidecar::read(dir).ok().flatten().map(|(_, s)| s);
         // the cached thumbnail (if still valid for this file state) is known only to the index
@@ -1658,7 +1768,7 @@ impl Engine {
     pub fn project_hints(&self, project_id: &str) -> Result<hints::Hints> {
         let p = self.online_project(project_id)?;
         let dir = self.project_dir(&p)?;
-        let mut h = hints::detect(&dir, &p.files, &self.known_creators()?);
+        let mut h = detect_hints(&p, &dir, &self.known_creators()?);
         self.page_hints(&p, &mut h);
         if let Some(d) = self.settings.get().dismissed_hints.get(project_id) {
             h.creator.retain(|c| !d.iter().any(|x| hints::fold(x) == hints::fold(&c.value)));
@@ -1705,7 +1815,7 @@ impl Engine {
                 Ok(d) => d,
                 Err(_) => continue,
             };
-            let mut h = hints::detect(&dir, &project.files, &known);
+            let mut h = detect_hints(&project, &dir, &known);
             self.page_hints(&project, &mut h);
             if let Some((prefix, support)) = library.get(&summary.id) {
                 let conf = if *support >= 5 { 65 } else { 58 };
@@ -1811,21 +1921,32 @@ impl Engine {
         progress(HashProgress { done: 0, total });
         let mut done = 0u32;
         let roots: HashMap<String, PathBuf> = self.roots()?.into_iter().map(|r| (r.id, r.path)).collect();
+        // packed projects: their models are hashed straight from the archive (LIB-9)
+        let packed_of: HashMap<String, String> = self
+            .index
+            .list(&ListQuery::default(), None)?
+            .into_iter()
+            .filter_map(|p| p.packed.map(|a| (p.id, a)))
+            .collect();
         for chunk in todo.chunks(32) {
-            let paths: Vec<PathBuf> = chunk
+            let sources: Vec<Option<Located>> = chunk
                 .iter()
-                .filter_map(|&i| {
+                .map(|&i| {
                     let (pid, rel, _, _) = &files[i];
                     let (root_id, proj_rel) = Project::split_id(pid)?;
                     let root = roots.get(root_id)?;
                     let dir = if proj_rel.is_empty() { root.clone() } else { root.join(proj_rel) };
-                    Some(dir.join(rel))
+                    Some(located_at(packed_of.get(pid).map(|s| s.as_str()), &dir, rel))
                 })
                 .collect();
-            let results = hash::sha256_many(&paths);
+            let present: Vec<Located> = sources.iter().flatten().cloned().collect();
+            let mut results = hash::sha256_located(&present).into_iter();
             let mut rows = Vec::new();
-            for (&i, (_, res)) in chunk.iter().zip(results.iter()) {
-                if let Ok(sha) = res {
+            for (&i, source) in chunk.iter().zip(sources.iter()) {
+                if source.is_none() {
+                    continue;
+                }
+                if let Some(Ok(sha)) = results.next() {
                     let (pid, rel, size, modified) = &files[i];
                     hashes.insert(i, sha.clone());
                     rows.push((pid.clone(), rel.clone(), *size, modified.clone(), sha.clone()));
@@ -2155,6 +2276,11 @@ impl Engine {
                 {
                     return Err(EngineError::NotAllowed("project.yaml stays with its project".into()));
                 }
+                if current.packed.as_deref() == Some(rel.as_str()) {
+                    return Err(EngineError::NotAllowed(format!(
+                        "{rel} holds this project's models; unpack the project first"
+                    )));
+                }
                 let from = self.resolve_file(project_id, rel)?;
                 let name = from
                     .file_name()
@@ -2260,6 +2386,11 @@ impl Engine {
         {
             return Err(EngineError::NotAllowed("project.yaml is managed by the app".into()));
         }
+        if current.packed.as_deref() == Some(rel) {
+            return Err(EngineError::NotAllowed(format!(
+                "{rel} holds this project's models; unpack the project or delete the whole project"
+            )));
+        }
         let path = self.resolve_file(project_id, rel)?;
         (self.deleter)(&path).map_err(|e| EngineError::Io {
             path: path.clone(),
@@ -2278,6 +2409,233 @@ impl Engine {
             self.index.remove_project(project_id)?;
             Ok(None)
         }
+    }
+
+    // ---- packed projects (LIB-9) ---------------------------------------------------------
+
+    /// Packs a project's loose model files into `<folder>.zip` inside the project folder and
+    /// names it in project.yaml. The archive is written next to its final name, renamed,
+    /// read back and compared with the files on disk; only then do the loose files go to
+    /// the trash. Other files (images, readmes) stay as they are. Returns the project and
+    /// notes about loose files that could not be removed.
+    pub fn pack_project(&mut self, project_id: &str, progress: &mut dyn FnMut(PackProgress)) -> Result<(Project, Vec<String>)> {
+        let current = self.online_project(project_id)?;
+        if current.rel_path.is_empty() {
+            return Err(EngineError::NotAllowed("the library root itself cannot be packed".into()));
+        }
+        if current.packed.is_some() {
+            return Err(EngineError::NotAllowed("the project is packed already".into()));
+        }
+        let dir = self.project_dir(&current)?;
+        let rels: Vec<String> = current
+            .files
+            .iter()
+            .filter(|f| f.kind == FileKind::Model)
+            .map(|f| f.rel_path.clone())
+            .collect();
+        if rels.is_empty() {
+            return Err(EngineError::NotAllowed("the project has no model files to pack".into()));
+        }
+        // a sidecar that does not parse stops this before anything is written
+        let (mut sc, stamp) = match sidecar::read(&dir)? {
+            Some((sc, stamp)) => (sc, Some(stamp)),
+            None => (Sidecar::default(), None),
+        };
+        let folder = dir
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "models".to_string());
+        let archive = import::unique_file_name(&dir, &format!("{folder}.zip"));
+        let archive_rel = archive.file_name().map(|n| n.to_string_lossy().into_owned()).unwrap_or_default();
+        let total = rels.len() as u32;
+        let mut step = |phase: &str, index: usize, name: &str| {
+            progress(PackProgress {
+                project_id: project_id.to_string(),
+                phase: phase.to_string(),
+                index: index as u32,
+                total,
+                name: name.to_string(),
+            })
+        };
+        packed::write_archive(&archive, &dir, &rels, |i, name| step("pack", i, name))?;
+        step("verify", rels.len(), &archive_rel);
+        let checked = packed::verify_archive(&archive, &dir, &rels).and_then(|_| {
+            sc.packed = Some(archive_rel.clone());
+            sidecar::write(&dir, &sc, stamp).map(|_| ())
+        });
+        if let Err(e) = checked {
+            let _ = std::fs::remove_file(&archive);
+            return Err(e);
+        }
+        // from here on the archive is the project's content; a loose file that cannot be
+        // removed is listed next to its packed copy until someone removes it
+        let mut notes = Vec::new();
+        for rel in &rels {
+            let path = dir.join(rel);
+            if let Err(e) = (self.deleter)(&path) {
+                notes.push(format!("{rel}: packed, but the loose file could not be removed: {e}"));
+            }
+        }
+        remove_empty_subdirs(&dir);
+        self.remove_thumb_files(&current)?;
+        self.index.clear_thumb(&current.id)?;
+        Ok((self.reindex_dir(&current.root_id, &dir)?, notes))
+    }
+
+    /// Extracts a packed project's archive back into its folder and drops the `packed:` key.
+    /// Nothing is overwritten: an entry whose target exists stops the whole thing before a
+    /// file is written. A download bundle's single wrapper folder is stripped as an import
+    /// would; an archive this app packed keeps its layout. The archive stays as an
+    /// attachment with `keep_archive`, otherwise it goes to the trash.
+    pub fn unpack_project(
+        &mut self,
+        project_id: &str,
+        keep_archive: bool,
+        progress: &mut dyn FnMut(PackProgress),
+    ) -> Result<(Project, Vec<String>)> {
+        let current = self.online_project(project_id)?;
+        let Some(archive_rel) = current.packed.clone() else {
+            return Err(EngineError::NotAllowed("the project is not packed".into()));
+        };
+        let dir = self.project_dir(&current)?;
+        let archive = dir.join(&archive_rel);
+        let (mut sc, stamp) = match sidecar::read(&dir)? {
+            Some((sc, stamp)) => (sc, Some(stamp)),
+            None => (Sidecar::default(), None),
+        };
+        let strip = {
+            let all = packed::list_entries(&archive)?;
+            packed::strip_prefix(&archive, &all)
+        };
+        // the project's own project.yaml wins over one inside the archive
+        let entries: Vec<packed::PackedEntry> = packed::list_entries(&archive)?
+            .into_iter()
+            .filter(|e| packed::unpacked_rel(&e.name, strip.as_deref()) != crate::model::SIDECAR_FILE_NAME)
+            .collect();
+        for e in &entries {
+            let rel = packed::unpacked_rel(&e.name, strip.as_deref());
+            if dir.join(&rel).exists() {
+                return Err(EngineError::AlreadyExists(rel));
+            }
+        }
+        let total = entries.len() as u32;
+        // extract next to the project's files first, so a failure half way leaves nothing behind
+        let staging = dir.join(".meshkeep").join("unpack");
+        if staging.exists() {
+            std::fs::remove_dir_all(&staging).map_err(crate::error::io_err(&staging))?;
+        }
+        let cleanup = |staging: &Path| {
+            let _ = std::fs::remove_dir_all(staging);
+            let _ = std::fs::remove_dir(staging.parent().unwrap_or(staging)); // `.meshkeep`, when empty
+        };
+        let written = match packed::extract_all(&archive, &entries, strip.as_deref(), &staging, |i, name| {
+            progress(PackProgress {
+                project_id: project_id.to_string(),
+                phase: "unpack".to_string(),
+                index: i as u32,
+                total,
+                name: name.to_string(),
+            })
+        }) {
+            Ok(w) => w,
+            Err(e) => {
+                cleanup(&staging);
+                return Err(e);
+            }
+        };
+        let mut placed: Vec<PathBuf> = Vec::new();
+        let moved = (|| -> Result<()> {
+            for rel in &written {
+                let to = dir.join(rel);
+                if let Some(parent) = to.parent() {
+                    std::fs::create_dir_all(parent).map_err(crate::error::io_err(parent))?;
+                }
+                move_file(&staging.join(rel), &to).map_err(crate::error::io_err(&to))?;
+                placed.push(to);
+            }
+            sc.packed = None;
+            // a preview that pointed into the archive follows the file to its new place
+            if let Some(inner) = sc.thumbnail.as_deref().and_then(|t| t.strip_prefix(&format!("{archive_rel}/"))) {
+                sc.thumbnail = Some(packed::unpacked_rel(inner, strip.as_deref()));
+            }
+            sidecar::write(&dir, &sc, stamp).map(|_| ())
+        })();
+        cleanup(&staging);
+        if let Err(e) = moved {
+            for p in &placed {
+                let _ = std::fs::remove_file(p);
+            }
+            remove_empty_subdirs(&dir);
+            return Err(e);
+        }
+        let mut notes = Vec::new();
+        if !keep_archive {
+            if let Err(e) = (self.deleter)(&archive) {
+                notes.push(format!("{archive_rel}: unpacked, but the archive could not be removed: {e}"));
+            }
+        }
+        self.remove_thumb_files(&current)?;
+        self.index.clear_thumb(&current.id)?;
+        Ok((self.reindex_dir(&current.root_id, &dir)?, notes))
+    }
+
+    /// `pack_project` for many; one project that fails does not stop the others.
+    pub fn pack_projects(&mut self, project_ids: &[String], mut progress: impl FnMut(PackProgress)) -> PackReport {
+        let mut report = PackReport::default();
+        for id in project_ids {
+            let before = self.index.project(id).ok().flatten().map(|p| p.total_bytes).unwrap_or(0);
+            match self.pack_project(id, &mut progress) {
+                Ok((p, notes)) => {
+                    report.bytes_before += before;
+                    report.bytes_after += p.total_bytes;
+                    report.warnings.extend(notes.into_iter().map(|n| format!("{}: {n}", p.rel_path)));
+                    report.projects.push(p);
+                }
+                Err(e) => report.failed.push(BatchFailure {
+                    project_id: id.clone(),
+                    message: e.to_string(),
+                }),
+            }
+        }
+        report
+    }
+
+    /// `unpack_project` for many; one project that fails does not stop the others.
+    pub fn unpack_projects(&mut self, project_ids: &[String], keep_archive: bool, mut progress: impl FnMut(PackProgress)) -> PackReport {
+        let mut report = PackReport::default();
+        for id in project_ids {
+            let before = self.index.project(id).ok().flatten().map(|p| p.total_bytes).unwrap_or(0);
+            match self.unpack_project(id, keep_archive, &mut progress) {
+                Ok((p, notes)) => {
+                    report.bytes_before += before;
+                    report.bytes_after += p.total_bytes;
+                    report.warnings.extend(notes.into_iter().map(|n| format!("{}: {n}", p.rel_path)));
+                    report.projects.push(p);
+                }
+                Err(e) => report.failed.push(BatchFailure {
+                    project_id: id.clone(),
+                    message: e.to_string(),
+                }),
+            }
+        }
+        report
+    }
+}
+
+/// Removes directories below `dir` that hold nothing any more (after packing or a rolled
+/// back unpack), deepest first. `dir` itself stays.
+fn remove_empty_subdirs(dir: &Path) {
+    let mut dirs: Vec<PathBuf> = walkdir::WalkDir::new(dir)
+        .min_depth(1)
+        .follow_links(false)
+        .into_iter()
+        .flatten()
+        .filter(|e| e.file_type().is_dir())
+        .map(|e| e.into_path())
+        .collect();
+    dirs.sort_by_key(|p| std::cmp::Reverse(p.components().count()));
+    for d in dirs {
+        let _ = std::fs::remove_dir(&d); // fails while anything is left inside, which is the point
     }
 }
 
@@ -2368,6 +2726,46 @@ fn stamp_of(m: &std::fs::Metadata) -> SidecarStamp {
         size: m.len(),
     }
 }
+/// Folder in the app data dir for copies of packed entries another program opens (LIB-9).
+const OPENED_DIR: &str = "opened";
+
+/// Where `rel` of a project lives, given the project's packed archive (if any).
+fn located_at(packed: Option<&str>, dir: &Path, rel: &str) -> Located {
+    if let Some(archive_rel) = packed {
+        if let Some(entry) = rel.strip_prefix(&format!("{archive_rel}/")) {
+            return Located::Packed {
+                archive: dir.join(archive_rel),
+                entry: entry.to_string(),
+            };
+        }
+    }
+    Located::Disk(dir.join(rel))
+}
+
+fn located_in(p: &Project, dir: &Path, rel: &str) -> Located {
+    located_at(p.packed.as_deref(), dir, rel)
+}
+
+/// `hints::detect` for a project whose files may sit inside its packed archive: readme and
+/// shortcut texts are read from there too; 3MF metadata only from files on disk.
+fn detect_hints(p: &Project, dir: &Path, known: &[String]) -> hints::Hints {
+    hints::detect_from(
+        dir.file_name().and_then(|n| n.to_str()),
+        &p.files,
+        known,
+        &|f: &FileEntry| {
+            located_in(p, dir, &f.rel_path)
+                .read_head(hints::MAX_TEXT)
+                .ok()
+                .map(|b| String::from_utf8_lossy(&b).into_owned())
+        },
+        &|f: &FileEntry| match located_in(p, dir, &f.rel_path) {
+            Located::Disk(path) => hints::threemf_metadata(&path),
+            Located::Packed { .. } => Vec::new(),
+        },
+    )
+}
+
 fn new_mcp_token() -> String {
     format!("mk_{}{}", uuid::Uuid::new_v4().simple(), uuid::Uuid::new_v4().simple())
 }

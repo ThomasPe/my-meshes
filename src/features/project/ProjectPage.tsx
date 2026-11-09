@@ -1,4 +1,4 @@
-import { ChevronLeft, CloudOff, FolderOpen, ImageUp, Pencil, RotateCcw, Star, Trash2 } from 'lucide-react';
+import { Archive, ChevronLeft, CloudOff, FolderOpen, ImageUp, PackageOpen, Pencil, RotateCcw, Star, Trash2 } from 'lucide-react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -27,7 +27,7 @@ export function ProjectPage({ id }: { id: string }) {
   if (project.isError || !project.data) return <div className="p-6"><p className="text-sm text-destructive">{t('errors.not_found')}</p><Button asChild variant="outline" className="mt-3"><a href={routeHref({ page: 'library' })}>{t('project.back')}</a></Button></div>;
   const p = project.data;
   const root = roots.data?.find((r) => r.id === p.root_id);
-  const summary: ProjectSummary = { id: p.id, root_id: p.root_id, rel_path: p.rel_path, title: p.title, creator: p.creator, tags: p.tags, thumbnail: p.thumbnail, file_count: p.files.length, model_count: p.model_count, total_bytes: p.total_bytes, modified: p.modified, has_sidecar: p.sidecar.state === 'ok', offline: p.offline, favorite: p.favorite, added: p.added, thumb: p.thumb, slicer: p.slicer };
+  const summary: ProjectSummary = { id: p.id, root_id: p.root_id, rel_path: p.rel_path, title: p.title, creator: p.creator, tags: p.tags, thumbnail: p.thumbnail, file_count: p.files.length, model_count: p.model_count, total_bytes: p.total_bytes, modified: p.modified, has_sidecar: p.sidecar.state === 'ok', offline: p.offline, favorite: p.favorite, added: p.added, thumb: p.thumb, slicer: p.slicer, packed: p.packed };
   return (
     <div className="h-full overflow-auto" data-testid="project-page">
       {dialogs}
@@ -60,10 +60,14 @@ export function ProjectPage({ id }: { id: string }) {
               {p.creator ? <><span className="grid size-5 place-items-center rounded-full bg-accent text-[9px] font-extrabold text-accent-foreground">{initials(p.creator)}</span>{p.creator}</> : t('library.unknownCreator')}
               <span>·</span><span>{t('library.files', { count: p.files.length })} · {formatBytes(p.total_bytes, i18n.language)}</span>
               {p.slicer && <Badge variant="accent" data-testid="slicer-badge">{p.slicer}</Badge>}
+              {p.packed && <Badge variant="outline" title={t('library.packedHint')} data-testid="packed-badge"><Archive />{t('library.packed')}</Badge>}
               {p.offline && <Badge variant="outline"><CloudOff />{t('library.offline')}</Badge>}
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            {p.packed
+              ? <Button variant="outline" disabled={p.offline} onClick={() => actions.unpack([summary])} data-testid="project-unpack"><PackageOpen />{t('actions.unpack')}</Button>
+              : <Button variant="outline" disabled={p.offline || p.rel_path === '' || p.model_count === 0} onClick={() => actions.pack([summary])} data-testid="project-pack"><Archive />{t('actions.pack')}</Button>}
             <Button variant="outline" disabled={p.offline} onClick={() => actions.reveal(summary)}><FolderOpen />{t('inspector.reveal')}</Button>
             <Button variant="outline" disabled={p.offline || p.rel_path === ''} onClick={() => actions.rename(summary)} data-testid="project-rename"><Pencil />{t('actions.rename')}</Button>
             <Button variant="outline" disabled={p.offline || p.rel_path === ''} onClick={() => actions.remove(summary)} data-testid="project-delete" className="text-destructive hover:text-destructive"><Trash2 />{t('actions.delete')}</Button>
@@ -81,7 +85,7 @@ export function ProjectPage({ id }: { id: string }) {
               <div className="rounded-2xl bg-card p-5 shadow-card"><MetadataForm project={p} onReload={() => void project.refetch()} /></div>
             </div>
           </TabsContent>
-          <TabsContent value="files" className="mt-4"><FilesTable projectId={p.id} files={p.files} offline={p.offline} /></TabsContent>
+          <TabsContent value="files" className="mt-4"><FilesTable projectId={p.id} files={p.files} offline={p.offline} packed={p.packed} /></TabsContent>
           <TabsContent value="images" className="mt-4"><ImageGallery project={p} files={p.files} offline={p.offline} /></TabsContent>
         </Tabs>
       </div>
