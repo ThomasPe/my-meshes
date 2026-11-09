@@ -522,9 +522,18 @@ test('preview: a project image or the current view becomes the thumbnail, automa
   await expect(tile.getByTestId('thumbnail-badge')).toBeVisible();
   await expect(page.getByTestId('image-gallery')).toContainText('Preview image: photo_desk.png');
   expect(await page.evaluate(() => (window as unknown as { __mockThumbPicks?: Array<string | null> }).__mockThumbPicks)).toEqual(['photo_desk.png']);
-  await page.getByTestId('thumbnail-auto').click();
+  // the header shows the same preview as the card once the queue rendered it, and its menu
+  // offers the way back to the automatic choice
+  const headerThumb = page.getByTestId('project-thumb');
+  await expect(headerThumb.getByTestId('thumb-img')).toBeVisible({ timeout: 20_000 });
+  await headerThumb.click();
+  await page.getByTestId('project-thumb-auto').click();
   await expect(page.getByText('Preview is chosen automatically again')).toBeVisible();
   await expect(tile.getByTestId('thumbnail-badge')).toHaveCount(0);
+  await headerThumb.click();
+  await expect(page.getByTestId('project-thumb-rerender')).toBeVisible();
+  await expect(page.getByTestId('project-thumb-auto')).toHaveCount(0);
+  await page.keyboard.press('Escape');
   // the viewer's current view, saved inside the project and listed with the images
   await page.getByRole('tab', { name: 'Overview' }).click();
   await expect(page.getByTestId('viewer-triangles')).toBeVisible({ timeout: 30_000 });

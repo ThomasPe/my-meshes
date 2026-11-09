@@ -218,6 +218,7 @@
       "saving": "Speichert…",
       "saved": "Alle Änderungen gespeichert"
     },
+    "previewMenu": "Vorschau: neu erzeugen oder automatisch wählen",
     "useAsThumbnail": "Als Vorschau verwenden",
     "thumbnailCurrent": "Vorschau",
     "thumbnailIs": "Vorschaubild: {{name}}",

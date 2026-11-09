@@ -353,7 +353,7 @@ pub fn tools(allow_writes: bool, allow_deletes: bool) -> Vec<Value> {
             ),
             tool(
                 "execute_import",
-                "Create projects from archives, folders or files in the import folders (see analyze_import for the items). Each item: source path, action (project | inbox | skip) and the project name. With apply_hints the creator, license and link found in the files are written into each new project.yaml; with fetch_pages the model page is read too (needs the network setting). archive_policy: keep (copy the archive into the project), originals (move it to <root>/_Originals), trash, or leave (leave it where it is).",
+                "Create projects from archives, folders or files in the import folders (see analyze_import for the items). Each item: source path, action (project | inbox | skip) and the project name. A zip or 7z is extracted into the new project folder; a folder is copied; a loose model file (stl, 3mf, obj, ...) is copied into the new folder as it is, never extracted. A failed item leaves nothing behind. With apply_hints the creator, license and link found in the files are written into each new project.yaml; with fetch_pages the model page is read too (needs the network setting). archive_policy applies to zip and 7z only, never to model files: keep (copy the archive into the project), originals (move it to <root>/_Originals), trash, or leave (leave it where it is).",
                 schema(
                     &[
                         ("root_id", s("Library root that receives the projects")),

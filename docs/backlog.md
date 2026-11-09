@@ -189,7 +189,9 @@ submission is outside the code: Partner Center identity values, screenshots
       `.meshkeep/preview.png` inside the project), "choose automatically" to go back; the
       sidecar's `thumbnail:` points at the file. "Re-render preview" per project (card menu,
       inspector) drops the cached PNG and queues the project again; previews frame the
-      bounding box so wide or flat parts are no longer cut off.
+      bounding box so wide or flat parts are no longer cut off. The project page shows the
+      preview in its header, so a chosen image or captured view is confirmed in place; its
+      menu offers "re-render" and "choose automatically".
 - [ ] **Frameless title bar** (APP-10), if confirmed.
 
 ### Epic 9: AI assistance (ADR-0003, first slice)
