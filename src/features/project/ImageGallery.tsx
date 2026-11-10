@@ -12,7 +12,16 @@ import { isPageCover, VIEW_PREVIEW_REL } from '@/lib/thumbs/queue';
 import type { EmbeddedPicture, FileEntry, Project } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
-const urls = new Map<string, string>(); // `${projectId}/${rel}[#entry][@version]` -> object URL (session cache)
+const urls = new Map<string, string>(); // `${projectId}/${rel}[#entry][@version]` -> object URL (cache for the open project)
+
+/** Drops the pictures of every other project (#66): each entry pins a full-size image in
+ * memory, and a session that walks through the library would otherwise keep them all. */
+function keepProjectImages(projectId: string) {
+  const prefix = `${projectId}/`;
+  for (const [key, url] of urls) {
+    if (!key.startsWith(prefix)) { urls.delete(key); URL.revokeObjectURL(url); }
+  }
+}
 
 /** A tile of the gallery: an image file of the project, or a photo stored inside one of its 3MF files. */
 type Item = { key: string; name: string; size: number; file?: FileEntry; picture?: EmbeddedPicture; /** Size and date of the file the bytes come from. */ version: string };
@@ -66,6 +75,7 @@ export function ImageGallery({ project, files, pictures = [], offline }: { proje
   const { t } = useTranslation();
   const projectId = project.id;
   const choose = useChooseThumbnail(project);
+  useEffect(() => { keepProjectImages(projectId); }, [projectId]);
   const images: Item[] = [
     ...files.filter((f) => f.kind === 'image').map((f) => ({ key: f.rel_path, name: f.name, size: f.size, file: f, version: versionOf(f) })),
     ...pictures.map((x) => ({ key: `${x.file}#${x.entry}`, name: x.name, size: x.size, picture: x, version: versionOf(files.find((f) => f.rel_path === x.file)) })),

@@ -142,3 +142,62 @@ describe('3MF colours', () => {
     expect(rgb(2)).toEqual([0, 0, 0]);      // part 2: extruder 3
   });
 });
+
+describe('3MF memory behaviour (#66)', () => {
+  const tri = '<vertices><vertex x="0" y="0" z="0"/><vertex x="1" y="0" z="0"/><vertex x="0" y="1" z="0"/></vertices>';
+  const model = (resources: string, build: string) => strToU8(`<?xml version="1.0"?><model><resources>${resources}</resources><build>${build}</build></model>`);
+
+  it('sizes the output by counting: a mesh used by several components and items is repeated', () => {
+    const xml = model(
+      `<object id="1"><mesh>${tri}<triangles><triangle v1="0" v2="1" v3="2"/><triangle v1="0" v2="2" v3="1"/></triangles></mesh></object>`
+      + '<object id="2"><components><component objectid="1"/><component objectid="1" transform="1 0 0 0 1 0 0 0 1 10 0 0"/></components></object>',
+      '<item objectid="2"/><item objectid="2" transform="1 0 0 0 1 0 0 0 1 0 0 50"/><item objectid="1"/>',
+    );
+    const m = parse3mf(generate3mf({ '3D/3dmodel.model': xml }));
+    expect(m.triangles).toBe(10);
+    expect(m.positions.length).toBe(90);
+    expect(m.normals.length).toBe(90);
+    expect(m.colors).toBeUndefined();
+    expect(Array.from(m.positions.slice(18, 21))).toEqual([10, 0, 0]);  // second component
+    expect(Array.from(m.positions.slice(54, 57))).toEqual([10, 0, 50]); // second item, second component
+    expect(Array.from(m.positions.slice(72, 75))).toEqual([0, 0, 0]);   // the plain item
+  });
+
+  it('gives earlier triangles the default colour when colour first shows up later in the file', () => {
+    const xml = model(
+      '<basematerials id="5"><base name="red" displaycolor="#FF0000"/></basematerials>'
+      + `<object id="1"><mesh>${tri}<triangles><triangle v1="0" v2="1" v3="2"/></triangles></mesh></object>`
+      + `<object id="2"><mesh>${tri}<triangles><triangle v1="0" v2="1" v3="2"/><triangle v1="0" v2="1" v3="2" pid="5" p1="0"/></triangles></mesh></object>`,
+      '<item objectid="1"/><item objectid="2"/>',
+    );
+    const m = parse3mf(generate3mf({ '3D/3dmodel.model': xml }));
+    expect(m.triangles).toBe(3);
+    const rgb = (i: number) => Array.from(m.colors!.slice(i * 9, i * 9 + 3)).map((x) => Math.round(x * 255));
+    expect(rgb(0)).toEqual([0x0f, 0x8b, 0x8d]);
+    expect(rgb(1)).toEqual([0x0f, 0x8b, 0x8d]);
+    expect(rgb(2)).toEqual([255, 0, 0]);
+  });
+
+  it('keeps vertices and indices in typed arrays, however many there are', () => {
+    const n = 5000; // well past the initial capacity, so the buffers have to grow
+    let vs = '', ts = '';
+    for (let i = 0; i < n + 2; i++) vs += `<vertex x="${i}" y="${i % 7}" z="${i % 3}"/>`;
+    for (let i = 0; i < n; i++) ts += `<triangle v1="${i}" v2="${i + 1}" v3="${i + 2}"/>`;
+    const { objects } = parseModelXml(`<model><resources><object id="1"><mesh><vertices>${vs}</vertices><triangles>${ts}</triangles></mesh></object></resources></model>`);
+    const mesh = objects.get('1')!.mesh!;
+    expect(mesh.v).toBeInstanceOf(Float32Array);
+    expect(mesh.t).toBeInstanceOf(Uint32Array);
+    expect(mesh.v.length).toBe((n + 2) * 3);
+    expect(mesh.t.length).toBe(n * 3);
+    expect(Array.from(mesh.t.slice(-3))).toEqual([n - 1, n, n + 1]);
+    expect(mesh.v[(n + 1) * 3]).toBe(n + 1);
+    expect(mesh.colors).toBeUndefined();
+    expect(mesh.paint).toBeUndefined();
+  });
+
+  it('refuses a model part that would inflate past the limit instead of exhausting memory', () => {
+    const buf = generate3mf();
+    expect(() => parse3mf(buf, 64)).toThrow(/too large to preview/);
+    expect(parse3mf(buf).triangles).toBe(36);
+  });
+});

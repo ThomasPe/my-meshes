@@ -2,6 +2,11 @@
 // then scan the XML for <object>/<mesh>/<vertex>/<triangle>, <components> and <build><item>
 // with their 3x4 transforms. A tolerant regex scanner is used because workers have no
 // DOMParser and slicer 3MFs can be tens of megabytes; it ignores anything it does not know.
+//
+// Memory matters here (#66): a 3MF is zipped XML, so a 30 MB file holds millions of
+// triangles. Everything per vertex or per triangle lives in typed arrays that grow by
+// doubling, and the output is sized by counting first; plain `number[]` lists cost about
+// 1 GB for 2 million triangles and took the whole webview down with them.
 import { unzipSync } from 'fflate';
 import { computeFlatNormals, DEFAULT_COLOR, hexToRgb, type ParsedMesh } from './types';
 
@@ -9,11 +14,34 @@ type Mat = number[]; // 12 numbers, 3MF column-major "m00 m01 m02 m10 m11 m12 m2
 const IDENTITY: Mat = [1, 0, 0, 0, 1, 0, 0, 0, 1, 0, 0, 0];
 
 type Rgb = [number, number, number];
+/** "No colour" in the packed per-triangle colour lists (otherwise 0xRRGGBB). */
+const NONE = -1;
+const pack = (c: Rgb | null | undefined): number => (c ? (Math.round(c[0] * 255) << 16) | (Math.round(c[1] * 255) << 8) | Math.round(c[2] * 255) : NONE);
+
+/** One model part may not inflate beyond this: the XML is scanned as one string, and the engine caps strings near 512 MB. */
+export const MAX_MODEL_PART_BYTES = 480 * 1024 * 1024;
+
+type Numbers = Float32Array | Uint32Array | Int32Array | Int16Array;
+/** Append-only typed array that doubles when full. */
+class Buf<T extends Numbers> {
+  n = 0;
+  constructor(private a: T) {}
+  push(x: number) {
+    if (this.n === this.a.length) {
+      const b = new (this.a.constructor as new (n: number) => T)(this.a.length * 2);
+      b.set(this.a);
+      this.a = b;
+    }
+    this.a[this.n++] = x;
+  }
+  view(): T { return this.a.subarray(0, this.n) as T; }
+}
+
 interface MeshDef {
   v: Float32Array;
   t: Uint32Array;
-  /** Per-triangle colour from core materials (`pid`/`p1`), when any triangle has one. */
-  colors?: Array<Rgb | null>;
+  /** Per-triangle colour from core materials (`pid`/`p1`) as 0xRRGGBB or `NONE`, when any triangle has one. */
+  colors?: Int32Array;
   /** Per-triangle painting state (Bambu `paint_color`, Prusa `slic3rpe:mmu_segmentation`), 0 = unpainted. */
   paint?: Int16Array;
 }
@@ -35,17 +63,13 @@ function mul(a: Mat, b: Mat): Mat {
   for (let col = 0; col < 3; col++) r[9 + col] = b[9]! * a[col]! + b[10]! * a[3 + col]! + b[11]! * a[6 + col]! + a[9 + col]!;
   return r;
 }
-function apply(m: Mat, x: number, y: number, z: number): [number, number, number] {
-  return [
-    x * m[0]! + y * m[3]! + z * m[6]! + m[9]!,
-    x * m[1]! + y * m[4]! + z * m[7]! + m[10]!,
-    x * m[2]! + y * m[5]! + z * m[8]! + m[11]!,
-  ];
-}
 
+// compiled once per attribute name: this runs for every vertex and triangle
+const attrRes = new Map<string, [RegExp, RegExp]>();
 const attr = (tag: string, name: string): string | undefined => {
-  const m = new RegExp(`\\s${name}\\s*=\\s*"([^"]*)"`).exec(tag) ?? new RegExp(`\\s${name}\\s*=\\s*'([^']*)'`).exec(tag);
-  return m?.[1];
+  let re = attrRes.get(name);
+  if (!re) { re = [new RegExp(`\\s${name}\\s*=\\s*"([^"]*)"`), new RegExp(`\\s${name}\\s*=\\s*'([^']*)'`)]; attrRes.set(name, re); }
+  return (re[0].exec(tag) ?? re[1].exec(tag))?.[1];
 };
 
 function findModelPath(files: Record<string, Uint8Array>): string {
@@ -135,29 +159,29 @@ export function parseModelXml(xml: string): { objects: Map<string, ObjectDef>; b
     const def: ObjectDef = { components: [], color: material(attr(otag, 'pid'), attr(otag, 'pindex')) };
     const meshStart = body.indexOf('<mesh');
     if (meshStart >= 0) {
-      const v: number[] = [];
+      const v = new Buf(new Float32Array(3 * 1024));
       const vRe = /<vertex\b([^>]*)\/?>/g;
       let vm: RegExpExecArray | null;
       while ((vm = vRe.exec(body))) {
         const t = '<vertex' + vm[1];
-        v.push(+(attr(t, 'x') ?? 0), +(attr(t, 'y') ?? 0), +(attr(t, 'z') ?? 0));
+        v.push(+(attr(t, 'x') ?? 0)); v.push(+(attr(t, 'y') ?? 0)); v.push(+(attr(t, 'z') ?? 0));
       }
-      const t: number[] = [];
-      const colors: Array<Rgb | null> = [];
-      const paint: number[] = [];
+      const t = new Buf(new Uint32Array(3 * 1024));
+      const colors = new Buf(new Int32Array(1024));
+      const paint = new Buf(new Int16Array(1024));
       let anyColor = false, anyPaint = false;
       const tRe = /<triangle\b([^>]*)\/?>/g;
       let tm: RegExpExecArray | null;
       while ((tm = tRe.exec(body))) {
         const tag = '<triangle' + tm[1];
-        t.push(+(attr(tag, 'v1') ?? 0), +(attr(tag, 'v2') ?? 0), +(attr(tag, 'v3') ?? 0));
+        t.push(+(attr(tag, 'v1') ?? 0)); t.push(+(attr(tag, 'v2') ?? 0)); t.push(+(attr(tag, 'v3') ?? 0));
         const c = tag.includes('pid') || tag.includes('p1') ? material(attr(tag, 'pid') ?? attr(otag, 'pid'), attr(tag, 'p1')) : null;
-        colors.push(c); if (c) anyColor = true;
+        colors.push(pack(c)); if (c) anyColor = true;
         const code = tag.includes('paint_color') || tag.includes('mmu_segmentation') ? (attr(tag, 'paint_color') ?? attr(tag, 'slic3rpe:mmu_segmentation')) : undefined;
         const st = code ? paintState(code) : 0;
         paint.push(st); if (st) anyPaint = true;
       }
-      if (t.length) def.mesh = { v: Float32Array.from(v), t: Uint32Array.from(t), colors: anyColor ? colors : undefined, paint: anyPaint ? Int16Array.from(paint) : undefined };
+      if (t.n) def.mesh = { v: v.view(), t: t.view(), colors: anyColor ? colors.view() : undefined, paint: anyPaint ? paint.view() : undefined };
     }
     const cRe = /<component\b([^>]*)\/?>/g;
     let cm: RegExpExecArray | null;
@@ -246,57 +270,93 @@ function slicerPalette(files: Record<string, Uint8Array>): { filaments: Array<Rg
   return { filaments, objectExtruder, partExtruder, volumes };
 }
 
-export function parse3mf(buffer: ArrayBuffer): ParsedMesh {
-  const files = unzipSync(new Uint8Array(buffer), { filter: (f) => /\.(model|rels)$/i.test(f.name) || /^Metadata\/(project_settings|model_settings|Slic3r_PE|Slic3r_PE_model)\.config$/.test(f.name) });
+export function parse3mf(buffer: ArrayBuffer, maxPartBytes = MAX_MODEL_PART_BYTES): ParsedMesh {
+  const files = unzipSync(new Uint8Array(buffer), {
+    filter: (f) => {
+      const model = /\.model$/i.test(f.name);
+      if (model && f.originalSize > maxPartBytes) throw new Error(`3MF model part is too large to preview (${Math.round(f.originalSize / (1024 * 1024))} MB of XML)`);
+      return model || /\.rels$/i.test(f.name) || /^Metadata\/(project_settings|model_settings|Slic3r_PE|Slic3r_PE_model)\.config$/.test(f.name);
+    },
+  });
   const modelPath = findModelPath(files);
+  const palette = slicerPalette(files);
   const parts = new Map<string, ReturnType<typeof parseModelXml>>();
+  // Hands out a part's XML and forgets its inflated bytes, so they are gone while it is scanned.
+  const takeText = (path: string): string | null => {
+    const key = files[path] ? path : decodeURIComponent(path);
+    const data = files[key];
+    if (!data) return null;
+    delete files[key];
+    return new TextDecoder().decode(data);
+  };
   const part = (path: string) => {
     let p = parts.get(path);
     if (!p) {
-      const data = files[path] ?? files[decodeURIComponent(path)];
-      p = data ? parseModelXml(new TextDecoder().decode(data)) : { objects: new Map(), build: [], materials: new Map() };
+      const xml = takeText(path);
+      p = xml === null ? { objects: new Map(), build: [], materials: new Map() } : parseModelXml(xml);
       parts.set(path, p);
     }
     return p;
   };
   const { objects, build } = part(modelPath);
-  const palette = slicerPalette(files);
-  const filament = (n: number): Rgb | null => (n >= 1 ? palette.filaments[n - 1] ?? null : null);
-  const out: number[] = [];
-  const cols: number[] = [];
-  let anyColor = false;
+  const filaments = palette.filaments.map(pack);
+  const filament = (n: number): number => (n >= 1 ? filaments[n - 1] ?? NONE : NONE);
+  const items = build.length ? build : [...objects.keys()].map((id) => ({ id, transform: IDENTITY }));
+  // First pass: how many triangles the build expands to (components repeat their meshes),
+  // so the output is allocated once at its final size.
+  const count = (id: string, depth: number, scope = objects): number => {
+    const def = scope.get(id);
+    if (!def || depth > 16) return 0;
+    let n = def.mesh ? def.mesh.t.length / 3 : 0;
+    for (const comp of def.components) n += count(comp.id, depth + 1, comp.path ? part(comp.path).objects : scope);
+    return n;
+  };
+  let total = 0;
+  for (const it of items) total += count(it.id, 0);
+  if (total === 0) throw new Error('3MF contains no mesh geometry');
+  const positions = new Float32Array(total * 9);
+  let cols: Float32Array | null = null; // allocated when the first coloured triangle shows up
+  let k = 0;
   // Colour of one triangle: painting > core material on the triangle > material on the object >
   // extruder of the part/volume/object (slicer projects) > none.
-  const emit = (id: string, m: Mat, depth: number, scope = objects, inherited: Rgb | null = null, rootId = id) => {
+  const emit = (id: string, m: Mat, depth: number, scope = objects, inherited = NONE, rootId = id) => {
     const def = scope.get(id);
     if (!def || depth > 16) return;
-    const partColor = filament(palette.partExtruder.get(id) ?? 0) ?? filament(palette.objectExtruder.get(rootId) ?? 0);
-    const base = def.color ?? partColor ?? inherited;
+    let partColor = filament(palette.partExtruder.get(id) ?? 0);
+    if (partColor === NONE) partColor = filament(palette.objectExtruder.get(rootId) ?? 0);
+    const own = pack(def.color);
+    const base = own !== NONE ? own : partColor !== NONE ? partColor : inherited;
     if (def.mesh) {
       const { v, t, colors, paint } = def.mesh;
       const vols = palette.volumes.get(id);
       for (let i = 0, tri = 0; i < t.length; i += 3, tri++) {
-        let c: Rgb | null = null;
+        let c = NONE;
         const st = paint ? paint[tri]! : 0;
         if (st) c = filament(st);
-        if (!c && colors) c = colors[tri] ?? null;
-        if (!c && vols) { const vol = vols.find((r) => tri >= r.first && tri <= r.last); if (vol) c = filament(vol.extruder); }
-        if (!c) c = base;
-        if (c) anyColor = true;
-        const [r, g, b] = c ?? DEFAULT_COLOR;
-        for (let k = 0; k < 3; k++) {
-          const vi = t[i + k]! * 3;
-          const p = apply(m, v[vi] ?? 0, v[vi + 1] ?? 0, v[vi + 2] ?? 0);
-          out.push(p[0], p[1], p[2]);
-          cols.push(r, g, b);
+        if (c === NONE && colors) c = colors[tri]!;
+        if (c === NONE && vols) { const vol = vols.find((r) => tri >= r.first && tri <= r.last); if (vol) c = filament(vol.extruder); }
+        if (c === NONE) c = base;
+        if (c !== NONE && !cols) {
+          cols = new Float32Array(total * 9);
+          for (let j = 0; j < k; j += 3) { cols[j] = DEFAULT_COLOR[0]; cols[j + 1] = DEFAULT_COLOR[1]; cols[j + 2] = DEFAULT_COLOR[2]; }
+        }
+        const r = c === NONE ? DEFAULT_COLOR[0] : ((c >> 16) & 255) / 255;
+        const g = c === NONE ? DEFAULT_COLOR[1] : ((c >> 8) & 255) / 255;
+        const b = c === NONE ? DEFAULT_COLOR[2] : (c & 255) / 255;
+        for (let n = 0; n < 3; n++) {
+          const vi = t[i + n]! * 3;
+          const x = v[vi] ?? 0, y = v[vi + 1] ?? 0, z = v[vi + 2] ?? 0;
+          positions[k] = x * m[0]! + y * m[3]! + z * m[6]! + m[9]!;
+          positions[k + 1] = x * m[1]! + y * m[4]! + z * m[7]! + m[10]!;
+          positions[k + 2] = x * m[2]! + y * m[5]! + z * m[8]! + m[11]!;
+          if (cols) { cols[k] = r; cols[k + 1] = g; cols[k + 2] = b; }
+          k += 3;
         }
       }
     }
     for (const comp of def.components) emit(comp.id, mul(m, comp.transform), depth + 1, comp.path ? part(comp.path).objects : scope, base, rootId);
   };
-  const items = build.length ? build : [...objects.keys()].map((id) => ({ id, transform: IDENTITY }));
   for (const it of items) emit(it.id, it.transform, 0);
-  if (out.length === 0) throw new Error('3MF contains no mesh geometry');
-  const positions = Float32Array.from(out);
-  return { positions, normals: computeFlatNormals(positions), triangles: positions.length / 9, colors: anyColor ? Float32Array.from(cols) : undefined };
+  parts.clear(); // the indexed meshes are garbage before the normals are allocated
+  return { positions, normals: computeFlatNormals(positions), triangles: total, colors: cols ?? undefined };
 }
