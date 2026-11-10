@@ -813,6 +813,24 @@ fn page_cover_is_opt_in_saved_inside_the_project_and_becomes_the_preview() {
     let p = engine.set_thumbnail_image(&rose, None).unwrap();
     assert!(p.thumbnail.is_none());
     assert!(!lib.path().join("Rose/.meshkeep").exists());
+
+    // a sidecar that cannot be written leaves the preview the project had: the captured view
+    // stays, the downloaded picture is not left behind
+    engine.set_view_thumbnail(&rose, b"\x89PNG\r\n\x1a\nview").unwrap();
+    let yaml = lib.path().join("Rose/project.yaml");
+    let good = fs::read(&yaml).unwrap();
+    fs::write(&yaml, b"metadata: [not, a, mapping\n").unwrap();
+    *answer.lock().unwrap() = vec![0xFF, 0xD8, 0xFF, 0xE0, 1];
+    assert!(engine.set_page_thumbnail(&rose).is_err());
+    assert!(lib.path().join("Rose/.meshkeep/preview.png").is_file());
+    assert!(!cover.exists());
+    fs::write(&yaml, good).unwrap();
+    let p = engine.set_page_thumbnail(&rose).unwrap();
+    assert_eq!(p.thumbnail.as_deref(), Some(".meshkeep/cover.jpg"));
+    assert!(
+        !lib.path().join("Rose/.meshkeep/preview.png").exists(),
+        "now the capture is replaced"
+    );
 }
 
 #[test]

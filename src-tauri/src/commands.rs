@@ -2,7 +2,7 @@ use crate::state::{self, AppState};
 use meshkeep_engine::ai::{AiSettings, AiTestReport, MetadataSuggestion};
 use meshkeep_engine::collections::{Collection, SmartCollection};
 use meshkeep_engine::conventions::{CheckReport, Conventions};
-use meshkeep_engine::enrich::{EnrichReport, PageSuggestion};
+use meshkeep_engine::enrich::{self, EnrichReport, PageSuggestion};
 use meshkeep_engine::hints::Hints;
 use meshkeep_engine::import::{ImportItem, ImportReport, ImportRequest, InboxFile};
 use meshkeep_engine::model::{
@@ -727,17 +727,25 @@ pub fn set_view_thumbnail(app: AppHandle, state: State<AppState>, request: Reque
 }
 
 /// Downloads the cover picture of the project's model page and makes it the preview (opt-in
-/// network feature; the file is saved inside the project).
+/// network feature; the file is saved inside the project). The engine is held only before and
+/// after the download, so the rest of the app keeps answering while it runs.
 #[tauri::command]
 pub async fn set_page_thumbnail(app: AppHandle, project_id: String) -> CmdResult<Project> {
-    let handle = app.clone();
-    let id = project_id.clone();
-    let p = tauri::async_runtime::spawn_blocking(move || handle.state::<AppState>().engine.lock().unwrap().set_page_thumbnail(&id))
+    let (url, known) = { app.state::<AppState>().engine.lock().unwrap().page_cover_source(&project_id)? };
+    let page_url = url.clone();
+    let cover = tauri::async_runtime::spawn_blocking(move || enrich::download_cover(&page_url, known.as_deref()))
         .await
         .map_err(|e| AppError {
             code: "shell",
             message: e.to_string(),
         })??;
+    let p = {
+        app.state::<AppState>()
+            .engine
+            .lock()
+            .unwrap()
+            .store_page_cover(&project_id, &url, cover)?
+    };
     let _ = app.emit("project://changed", serde_json::json!({ "projectId": project_id }));
     Ok(p)
 }

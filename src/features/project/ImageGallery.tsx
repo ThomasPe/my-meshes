@@ -12,15 +12,17 @@ import { isPageCover, VIEW_PREVIEW_REL } from '@/lib/thumbs/queue';
 import type { EmbeddedPicture, FileEntry, Project } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
-const urls = new Map<string, string>(); // `${projectId}/${rel}` -> object URL (session cache)
+const urls = new Map<string, string>(); // `${projectId}/${rel}[#entry][@version]` -> object URL (session cache)
 
 /** A tile of the gallery: an image file of the project, or a photo stored inside one of its 3MF files. */
-type Item = { key: string; name: string; size: number; file?: FileEntry; picture?: EmbeddedPicture };
+type Item = { key: string; name: string; size: number; file?: FileEntry; picture?: EmbeddedPicture; /** Size and date of the file the bytes come from. */ version: string };
+const versionOf = (f: FileEntry | undefined) => (f ? `${f.size}-${f.modified}` : '');
 
 /** Loads one project image through the backend and returns an object URL. With `entry`, `rel`
- * names a 3MF and the image is read out of that archive. */
-export function useProjectImage(projectId: string, rel: string | null, enabled = true, entry: string | null = null): string | null {
-  const key = rel ? `${projectId}/${rel}${entry ? `#${entry}` : ''}` : '';
+ * names a 3MF and the image is read out of that archive. `version` changes when the file on
+ * disk does, so a replaced file is read again instead of served from the session cache. */
+export function useProjectImage(projectId: string, rel: string | null, enabled = true, entry: string | null = null, version = ''): string | null {
+  const key = rel ? `${projectId}/${rel}${entry ? `#${entry}` : ''}${version ? `@${version}` : ''}` : '';
   const [url, setUrl] = useState<string | null>(() => (key ? urls.get(key) ?? null : null));
   useEffect(() => {
     if (!key || !enabled) { setUrl(null); return; }
@@ -40,21 +42,20 @@ const relOf = (item: Item | null) => item?.picture?.file ?? item?.file?.rel_path
 
 function Tile({ projectId, item, current, onOpen, onChoose }: { projectId: string; item: Item; current: boolean; onOpen: () => void; onChoose: () => void }) {
   const { t, i18n } = useTranslation();
-  const url = useProjectImage(projectId, relOf(item), true, item.picture?.entry ?? null);
+  const url = useProjectImage(projectId, relOf(item), true, item.picture?.entry ?? null, item.version);
   const captured = item.file?.rel_path === VIEW_PREVIEW_REL;
-  const file = item;
   return (
     <div className="group relative grid gap-1.5 text-left" data-testid="image-tile" data-current={current || undefined} data-embedded={item.picture ? true : undefined}>
       <button type="button" onClick={onOpen} className="relative block aspect-[4/3] overflow-hidden rounded-xl bg-secondary shadow-card">
-        {url ? <img src={url} alt={file.name} className="size-full object-cover transition-transform group-hover:scale-[1.03]" loading="lazy" /> : <ImageIcon className="absolute inset-0 m-auto size-8 text-muted-foreground" />}
+        {url ? <img src={url} alt={item.name} className="size-full object-cover transition-transform group-hover:scale-[1.03]" loading="lazy" /> : <ImageIcon className="absolute inset-0 m-auto size-8 text-muted-foreground" />}
       </button>
       {item.picture
         ? <Badge className="absolute left-2 top-2 max-w-[calc(100%-1rem)]" data-testid="embedded-badge"><span className="truncate">{t('project.embeddedIn', { file: item.picture.file.split('/').pop() })}</span></Badge>
         : current
         ? <Badge variant="accent" className="absolute left-2 top-2" data-testid="thumbnail-badge"><ImageUp />{t('project.thumbnailCurrent')}</Badge>
         : <Button size="sm" variant="secondary" className="absolute left-2 top-2 opacity-0 shadow-card transition-opacity focus-visible:opacity-100 group-hover:opacity-100" onClick={onChoose} data-testid="use-as-thumbnail"><ImageUp />{t('project.useAsThumbnail')}</Button>}
-      <span className="truncate text-xs font-semibold">{captured ? t('project.viewCapture') : isPageCover(item.file?.rel_path) ? t('project.pageCover') : file.name}</span>
-      <span className="text-[11px] text-muted-foreground tabular">{formatBytes(file.size, i18n.language)}</span>
+      <span className="truncate text-xs font-semibold">{captured ? t('project.viewCapture') : isPageCover(item.file?.rel_path) ? t('project.pageCover') : item.name}</span>
+      <span className="text-[11px] text-muted-foreground tabular">{formatBytes(item.size, i18n.language)}</span>
     </div>
   );
 }
@@ -66,12 +67,12 @@ export function ImageGallery({ project, files, pictures = [], offline }: { proje
   const projectId = project.id;
   const choose = useChooseThumbnail(project);
   const images: Item[] = [
-    ...files.filter((f) => f.kind === 'image').map((f) => ({ key: f.rel_path, name: f.name, size: f.size, file: f })),
-    ...pictures.map((x) => ({ key: `${x.file}#${x.entry}`, name: x.name, size: x.size, picture: x })),
+    ...files.filter((f) => f.kind === 'image').map((f) => ({ key: f.rel_path, name: f.name, size: f.size, file: f, version: versionOf(f) })),
+    ...pictures.map((x) => ({ key: `${x.file}#${x.entry}`, name: x.name, size: x.size, picture: x, version: versionOf(files.find((f) => f.rel_path === x.file)) })),
   ];
   const [index, setIndex] = useState<number | null>(null);
   const current = index !== null ? images[index] ?? null : null;
-  const url = useProjectImage(projectId, relOf(current), true, current?.picture?.entry ?? null);
+  const url = useProjectImage(projectId, relOf(current), true, current?.picture?.entry ?? null, current?.version ?? '');
   useEffect(() => {
     if (index === null) return;
     const on = (e: KeyboardEvent) => {

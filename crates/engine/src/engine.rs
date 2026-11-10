@@ -402,48 +402,94 @@ impl Engine {
         self.page_suggestion(&url, &parsed, cached)
     }
 
-    /// Downloads the cover picture of the project's model page (opt-in like the page itself),
-    /// saves it as `.meshkeep/cover.<ext>` inside the project and makes it the preview. The
-    /// file travels with the project: unlike a rendered preview it cannot be reproduced once
-    /// the page is gone. Only called after the user (or an agent with write access) asked.
-    pub fn set_page_thumbnail(&mut self, project_id: &str) -> Result<Project> {
+    /// First step of fetching a model page's cover picture: checks the opt-in and names the
+    /// page and, when that page was read this session, its picture link. The download itself
+    /// (`enrich::download_cover`) needs no engine, so callers do it without holding it.
+    pub fn page_cover_source(&self, project_id: &str) -> Result<(String, Option<String>)> {
         if !self.settings.get().network.fetch_model_pages {
             return Err(EngineError::PageFetchDisabled);
         }
-        let current = self.online_project(project_id)?;
+        self.online_project(project_id)?;
         let url = self
             .model_page_url(project_id)?
             .ok_or_else(|| EngineError::PageFetch("the project has no link to a supported model site".into()))?;
-        let (parsed, _) = self.load_page(&url)?;
-        let image = parsed
-            .image
-            .filter(|u| enrich::image_allowed(u))
-            .ok_or_else(|| EngineError::PageFetch(format!("{url} names no picture")))?;
-        let bytes = match &self.image_override {
-            Some(f) => f(&image)?,
-            None => enrich::fetch_image(&image)?,
-        };
-        let ext =
-            enrich::image_kind(&bytes).ok_or_else(|| EngineError::PageFetch(format!("{image} is not a JPEG, PNG or WebP picture")))?;
-        let dir = self.project_dir(&current)?;
-        let rel = format!("{PAGE_COVER_STEM}.{ext}");
-        let path = dir.join(&rel);
-        let parent = path.parent().expect("cover path has a parent");
+        let known = self
+            .page_cache
+            .get(&url)
+            .and_then(|p| p.image.clone())
+            .filter(|u| enrich::image_allowed(u));
+        Ok((url, known))
+    }
+
+    /// Last step: saves the downloaded picture as `.meshkeep/cover.<ext>` inside the project
+    /// and makes it the preview. The file travels with the project: unlike a rendered preview
+    /// it cannot be reproduced once the page is gone.
+    pub fn store_page_cover(&mut self, project_id: &str, page_url: &str, cover: enrich::Cover) -> Result<Project> {
+        if !self.settings.get().network.fetch_model_pages {
+            return Err(EngineError::PageFetchDisabled);
+        }
+        if let Some(page) = cover.page {
+            self.page_cache.insert(page_url.to_string(), page);
+        }
+        let ext = enrich::image_kind(&cover.bytes)
+            .ok_or_else(|| EngineError::PageFetch(format!("the picture of {page_url} is not a JPEG, PNG or WebP")))?;
+        let current = self.online_project(project_id)?;
+        self.write_app_preview(&current, &format!("{PAGE_COVER_STEM}.{ext}"), &cover.bytes)
+    }
+
+    /// Downloads the cover picture of the project's model page (opt-in like the page itself)
+    /// and makes it the preview. Only called after the user (or an agent with write access)
+    /// asked. Holds the engine for the download; the shell uses the two steps above instead.
+    pub fn set_page_thumbnail(&mut self, project_id: &str) -> Result<Project> {
+        let (url, known) = self.page_cover_source(project_id)?;
+        let cover = enrich::cover_bytes(
+            &url,
+            known.as_deref(),
+            |u| match &self.page_override {
+                Some(f) => f(u),
+                None => enrich::fetch_html(u),
+            },
+            |u| match &self.image_override {
+                Some(f) => f(u),
+                None => enrich::fetch_image(u),
+            },
+        )?;
+        self.store_page_cover(project_id, &url, cover)
+    }
+
+    /// Writes a picture the app keeps for a preview into the project (`rel` under
+    /// `.meshkeep`) and points the sidecar at it. The other such pictures go only once the
+    /// sidecar is written: if that fails, the project is left as it was.
+    fn write_app_preview(&mut self, current: &Project, rel: &str, bytes: &[u8]) -> Result<Project> {
+        let dir = self.project_dir(current)?;
+        let path = dir.join(rel);
+        let parent = path.parent().expect("preview path has a parent");
         std::fs::create_dir_all(parent).map_err(|e| EngineError::Io {
             path: parent.to_path_buf(),
             source: e,
         })?;
-        let tmp = parent.join(format!(".cover.{}.tmp", std::process::id()));
-        std::fs::write(&tmp, &bytes).map_err(|e| EngineError::Io {
-            path: tmp.clone(),
-            source: e,
-        })?;
-        if let Err(e) = std::fs::rename(&tmp, &path) {
+        let replaces_itself = path.is_file();
+        let tmp = parent.join(format!(".preview.{}.tmp", std::process::id()));
+        let written = std::fs::write(&tmp, bytes).and_then(|_| std::fs::rename(&tmp, &path));
+        if let Err(e) = written {
             let _ = std::fs::remove_file(&tmp);
+            let _ = std::fs::remove_dir(parent); // only when empty
             return Err(EngineError::Io { path, source: e });
         }
-        Self::drop_app_previews(&dir, Some(&rel))?;
-        self.write_sidecar_thumbnail(&current, Some(rel))
+        match self.write_sidecar_thumbnail(current, Some(rel.to_string())) {
+            Ok(p) => {
+                Self::drop_app_previews(&dir, Some(rel))?;
+                Ok(p)
+            }
+            Err(e) => {
+                // nothing points at the new file; one that replaced itself stays, it is still in use
+                if !replaces_itself {
+                    let _ = std::fs::remove_file(&path);
+                    let _ = std::fs::remove_dir(parent);
+                }
+                Err(e)
+            }
+        }
     }
 
     /// Removes the pictures the app keeps under `.meshkeep` for a preview (the viewer capture,
@@ -1487,8 +1533,9 @@ impl Engine {
             }
         }
         let dir = self.project_dir(&current)?;
+        let p = self.write_sidecar_thumbnail(&current, rel.clone())?;
         Self::drop_app_previews(&dir, rel.as_deref())?;
-        self.write_sidecar_thumbnail(&current, rel)
+        Ok(p)
     }
 
     /// VIEW-4: stores a PNG the viewer captured as `.meshkeep/preview.png` inside the project
@@ -1499,24 +1546,7 @@ impl Engine {
             return Err(EngineError::NotAllowed("the view capture is not a PNG".into()));
         }
         let current = self.online_project(project_id)?;
-        let dir = self.project_dir(&current)?;
-        let path = dir.join(VIEW_PREVIEW_REL);
-        let parent = path.parent().expect("preview path has a parent");
-        std::fs::create_dir_all(parent).map_err(|e| EngineError::Io {
-            path: parent.to_path_buf(),
-            source: e,
-        })?;
-        let tmp = parent.join(format!(".preview.{}.tmp", std::process::id()));
-        std::fs::write(&tmp, png).map_err(|e| EngineError::Io {
-            path: tmp.clone(),
-            source: e,
-        })?;
-        if let Err(e) = std::fs::rename(&tmp, &path) {
-            let _ = std::fs::remove_file(&tmp);
-            return Err(EngineError::Io { path, source: e });
-        }
-        Self::drop_app_previews(&dir, Some(VIEW_PREVIEW_REL))?;
-        self.write_sidecar_thumbnail(&current, Some(VIEW_PREVIEW_REL.to_string()))
+        self.write_app_preview(&current, VIEW_PREVIEW_REL, png)
     }
 
     fn write_sidecar_thumbnail(&mut self, current: &Project, value: Option<String>) -> Result<Project> {

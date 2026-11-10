@@ -178,11 +178,11 @@ test('model pages: off by default with a hint, on request the page feeds the dia
   await expect(dialog).toBeHidden();
   await expect(page.getByText('Preview chosen; rendering it now…')).toBeVisible();
   expect(await page.evaluate(() => (window as unknown as { __mockThumbPicks?: Array<string | null> }).__mockThumbPicks)).toEqual(['.meshkeep/cover.jpg']);
-  // asked again, the metadata is settled and only the picture is left; unticked, nothing can be applied
+  // asked again, the picture is not ticked: it is the preview already and is not downloaded twice
   await page.getByTestId('inspector-fetch-page').click();
   await expect(dialog.getByTestId('suggest-field')).toHaveCount(2); // the title left unticked above, and the picture
+  await expect(dialog.getByTestId('suggest-pick-image')).not.toBeChecked();
   await dialog.getByTestId('suggest-pick-title').uncheck();
-  await dialog.getByTestId('suggest-pick-image').uncheck();
   await expect(dialog.getByTestId('suggest-apply')).toBeDisabled();
   await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();

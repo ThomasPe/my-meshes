@@ -86,7 +86,10 @@ pub fn read_picture(path: &Path, entry: &str) -> Result<Vec<u8>> {
         source: std::io::Error::new(std::io::ErrorKind::NotFound, format!("{entry}: {e}")),
     })?;
     let mut out = Vec::new();
-    file.take(PICTURE_MAX).read_to_end(&mut out).map_err(io_err(path))?;
+    file.take(PICTURE_MAX + 1).read_to_end(&mut out).map_err(io_err(path))?;
+    if out.len() as u64 > PICTURE_MAX {
+        return Err(EngineError::NotAllowed(format!("{entry} is larger than 32 MiB")));
+    }
     Ok(out)
 }
 

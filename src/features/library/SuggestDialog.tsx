@@ -33,7 +33,7 @@ export function SuggestDialog({ project: p, open, onOpenChange, mode = 'ai' }: {
   const [picked, setPicked] = useState<Record<Field, boolean>>({ title: true, creator: true, license: true, description: true, tags: true });
   const [conflict, setConflict] = useState<UpdateMetadata | null>(null);
   // the page's cover picture: a download into the project, so it is its own tick box and is
-  // off when the user already chose a preview themselves
+  // off when the project has a chosen preview already (by hand, or this picture from last time)
   const choose = useChooseThumbnail(p);
   const [pickImage, setPickImage] = useState(true);
   const [savingImage, setSavingImage] = useState(false);
@@ -44,7 +44,7 @@ export function SuggestDialog({ project: p, open, onOpenChange, mode = 'ai' }: {
   const k = (key: string) => (mode === 'page' ? t(`inspector.page.${key}`, { defaultValue: t(`inspector.${key}`) }) : t(`inspector.${key}`));
 
   useEffect(() => {
-    if (open) { suggest.reset(); setConflict(null); setPickImage(!p.thumbnail || isPageCover(p.thumbnail)); suggest.mutate(p.id); }
+    if (open) { suggest.reset(); setConflict(null); setPickImage(!p.thumbnail); suggest.mutate(p.id); }
   }, [open, p.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // a field is offered when the model proposed something that differs from what the project has

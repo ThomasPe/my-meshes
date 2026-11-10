@@ -73,7 +73,51 @@ pub fn host_allowed(url: &str) -> bool {
     host_of(url).is_some_and(|h| MODEL_HOSTS.iter().any(|m| h == *m || h.ends_with(&format!(".{m}"))))
 }
 
-/// GETs the page (HTML only, at most 1 MiB, 15 s), following redirects within the allowed hosts.
+fn client(timeout: Duration, follow: fn(&str) -> bool) -> Result<reqwest::blocking::Client> {
+    reqwest::blocking::Client::builder()
+        .timeout(timeout)
+        .user_agent(USER_AGENT)
+        .redirect(reqwest::redirect::Policy::custom(move |a| {
+            if a.previous().len() >= 5 {
+                return a.error("too many redirects");
+            }
+            if follow(a.url().as_str()) {
+                a.follow()
+            } else {
+                a.error("redirect leaves the allowed hosts")
+            }
+        }))
+        .build()
+        .map_err(|e| EngineError::PageFetch(e.to_string()))
+}
+
+/// One GET, at most `max` bytes of body. A longer body is cut there (`cut`, for a page whose
+/// metadata sits near the top) or refused (a picture cut short is a broken picture).
+fn get(client: &reqwest::blocking::Client, url: &str, accept: &str, max: u64, cut: bool) -> Result<Vec<u8>> {
+    let resp = client
+        .get(url)
+        .header("Accept", accept)
+        .header("Accept-Language", "en")
+        .send()
+        .map_err(|e| EngineError::PageFetch(e.to_string()))?;
+    let status = resp.status();
+    if !status.is_success() {
+        return Err(EngineError::PageFetch(format!("{url}: HTTP {status}")));
+    }
+    let mut body = Vec::new();
+    resp.take(max + 1)
+        .read_to_end(&mut body)
+        .map_err(|e| EngineError::PageFetch(e.to_string()))?;
+    if body.len() as u64 > max {
+        if !cut {
+            return Err(EngineError::PageFetch(format!("{url}: larger than {} MiB", max >> 20)));
+        }
+        body.truncate(max as usize);
+    }
+    Ok(body)
+}
+
+/// GETs the page (HTML only, at most 4 MiB, 15 s), following redirects within the allowed hosts.
 pub fn fetch_html(url: &str) -> Result<String> {
     if !url.starts_with("https://") && !url.starts_with("http://") {
         return Err(EngineError::PageFetch(format!("not a web link: {url}")));
@@ -84,53 +128,85 @@ pub fn fetch_html(url: &str) -> Result<String> {
             host_of(url).unwrap_or_default()
         )));
     }
-    let client = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(15))
-        .user_agent(USER_AGENT)
-        .redirect(reqwest::redirect::Policy::custom(|a| {
-            if a.previous().len() >= 5 {
-                return a.error("too many redirects");
-            }
-            if host_allowed(a.url().as_str()) {
-                a.follow()
-            } else {
-                a.error("redirect leaves the model site")
-            }
-        }))
-        .build()
-        .map_err(|e| EngineError::PageFetch(e.to_string()))?;
-    let resp = client
-        .get(url)
-        .header("Accept", "text/html,application/xhtml+xml")
-        .header("Accept-Language", "en")
-        .send()
-        .map_err(|e| EngineError::PageFetch(e.to_string()))?;
-    let status = resp.status();
-    if !status.is_success() {
-        return Err(EngineError::PageFetch(format!("{url}: HTTP {status}")));
-    }
-    let mut body = Vec::new();
-    resp.take(MAX_BODY)
-        .read_to_end(&mut body)
-        .map_err(|e| EngineError::PageFetch(e.to_string()))?;
+    let body = get(
+        &client(Duration::from_secs(15), host_allowed)?,
+        url,
+        "text/html,application/xhtml+xml",
+        MAX_BODY,
+        true,
+    )?;
     Ok(String::from_utf8_lossy(&body).into_owned())
 }
 
 const MAX_IMAGE: u64 = 16 << 20;
 
-/// A cover picture is fetched from wherever the page says it lives (a CDN, usually), so the
-/// model-site list does not apply. What does: https only, a named host, nothing local.
-pub fn image_allowed(url: &str) -> bool {
-    let Some(rest) = url.strip_prefix("https://") else { return false };
+/// The host of an https picture link, lower-cased and without a trailing dot; `None` for
+/// anything that is not a plain `https://name.tld/...` link.
+fn image_host(url: &str) -> Option<String> {
+    let rest = url.strip_prefix("https://")?;
     let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
-    if authority.contains('@') || authority.starts_with('[') {
+    if authority.contains(['@', '[', '\\', '%']) {
+        return None;
+    }
+    let host = authority.split(':').next().unwrap_or("").trim_end_matches('.').to_ascii_lowercase();
+    (!host.is_empty()).then_some(host)
+}
+
+/// A cover picture is fetched from wherever the page says it lives (a CDN, usually), so the
+/// model-site list does not apply. What does: https only and a public host name. The last
+/// label has to be a real top-level domain, which rules out every way of writing an IP
+/// address (`127.0.0.1`, `0x7f.1`, `2130706433`) and the names of a home or company network.
+pub fn image_allowed(url: &str) -> bool {
+    let Some(host) = image_host(url) else { return false };
+    let Some((_, tld)) = host.rsplit_once('.') else { return false };
+    let named = tld.len() >= 2 && (tld.chars().all(|c| c.is_ascii_alphabetic()) || tld.starts_with("xn--"));
+    named
+        && !matches!(
+            tld,
+            "local" | "localhost" | "internal" | "lan" | "home" | "corp" | "intranet" | "private" | "test" | "invalid" | "arpa"
+        )
+}
+
+/// An address on the public internet: not this machine, not the local network.
+pub fn is_public_ip(ip: std::net::IpAddr) -> bool {
+    use std::net::IpAddr;
+    match ip {
+        IpAddr::V4(v4) => {
+            let o = v4.octets();
+            let shared = o[0] == 100 && (64..128).contains(&o[1]); // 100.64.0.0/10, carrier-grade NAT
+            !(v4.is_loopback()
+                || v4.is_private()
+                || v4.is_link_local()
+                || v4.is_unspecified()
+                || v4.is_broadcast()
+                || v4.is_multicast()
+                || shared)
+        }
+        IpAddr::V6(v6) => match v6.to_ipv4_mapped() {
+            Some(v4) => is_public_ip(IpAddr::V4(v4)),
+            None => {
+                let first = v6.segments()[0];
+                let unique_local = first & 0xfe00 == 0xfc00;
+                let link_local = first & 0xffc0 == 0xfe80;
+                !(v6.is_loopback() || v6.is_unspecified() || v6.is_multicast() || unique_local || link_local)
+            }
+        },
+    }
+}
+
+/// `image_allowed`, and the name does not resolve to this machine or the local network (a
+/// public-looking name can point anywhere). A name that does not resolve here is left to
+/// the request: behind a proxy only the proxy can look it up.
+fn image_reachable(url: &str) -> bool {
+    use std::net::ToSocketAddrs;
+    if !image_allowed(url) {
         return false;
     }
-    let host = authority.split(':').next().unwrap_or("").to_ascii_lowercase();
-    let numeric = host
-        .split('.')
-        .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit()));
-    host.contains('.') && !numeric && !host.ends_with(".local") && !host.ends_with(".internal") && !host.ends_with(".localhost")
+    let Some(host) = image_host(url) else { return false };
+    match (host.as_str(), 443).to_socket_addrs() {
+        Ok(addrs) => addrs.into_iter().all(|a| is_public_ip(a.ip())),
+        Err(_) => true,
+    }
 }
 
 /// The file extension for picture bytes, told from their first bytes; `None` for anything
@@ -150,41 +226,53 @@ pub fn image_kind(bytes: &[u8]) -> Option<&'static str> {
 /// GETs a cover picture (at most 16 MiB, 20 s). Redirects are followed under the same rule
 /// as the first URL.
 pub fn fetch_image(url: &str) -> Result<Vec<u8>> {
-    if !image_allowed(url) {
+    if !image_reachable(url) {
         return Err(EngineError::PageFetch(format!("{url}: not a picture link the app loads")));
     }
-    let client = reqwest::blocking::Client::builder()
-        .timeout(Duration::from_secs(20))
-        .user_agent(USER_AGENT)
-        .redirect(reqwest::redirect::Policy::custom(|a| {
-            if a.previous().len() >= 5 {
-                return a.error("too many redirects");
-            }
-            if image_allowed(a.url().as_str()) {
-                a.follow()
-            } else {
-                a.error("redirect leaves the picture host rule")
-            }
-        }))
-        .build()
-        .map_err(|e| EngineError::PageFetch(e.to_string()))?;
-    let resp = client
-        .get(url)
-        .header("Accept", "image/webp,image/png,image/jpeg")
-        .send()
-        .map_err(|e| EngineError::PageFetch(e.to_string()))?;
-    let status = resp.status();
-    if !status.is_success() {
-        return Err(EngineError::PageFetch(format!("{url}: HTTP {status}")));
+    get(
+        &client(Duration::from_secs(20), image_reachable)?,
+        url,
+        "image/webp,image/png,image/jpeg",
+        MAX_IMAGE,
+        false,
+    )
+}
+
+/// What `cover_bytes` brings back: the picture, and the page when it had to be read (again).
+pub struct Cover {
+    pub bytes: Vec<u8>,
+    pub page: Option<Parsed>,
+}
+
+/// The cover picture of a model page. `known` is the picture link of a page read earlier
+/// this session; such a link can have expired (signed CDN links do), so when it fails the
+/// page is read again and its current link is used. Network access goes through the two
+/// functions so tests can stand in for it.
+pub fn cover_bytes(
+    page_url: &str,
+    known: Option<&str>,
+    fetch_page: impl Fn(&str) -> Result<String>,
+    fetch_picture: impl Fn(&str) -> Result<Vec<u8>>,
+) -> Result<Cover> {
+    if let Some(bytes) = known.and_then(|u| fetch_picture(u).ok()).filter(|b| image_kind(b).is_some()) {
+        return Ok(Cover { bytes, page: None });
     }
-    let mut body = Vec::new();
-    resp.take(MAX_IMAGE + 1)
-        .read_to_end(&mut body)
-        .map_err(|e| EngineError::PageFetch(e.to_string()))?;
-    if body.len() as u64 > MAX_IMAGE {
-        return Err(EngineError::PageFetch(format!("{url}: the picture is larger than 16 MiB")));
+    let page = parse(page_url, &fetch_page(page_url)?);
+    let image = page
+        .image
+        .clone()
+        .filter(|u| image_allowed(u))
+        .ok_or_else(|| EngineError::PageFetch(format!("{page_url} names no picture")))?;
+    let bytes = fetch_picture(&image)?;
+    if image_kind(&bytes).is_none() {
+        return Err(EngineError::PageFetch(format!("{image} is not a JPEG, PNG or WebP picture")));
     }
-    Ok(body)
+    Ok(Cover { bytes, page: Some(page) })
+}
+
+/// `cover_bytes` over the network.
+pub fn download_cover(page_url: &str, known: Option<&str>) -> Result<Cover> {
+    cover_bytes(page_url, known, fetch_html, fetch_image)
 }
 
 /// Pure extraction, so it can be tested on saved pages.
@@ -689,6 +777,14 @@ mod tests {
         for bad in [
             "http://media.printables.com/1.jpg",
             "https://127.0.0.1/1.jpg",
+            "https://0x7f.0.0.1/1.jpg",
+            "https://0x7f.1/1.jpg",
+            "https://2130706433/1.jpg",
+            "https://localhost./1.jpg",
+            "https://nas.local./1.jpg",
+            "https://printer.lan/1.jpg",
+            "https://intranet/1.jpg",
+            "https://media.printables.com%2f@127.0.0.1/1.jpg",
             "https://192.168.1.10:8443/1.jpg",
             "https://[::1]/1.jpg",
             "https://localhost/1.jpg",
@@ -699,11 +795,84 @@ mod tests {
         ] {
             assert!(!image_allowed(bad), "{bad}");
         }
+        assert!(
+            image_allowed("https://MEDIA.Printables.com./1.jpg"),
+            "a trailing dot and capitals are the same host"
+        );
+        for (ip, public) in [
+            ("93.184.216.34", true),
+            ("2606:4700::6810:84e5", true),
+            ("127.0.0.1", false),
+            ("10.1.2.3", false),
+            ("192.168.1.10", false),
+            ("172.16.0.1", false),
+            ("169.254.169.254", false),
+            ("100.64.0.1", false),
+            ("0.0.0.0", false),
+            ("::1", false),
+            ("::ffff:192.168.1.10", false),
+            ("fd00::1", false),
+            ("fe80::1", false),
+        ] {
+            assert_eq!(is_public_ip(ip.parse().unwrap()), public, "{ip}");
+        }
         assert_eq!(image_kind(&[0xFF, 0xD8, 0xFF, 0xE0, 0, 0]), Some("jpg"));
         assert_eq!(image_kind(b"\x89PNG\r\n\x1a\n...."), Some("png"));
         assert_eq!(image_kind(b"RIFF\x10\0\0\0WEBPVP8 "), Some("webp"));
         assert_eq!(image_kind(b"<!doctype html><html>"), None);
         assert_eq!(image_kind(b"<svg xmlns='http://www.w3.org/2000/svg'/>"), None);
         assert_eq!(image_kind(b""), None);
+    }
+
+    #[test]
+    fn an_expired_picture_link_is_replaced_by_reading_the_page_again() {
+        use std::cell::RefCell;
+        let page = |img: &str| format!(r#"<meta property="og:image" content="{img}">"#);
+        let jpg = vec![0xFF, 0xD8, 0xFF, 0xE0, 7];
+        let pages = RefCell::new(0);
+        let fetch_page = |_: &str| {
+            *pages.borrow_mut() += 1;
+            Ok(page("https://cdn.example.com/new.jpg"))
+        };
+        let fetch_picture = |u: &str| {
+            if u.ends_with("new.jpg") {
+                Ok(jpg.clone())
+            } else {
+                Err(EngineError::PageFetch(format!("{u}: HTTP 403")))
+            }
+        };
+        // a link that still works needs no second page read
+        let c = cover_bytes(
+            "https://www.printables.com/model/1",
+            Some("https://cdn.example.com/new.jpg"),
+            fetch_page,
+            fetch_picture,
+        )
+        .unwrap();
+        assert!(c.page.is_none());
+        assert_eq!(*pages.borrow(), 0);
+        // an expired one does, and the fresh page comes back for the cache
+        let c = cover_bytes(
+            "https://www.printables.com/model/1",
+            Some("https://cdn.example.com/old.jpg"),
+            fetch_page,
+            fetch_picture,
+        )
+        .unwrap();
+        assert_eq!(c.bytes, jpg);
+        assert_eq!(c.page.unwrap().image.as_deref(), Some("https://cdn.example.com/new.jpg"));
+        assert_eq!(*pages.borrow(), 1);
+        // a page whose picture is not a picture, or that names a local address, yields an error
+        assert!(cover_bytes("https://www.printables.com/model/1", None, fetch_page, |_: &str| Ok(
+            b"<html>".to_vec()
+        ))
+        .is_err());
+        assert!(cover_bytes(
+            "https://www.printables.com/model/1",
+            None,
+            |_: &str| Ok(page("https://192.168.1.1/x.jpg")),
+            fetch_picture
+        )
+        .is_err());
     }
 }
