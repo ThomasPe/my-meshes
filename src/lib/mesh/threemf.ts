@@ -72,7 +72,8 @@ const attr = (tag: string, name: string): string | undefined => {
   return (re[0].exec(tag) ?? re[1].exec(tag))?.[1];
 };
 
-function findModelPath(files: Record<string, Uint8Array>): string {
+/** `models` are the names of the package's model parts (not inflated yet). */
+function findModelPath(files: Record<string, Uint8Array>, models: ReadonlyMap<string, number>): string {
   const rels = files['_rels/.rels'];
   if (rels) {
     const text = new TextDecoder().decode(rels);
@@ -82,12 +83,12 @@ function findModelPath(files: Record<string, Uint8Array>): string {
       const type = attr(m[0], 'Type') ?? '';
       if (type.endsWith('/3dmodel')) {
         const target = (attr(m[0], 'Target') ?? '').replace(/^\//, '');
-        if (files[target]) return target;
+        if (models.has(target)) return target;
       }
     }
   }
-  if (files['3D/3dmodel.model']) return '3D/3dmodel.model';
-  const any = Object.keys(files).find((k) => k.toLowerCase().endsWith('.model'));
+  if (models.has('3D/3dmodel.model')) return '3D/3dmodel.model';
+  const any = models.keys().next().value;
   if (any) return any;
   throw new Error('3MF has no 3D model part');
 }
@@ -271,30 +272,35 @@ function slicerPalette(files: Record<string, Uint8Array>): { filaments: Array<Rg
 }
 
 export function parse3mf(buffer: ArrayBuffer, maxPartBytes = MAX_MODEL_PART_BYTES): ParsedMesh {
-  const files = unzipSync(new Uint8Array(buffer), {
+  const zip = new Uint8Array(buffer);
+  // Model parts are only listed here and inflated one at a time when the build reaches them:
+  // a slicer project can hold many large parts, and inflating all of them at once (the ones
+  // nothing refers to included) is what exhausts memory (#66).
+  const models = new Map<string, number>(); // name -> inflated size
+  const files = unzipSync(zip, {
     filter: (f) => {
-      const model = /\.model$/i.test(f.name);
-      if (model && f.originalSize > maxPartBytes) throw new Error(`3MF model part is too large to preview (${Math.round(f.originalSize / (1024 * 1024))} MB of XML)`);
-      return model || /\.rels$/i.test(f.name) || /^Metadata\/(project_settings|model_settings|Slic3r_PE|Slic3r_PE_model)\.config$/.test(f.name);
+      if (/\.model$/i.test(f.name)) { models.set(f.name, f.originalSize); return false; }
+      return /\.rels$/i.test(f.name) || /^Metadata\/(project_settings|model_settings|Slic3r_PE|Slic3r_PE_model)\.config$/.test(f.name);
     },
   });
-  const modelPath = findModelPath(files);
+  const modelPath = findModelPath(files, models);
   const palette = slicerPalette(files);
-  const parts = new Map<string, ReturnType<typeof parseModelXml>>();
-  // Hands out a part's XML and forgets its inflated bytes, so they are gone while it is scanned.
-  const takeText = (path: string): string | null => {
-    const key = files[path] ? path : decodeURIComponent(path);
-    const data = files[key];
-    if (!data) return null;
-    delete files[key];
-    return new TextDecoder().decode(data);
+  const empty = (): ReturnType<typeof parseModelXml> => ({ objects: new Map(), build: [], materials: new Map() });
+  // Inflates one part to text; its bytes are garbage again before the XML is scanned.
+  const readText = (name: string): string => {
+    const size = models.get(name)!;
+    if (size > maxPartBytes) throw new Error(`3MF model part is too large to preview (${Math.round(size / (1024 * 1024))} MB of XML)`);
+    return new TextDecoder().decode(unzipSync(zip, { filter: (f) => f.name === name })[name]);
   };
+  // Parsed parts by their name in the package, so a part referenced under two spellings
+  // (`my part.model`, `my%20part.model`) is the same part and is parsed once.
+  const parts = new Map<string, ReturnType<typeof parseModelXml>>();
   const part = (path: string) => {
-    let p = parts.get(path);
+    const name = models.has(path) ? path : decodeURIComponent(path);
+    let p = parts.get(name);
     if (!p) {
-      const xml = takeText(path);
-      p = xml === null ? { objects: new Map(), build: [], materials: new Map() } : parseModelXml(xml);
-      parts.set(path, p);
+      p = models.has(name) ? parseModelXml(readText(name)) : empty();
+      parts.set(name, p);
     }
     return p;
   };

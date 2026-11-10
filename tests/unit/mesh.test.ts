@@ -200,4 +200,22 @@ describe('3MF memory behaviour (#66)', () => {
     expect(() => parse3mf(buf, 64)).toThrow(/too large to preview/);
     expect(parse3mf(buf).triangles).toBe(36);
   });
+
+  it('inflates only the parts the build refers to: an unused oversized part is never read', () => {
+    const one = `<object id="1"><mesh>${tri}<triangles><triangle v1="0" v2="1" v3="2"/></triangles></mesh></object>`;
+    const root = model(one, '<item objectid="1"/>');
+    const unused = strToU8(`<model>${' '.repeat(root.length * 20)}</model>`);
+    const buf = generate3mf({ '3D/3dmodel.model': root, '3D/Objects/unused.model': unused });
+    expect(parse3mf(buf, root.length).triangles).toBe(1);
+  });
+
+  it('treats one part referenced under two spellings as the same part', () => {
+    const partXml = model(`<object id="1"><mesh>${tri}<triangles><triangle v1="0" v2="1" v3="2"/></triangles></mesh></object>`, '');
+    const root = strToU8('<?xml version="1.0"?><model xmlns:p="http://schemas.microsoft.com/3dmanufacturing/production/2015/06"><resources><object id="2"><components>'
+      + '<component p:path="/3D/Objects/my part.model" objectid="1"/><component p:path="/3D/Objects/my%20part.model" objectid="1" transform="1 0 0 0 1 0 0 0 1 7 0 0"/>'
+      + '</components></object></resources><build><item objectid="2"/></build></model>');
+    const m = parse3mf(generate3mf({ '3D/3dmodel.model': root, '3D/Objects/my part.model': partXml }));
+    expect(m.triangles).toBe(2);
+    expect(Array.from(m.positions.slice(9, 12))).toEqual([7, 0, 0]);
+  });
 });

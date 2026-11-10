@@ -14,13 +14,20 @@ import { cn } from '@/lib/utils';
 
 const urls = new Map<string, string>(); // `${projectId}/${rel}[#entry][@version]` -> object URL (cache for the open project)
 
-/** Drops the pictures of every other project (#66): each entry pins a full-size image in
- * memory, and a session that walks through the library would otherwise keep them all. */
-function keepProjectImages(projectId: string) {
-  const prefix = `${projectId}/`;
-  for (const [key, url] of urls) {
-    if (!key.startsWith(prefix)) { urls.delete(key); URL.revokeObjectURL(url); }
-  }
+let kept: string | null = null; // the project whose pictures may be cached right now
+
+/** Keeps the pictures of the project page that is open and releases them when the page
+ * switches projects or closes (#66): each entry pins a full-size image in memory, and a
+ * session that walks through the library would otherwise keep them all. */
+export function useProjectImageCache(projectId: string | null) {
+  useEffect(() => {
+    kept = projectId;
+    return () => {
+      kept = null;
+      for (const url of urls.values()) URL.revokeObjectURL(url);
+      urls.clear();
+    };
+  }, [projectId]);
 }
 
 /** A tile of the gallery: an image file of the project, or a photo stored inside one of its 3MF files. */
@@ -40,7 +47,13 @@ export function useProjectImage(projectId: string, rel: string | null, enabled =
     let alive = true;
     getBackend()
       .then((b) => (entry ? b.readEmbeddedPicture(projectId, rel!, entry) : b.readProjectFile(projectId, rel!)))
-      .then((bytes) => { const u = URL.createObjectURL(new Blob([bytes])); urls.set(key, u); if (alive) setUrl(u); })
+      .then((bytes) => {
+        // a read that outlived its project page must not put the picture back into the cache
+        if (!alive && kept !== projectId) return;
+        const u = urls.get(key) ?? URL.createObjectURL(new Blob([bytes]));
+        if (kept === projectId) urls.set(key, u);
+        if (alive) setUrl(u);
+      })
       .catch(() => { if (alive) setUrl(null); });
     return () => { alive = false; };
   }, [key, projectId, rel, entry, enabled]);
@@ -75,7 +88,6 @@ export function ImageGallery({ project, files, pictures = [], offline }: { proje
   const { t } = useTranslation();
   const projectId = project.id;
   const choose = useChooseThumbnail(project);
-  useEffect(() => { keepProjectImages(projectId); }, [projectId]);
   const images: Item[] = [
     ...files.filter((f) => f.kind === 'image').map((f) => ({ key: f.rel_path, name: f.name, size: f.size, file: f, version: versionOf(f) })),
     ...pictures.map((x) => ({ key: `${x.file}#${x.entry}`, name: x.name, size: x.size, picture: x, version: versionOf(files.find((f) => f.rel_path === x.file)) })),
