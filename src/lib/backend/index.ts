@@ -1,4 +1,4 @@
-import type { AppInfo, BatchReport, BatchUpdate, ConventionReport, ConventionsView, CreatorSuggestions, DuplicateReport, EnrichProgress, EnrichReport, Hints, McpSettings, McpStatus, NetworkSettings, PageSuggestion, HashProgress, MoveReport, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata, AiSettings, AiSettingsView, AiTestReport, MetadataSuggestion } from '@/lib/types';
+import type { EmbeddedPicture, AppInfo, BatchReport, BatchUpdate, ConventionReport, ConventionsView, CreatorSuggestions, DuplicateReport, EnrichProgress, EnrichReport, Hints, McpSettings, McpStatus, NetworkSettings, PageSuggestion, HashProgress, MoveReport, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata, AiSettings, AiSettingsView, AiTestReport, MetadataSuggestion } from '@/lib/types';
 
 export type Unlisten = () => void;
 
@@ -40,6 +40,9 @@ export interface Backend {
   /** Opens an http(s) link in the default browser. */
   openUrl(url: string): Promise<void>;
   readProjectFile(projectId: string, relPath: string): Promise<ArrayBuffer>;
+  /** Photos stored inside the project's 3MF files; empty for most projects. */
+  embeddedPictures(projectId: string): Promise<EmbeddedPicture[]>;
+  readEmbeddedPicture(projectId: string, relPath: string, entry: string): Promise<ArrayBuffer>;
   updateMetadata(projectId: string, update: UpdateMetadata): Promise<Project>;
   revealProject(projectId: string): Promise<void>;
   /** Opens a folder of a root (tree node, inbox) in the file manager. */
@@ -69,6 +72,8 @@ export interface Backend {
   setThumbnailImage(projectId: string, relPath: string | null): Promise<Project>;
   /** VIEW-4: a PNG captured in the viewer becomes the preview (saved inside the project). */
   setViewThumbnail(projectId: string, png: ArrayBuffer): Promise<Project>;
+  /** Downloads the cover picture of the project's model page into the project and makes it the preview (opt-in network feature). */
+  setPageThumbnail(projectId: string): Promise<Project>;
   pickImportFiles(): Promise<string[]>;
   analyzeImport(paths: string[]): Promise<ImportItem[]>;
   executeImport(request: ImportRequest): Promise<ImportReport>;

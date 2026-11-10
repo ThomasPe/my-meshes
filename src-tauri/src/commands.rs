@@ -2,7 +2,7 @@ use crate::state::{self, AppState};
 use meshkeep_engine::ai::{AiSettings, AiTestReport, MetadataSuggestion};
 use meshkeep_engine::collections::{Collection, SmartCollection};
 use meshkeep_engine::conventions::{CheckReport, Conventions};
-use meshkeep_engine::enrich::{EnrichReport, PageSuggestion};
+use meshkeep_engine::enrich::{self, EnrichReport, PageSuggestion};
 use meshkeep_engine::hints::Hints;
 use meshkeep_engine::import::{ImportItem, ImportReport, ImportRequest, InboxFile};
 use meshkeep_engine::model::{
@@ -10,6 +10,7 @@ use meshkeep_engine::model::{
     ThumbStats,
 };
 use meshkeep_engine::settings::{McpSettings, NetworkSettings};
+use meshkeep_engine::threemf::{self, EmbeddedPicture};
 use meshkeep_engine::{
     BatchReport, BatchUpdate, CreatorSuggestions, DuplicateReport, EngineError, MoveReport, PromoteItem, PromoteReport, UpdateMetadata,
 };
@@ -307,6 +308,37 @@ pub async fn read_project_file(app: AppHandle, project_id: String, rel_path: Str
             .resolve_file(&project_id, &rel_path)?
     };
     let bytes = tauri::async_runtime::spawn_blocking(move || std::fs::read(path))
+        .await
+        .map_err(|e| AppError {
+            code: "shell",
+            message: e.to_string(),
+        })??;
+    Ok(Response::new(bytes))
+}
+
+/// Photos stored inside the project's 3MF files (MakerWorld downloads), for the gallery.
+#[tauri::command]
+pub async fn embedded_pictures(app: AppHandle, project_id: String) -> CmdResult<Vec<EmbeddedPicture>> {
+    let files = { app.state::<AppState>().engine.lock().unwrap().threemf_files(&project_id)? };
+    tauri::async_runtime::spawn_blocking(move || threemf::pictures_of(&files))
+        .await
+        .map_err(|e| AppError {
+            code: "shell",
+            message: e.to_string(),
+        })
+}
+
+/// Raw bytes of one of those photos, read straight from the archive.
+#[tauri::command]
+pub async fn read_embedded_picture(app: AppHandle, project_id: String, rel_path: String, entry: String) -> CmdResult<Response> {
+    let path = {
+        app.state::<AppState>()
+            .engine
+            .lock()
+            .unwrap()
+            .resolve_file(&project_id, &rel_path)?
+    };
+    let bytes = tauri::async_runtime::spawn_blocking(move || threemf::read_picture(&path, &entry))
         .await
         .map_err(|e| AppError {
             code: "shell",
@@ -690,6 +722,30 @@ pub fn set_view_thumbnail(app: AppHandle, state: State<AppState>, request: Reque
         });
     };
     let p = state.engine.lock().unwrap().set_view_thumbnail(&project_id, png)?;
+    let _ = app.emit("project://changed", serde_json::json!({ "projectId": project_id }));
+    Ok(p)
+}
+
+/// Downloads the cover picture of the project's model page and makes it the preview (opt-in
+/// network feature; the file is saved inside the project). The engine is held only before and
+/// after the download, so the rest of the app keeps answering while it runs.
+#[tauri::command]
+pub async fn set_page_thumbnail(app: AppHandle, project_id: String) -> CmdResult<Project> {
+    let (url, known) = { app.state::<AppState>().engine.lock().unwrap().page_cover_source(&project_id)? };
+    let page_url = url.clone();
+    let cover = tauri::async_runtime::spawn_blocking(move || enrich::download_cover(&page_url, known.as_deref()))
+        .await
+        .map_err(|e| AppError {
+            code: "shell",
+            message: e.to_string(),
+        })??;
+    let p = {
+        app.state::<AppState>()
+            .engine
+            .lock()
+            .unwrap()
+            .store_page_cover(&project_id, &url, cover)?
+    };
     let _ = app.emit("project://changed", serde_json::json!({ "projectId": project_id }));
     Ok(p)
 }

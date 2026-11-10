@@ -21,7 +21,7 @@ pub struct Index {
     conn: Connection,
 }
 
-const SCHEMA_VERSION: i64 = 4;
+const SCHEMA_VERSION: i64 = 5;
 
 /// (project id, rel path) -> (size, modified, sha256), see `Index::file_hashes`.
 pub type HashCache = HashMap<(String, String), (u64, String, String)>;
@@ -148,11 +148,16 @@ impl Index {
                     params![pid, rel, ext_of(&name)],
                 )?;
             }
-        } else if version != SCHEMA_VERSION && version != 3 {
-            // v3 -> v4 only adds file_hashes (created below); anything else starts over
+        } else if !(3..=SCHEMA_VERSION).contains(&version) {
+            // v3 -> v4 only adds file_hashes (created below); anything older or unknown starts over
             conn.execute_batch(DROP)?;
         }
         conn.execute_batch(SCHEMA)?;
+        if (2..5).contains(&version) {
+            // v5: a 3MF's embedded preview is now the model page's cover where the file carries
+            // one. Previews extracted before that are forgotten, so they are extracted again.
+            conn.execute_batch("DELETE FROM thumbs WHERE project_id IN (SELECT id FROM projects WHERE thumb_kind = 'embedded');")?;
+        }
         conn.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION};"))?;
         Ok(Index { conn })
     }
@@ -1018,6 +1023,36 @@ mod tests {
         }
         let ix = Index::open(&p).unwrap();
         assert_eq!(ix.count(None).unwrap().0, 0);
+    }
+
+    #[test]
+    fn v4_keeps_rendered_previews_and_forgets_embedded_ones() {
+        let t = tempfile::tempdir().unwrap();
+        let p = t.path().join("index.sqlite");
+        {
+            let c = Connection::open(&p).unwrap();
+            c.execute_batch(SCHEMA).unwrap();
+            c.execute_batch("PRAGMA user_version = 4;").unwrap();
+            for (id, kind) in [("r1:A", "render"), ("r1:B", "embedded")] {
+                c.execute("INSERT INTO projects (id, root_id, rel_path, title, total_bytes, file_count, model_count, modified, added, sidecar_state, warnings, thumb_source, thumb_kind) VALUES (?1,'r1',?1,'t',10,1,1,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z','missing','[]','a.3mf',?2)", params![id, kind]).unwrap();
+                c.execute("INSERT INTO thumbs (project_id, source_rel, source_size, source_mtime, key, updated) VALUES (?1,'a.3mf',10,'2026-01-01T00:00:00Z',?2,'2026-01-02T00:00:00Z')", params![id, format!("{kind}abcdefabcdefabcdef.png")]).unwrap();
+            }
+        }
+        let ix = Index::open(&p).unwrap();
+        let version: i64 = ix.conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(version, SCHEMA_VERSION);
+        assert_eq!(
+            ix.project_of_thumb("renderabcdefabcdefabcdef.png").unwrap().as_deref(),
+            Some("r1:A")
+        );
+        assert_eq!(ix.project_of_thumb("embeddedabcdefabcdefabcdef.png").unwrap(), None);
+        drop(ix);
+        // opening again changes nothing: the step runs once
+        let ix = Index::open(&p).unwrap();
+        assert_eq!(
+            ix.project_of_thumb("renderabcdefabcdefabcdef.png").unwrap().as_deref(),
+            Some("r1:A")
+        );
     }
 
     #[test]

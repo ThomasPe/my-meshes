@@ -169,7 +169,11 @@ submission is outside the code: Partner Center identity values, screenshots
       inspector chips and the creator view. Real-page markup could not be verified from the
       build sandbox (bot checks); check against live pages on the dev channel. The import
       dialog shows per-item hints and writes hints and, when allowed, page metadata into the
-      new project.yaml files (IMP-1a).
+      new project.yaml files (IMP-1a). Pictures (2026-11): a Bambu 3MF from MakerWorld
+      supplies the page's cover as the preview and its model pictures in the gallery, offline
+      (`threemf.rs`); for the other sites the page's cover picture is a tick box in the page
+      dialog and the MCP tool `set_page_thumbnail`, downloaded into `.meshkeep/cover.*`. Not
+      yet: the cover in batch page reads and in the import, the other pictures of a page.
 - [ ] **Organizational rules & maintenance tools** (IMP-7, IMP-8). Done so far: **move
       projects between folders** (dialog with folder picker and new sub-folder, multi-select,
       drag cards onto tree rows, Undo toast; collections, favorites, thumbnails and nested

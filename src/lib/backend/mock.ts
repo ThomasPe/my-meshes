@@ -306,8 +306,8 @@ export function createMockBackend(): Backend {
       const cached = pageCache.has(url);
       pageCache.add(url);
       const page = url.includes('printables')
-        ? { title: 'Baby Jellyfish Dragon', creator: 'Cinderwing3D', license: 'CC-BY-NC-SA-4.0', description: 'An articulated print-in-place jellyfish dragon.', tags: ['dragon', 'articulated', 'print in place'], site: 'printables.com' }
-        : { title: p.title, creator: 'zackfreedman', license: 'CC-BY-4.0', description: 'Modular bins for the Gridfinity system.', tags: ['gridfinity', 'storage'], site: 'thingiverse.com' };
+        ? { title: 'Baby Jellyfish Dragon', creator: 'Cinderwing3D', license: 'CC-BY-NC-SA-4.0', description: 'An articulated print-in-place jellyfish dragon.', tags: ['dragon', 'articulated', 'print in place'], site: 'printables.com', image: 'https://media.printables.com/media/prints/1104478/images/1.jpg' as string | null }
+        : { title: p.title, creator: 'zackfreedman', license: 'CC-BY-4.0', description: 'Modular bins for the Gridfinity system.', tags: ['gridfinity', 'storage'], site: 'thingiverse.com', image: null };
       const known = new Set(projects.flatMap((x) => x.tags));
       return { ...page, new_tags: page.tags.filter((t) => !known.has(t)), url, cached };
     },
@@ -380,6 +380,16 @@ export function createMockBackend(): Backend {
       if (relPath === '.meshkeep/preview.png' && captures.has(projectId)) return captures.get(projectId)!.slice(0);
       if (file.kind === 'image') return generateImage(seed);
       throw err('mock', 'no file contents in browser mode');
+    },
+    // Browser mode: the Dice Tower's 3MF plays a MakerWorld download with two model pictures.
+    async embeddedPictures(projectId) {
+      const file = find(projectId).files.find((x) => x.rel_path === 'tower.3mf');
+      if (!file) return [];
+      return ['cover.webp', 'printed.webp'].map((name) => ({ file: file.rel_path, entry: `Auxiliaries/Model Pictures/${name}`, name, size: 80_000 }));
+    },
+    async readEmbeddedPicture(projectId, relPath, entry) {
+      if (!find(projectId).files.some((x) => x.rel_path === relPath) || !entry.startsWith('Auxiliaries/Model Pictures/')) throw err('not_found', entry);
+      return generateImage([...entry].reduce((a, c) => a + c.charCodeAt(0), 0));
     },
     async updateMetadata(projectId, u: UpdateMetadata) {
       await delay(120);
@@ -673,6 +683,7 @@ export function createMockBackend(): Backend {
       const p = find(projectId);
       if (relPath && !p.files.some((x) => x.rel_path === relPath && x.kind === 'image')) throw err('not_allowed', `${relPath} is not an image of this project`);
       if (relPath !== '.meshkeep/preview.png') { captures.delete(projectId); p.files = p.files.filter((x) => x.rel_path !== '.meshkeep/preview.png'); }
+      if (relPath !== '.meshkeep/cover.jpg') p.files = p.files.filter((x) => x.rel_path !== '.meshkeep/cover.jpg');
       p.thumbnail = relPath;
       if (p.thumb) thumbs.delete(p.thumb);
       p.thumb = null; failed.delete(projectId);
@@ -680,6 +691,13 @@ export function createMockBackend(): Backend {
       const w = window as unknown as { __mockThumbPicks?: Array<string | null> }; (w.__mockThumbPicks ??= []).push(relPath);
       listeners.proj.forEach((cb) => cb({ projectId }));
       return { ...p };
+    },
+    async setPageThumbnail(projectId) {
+      const page = await this.fetchModelPage(projectId);
+      if (!page.image) throw err('page_fetch', `${page.url} names no picture`);
+      const p = find(projectId);
+      if (!p.files.some((x) => x.rel_path === '.meshkeep/cover.jpg')) p.files.push({ rel_path: '.meshkeep/cover.jpg', name: 'cover.jpg', kind: 'image', size: 90_000, modified: new Date().toISOString(), slicer: null, embedded_thumbnail: false });
+      return this.setThumbnailImage(projectId, '.meshkeep/cover.jpg');
     },
     async setViewThumbnail(projectId, png) {
       await delay(60);

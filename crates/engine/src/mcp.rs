@@ -336,6 +336,13 @@ pub fn tools(allow_writes: bool, allow_deletes: bool) -> Vec<Value> {
                 false,
             ),
             tool(
+                "set_page_thumbnail",
+                "Download the cover picture of the project's model page and make it the project's preview. The picture is saved inside the project folder (.meshkeep/cover.jpg, .png or .webp) and project.yaml points at it. Needs a link to a supported model site in the project and \"Load model pages\" turned on in Settings.",
+                schema(&[("project_id", s("Project id"))], &["project_id"]),
+                false,
+                false,
+            ),
+            tool(
                 "batch_update",
                 "The same change on many projects: add or remove tags, set creator or license (empty string clears).",
                 schema(
@@ -552,6 +559,7 @@ fn call_tool(engine: &mut Engine, name: &str, args: &Value, changes: &mut Vec<Ch
         || matches!(
             name,
             "update_metadata"
+                | "set_page_thumbnail"
                 | "batch_update"
                 | "execute_import"
                 | "promote_inbox"
@@ -749,6 +757,12 @@ fn call_tool(engine: &mut Engine, name: &str, args: &Value, changes: &mut Vec<Ch
                 reason: "scan".into(),
             });
             Ok(serde_json::to_value(r).unwrap_or_default())
+        }
+        "set_page_thumbnail" => {
+            let id = need_str(args, "project_id")?;
+            let p = engine.set_page_thumbnail(&id)?;
+            changes.push(Change::Project(id));
+            Ok(project_view(engine, &p))
         }
         "update_metadata" => {
             let id = need_str(args, "project_id")?;
@@ -1274,7 +1288,7 @@ mod tests {
                 ..Default::default()
             })
             .unwrap();
-        assert_eq!(list(&mut engine), read_only + 11);
+        assert_eq!(list(&mut engine), read_only + 12);
         let (r, _) = call(&mut engine, 3, "no_such_tool", json!({}));
         assert_eq!(r["error"]["code"], -32602);
         // deleting needs the third switch, which needs writes
@@ -1295,7 +1309,7 @@ mod tests {
                 ..Default::default()
             })
             .unwrap();
-        assert_eq!(list(&mut engine), read_only + 15);
+        assert_eq!(list(&mut engine), read_only + 16);
     }
 
     /// The case from #58: a library sorted by creator with a shared folder, ids in titles,
@@ -1719,6 +1733,25 @@ mod tests {
         // pages are off until the user says so
         let (r, _) = call(&mut engine, 8, "fetch_model_page", json!({ "project_id": rose }));
         assert!(r["result"]["content"][0]["text"].as_str().unwrap().contains("Settings"));
+        // the same switch guards the cover picture; with it on, the picture lands in the project
+        let (r, changes) = call(&mut engine, 80, "set_page_thumbnail", json!({ "project_id": rose }));
+        assert!(r["result"]["content"][0]["text"].as_str().unwrap().contains("Settings"));
+        assert!(changes.is_empty());
+        engine
+            .set_network_settings(crate::settings::NetworkSettings { fetch_model_pages: true })
+            .unwrap();
+        engine.set_page_fetcher(Box::new(|_| {
+            Ok(r#"<meta property="og:image" content="https://media.printables.com/media/prints/1/images/1.jpg">"#.to_string())
+        }));
+        engine.set_image_fetcher(Box::new(|_| Ok(vec![0xFF, 0xD8, 0xFF, 0xE0, 9])));
+        let (r, changes) = call(&mut engine, 81, "set_page_thumbnail", json!({ "project_id": rose }));
+        assert_eq!(structured(&r)["id"], rose);
+        assert_eq!(changes, vec![Change::Project(rose.clone())]);
+        assert!(lib.path().join("Rose/.meshkeep/cover.jpg").is_file());
+        engine.set_thumbnail_image(&rose, None).unwrap();
+        engine
+            .set_network_settings(crate::settings::NetworkSettings { fetch_model_pages: false })
+            .unwrap();
 
         let (r, changes) = call(
             &mut engine,

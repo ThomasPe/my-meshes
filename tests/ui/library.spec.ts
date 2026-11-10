@@ -169,8 +169,22 @@ test('model pages: off by default with a hint, on request the page feeds the dia
   await expect(dialog.getByTestId('suggest-field').filter({ hasText: 'License' })).toContainText('CC-BY-NC-SA-4.0');
   await expect(dialog.getByTestId('suggest-tag')).toHaveCount(3);
   await expect(dialog.getByTestId('suggest-tag-new')).toHaveCount(2); // "dragon" exists in the library already
+  // the page's cover picture is offered as the preview, ticked because none was chosen by hand
+  const image = dialog.getByTestId('suggest-field').filter({ hasText: 'Preview image' });
+  await expect(image).toContainText('Cover picture from media.printables.com');
+  await expect(dialog.getByTestId('suggest-pick-image')).toBeChecked();
   await dialog.getByTestId('suggest-pick-title').uncheck();
   await dialog.getByTestId('suggest-apply').click();
+  await expect(dialog).toBeHidden();
+  await expect(page.getByText('Preview chosen; rendering it now…')).toBeVisible();
+  expect(await page.evaluate(() => (window as unknown as { __mockThumbPicks?: Array<string | null> }).__mockThumbPicks)).toEqual(['.meshkeep/cover.jpg']);
+  // asked again, the picture is not ticked: it is the preview already and is not downloaded twice
+  await page.getByTestId('inspector-fetch-page').click();
+  await expect(dialog.getByTestId('suggest-field')).toHaveCount(2); // the title left unticked above, and the picture
+  await expect(dialog.getByTestId('suggest-pick-image')).not.toBeChecked();
+  await dialog.getByTestId('suggest-pick-title').uncheck();
+  await expect(dialog.getByTestId('suggest-apply')).toBeDisabled();
+  await page.keyboard.press('Escape');
   await expect(dialog).toBeHidden();
   await expect(page.getByTestId('inspector')).toContainText('Cinderwing3D');
   await expect(page.getByTestId('inspector')).toContainText('CC-BY-NC-SA-4.0');
@@ -277,6 +291,8 @@ test('rename via context menu: validation, collision, success', async ({ page })
 });
 
 test('delete moves a project to the trash after confirmation; Delete key works too', async ({ page }) => {
+  // the count is 0 until the first page of projects arrived
+  await expect(page.getByTestId('project-card').first()).toBeVisible();
   const before = Number(await page.getByTestId('result-count').textContent());
   const card = page.getByTestId('project-card').filter({ hasText: 'Dice Tower' });
   await card.click({ button: 'right' });
@@ -509,6 +525,24 @@ test('image viewer: images tab shows tiles, lightbox navigates', async ({ page }
   await page.getByTestId('tab-images').click();
   await page.getByTestId('image-tile').first().click();
   await expect(page.getByText('1 of 1')).toBeVisible();
+});
+
+test('image viewer: pictures stored inside a 3MF show in the gallery, read-only', async ({ page }) => {
+  // the Dice Tower has no image files; its 3MF plays a MakerWorld download with two model pictures
+  await page.getByTestId('project-card').filter({ hasText: 'Dice Tower' }).dblclick();
+  await expect(page.getByTestId('tab-images')).toContainText('2');
+  await page.getByTestId('tab-images').click();
+  const tiles = page.getByTestId('image-tile');
+  await expect(tiles).toHaveCount(2);
+  await expect(tiles.first().locator('img')).toBeVisible();
+  await expect(tiles.first().getByTestId('embedded-badge')).toHaveText('From tower.3mf');
+  await expect(tiles.first().getByTestId('use-as-thumbnail')).toHaveCount(0);
+  await tiles.first().locator('button').first().click();
+  await expect(page.getByTestId('lightbox-img')).toBeVisible();
+  await expect(page.getByTestId('lightbox-name')).toHaveText('cover.webp');
+  await expect(page.getByText('1 of 2')).toBeVisible();
+  await page.getByTestId('lightbox-next').click();
+  await expect(page.getByTestId('lightbox-name')).toHaveText('printed.webp');
 });
 
 test('preview: a project image or the current view becomes the thumbnail, automatic again on request', async ({ page }) => {
