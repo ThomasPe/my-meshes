@@ -31,6 +31,8 @@ export function useChooseThumbnail(project: Project | null) {
   return {
     /** One of the project's images, or `null` for the automatic choice. */
     useImage: (rel: string | null) => apply((id) => getBackend().then((b) => b.setThumbnailImage(id, rel)), rel ? t('project.thumbnailSet') : t('project.thumbnailAuto')),
+    /** The cover picture of the project's model page, downloaded into the project. */
+    usePage: () => apply((id) => getBackend().then((b) => b.setPageThumbnail(id)), t('project.thumbnailSet')),
     /** A PNG captured from the viewer. */
     useView: (png: ArrayBuffer) => apply((id) => getBackend().then((b) => b.setViewThumbnail(id, png)), t('project.thumbnailSet')),
   };

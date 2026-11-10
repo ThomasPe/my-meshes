@@ -738,6 +738,84 @@ fn creator_suggestions_from_file_names_and_metadata() {
 }
 
 #[test]
+fn page_cover_is_opt_in_saved_inside_the_project_and_becomes_the_preview() {
+    use meshkeep_engine::settings::NetworkSettings;
+    let data = tempfile::tempdir().unwrap();
+    let lib = tempfile::tempdir().unwrap();
+    let write = |p: &str, bytes: &[u8]| {
+        let path = lib.path().join(p);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, bytes).unwrap();
+    };
+    write("Rose/rose.stl", b"solid a");
+    write(
+        "Rose/project.yaml",
+        b"metadata:\n  title: Rose\n  source_url: https://www.printables.com/model/1234567-baby-rose-dragon\n",
+    );
+    write("Lonely/x.stl", b"solid c");
+    let mut engine = Engine::open(data.path()).unwrap();
+    engine.set_page_fetcher(Box::new(|_| Ok(include_str!("fixtures/pages/printables.html").to_string())));
+    let asked = std::sync::Arc::new(std::sync::Mutex::new(Vec::<String>::new()));
+    let seen = asked.clone();
+    let answer = std::sync::Arc::new(std::sync::Mutex::new(vec![0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3]));
+    let bytes = answer.clone();
+    engine.set_image_fetcher(Box::new(move |url| {
+        seen.lock().unwrap().push(url.to_string());
+        Ok(bytes.lock().unwrap().clone())
+    }));
+    let root = engine.add_root(lib.path(), SyncMode::Manual).unwrap();
+    engine.scan_root(&root.id, |_| {}).unwrap();
+    let rose = format!("{}:Rose", root.id);
+    let lonely = format!("{}:Lonely", root.id);
+    let cover = lib.path().join("Rose/.meshkeep/cover.jpg");
+
+    // off by default: nothing is requested, nothing is written
+    assert!(matches!(engine.set_page_thumbnail(&rose), Err(EngineError::PageFetchDisabled)));
+    assert!(asked.lock().unwrap().is_empty());
+    assert!(!cover.exists());
+    engine.set_network_settings(NetworkSettings { fetch_model_pages: true }).unwrap();
+
+    // the suggestion names the picture; asking for it saves the bytes and points the sidecar at them
+    let s = engine.fetch_model_page(&rose).unwrap();
+    assert_eq!(
+        s.image.as_deref(),
+        Some("https://media.printables.com/media/prints/1234567/images/1.jpg")
+    );
+    let p = engine.set_page_thumbnail(&rose).unwrap();
+    assert_eq!(p.thumbnail.as_deref(), Some(".meshkeep/cover.jpg"));
+    assert_eq!(asked.lock().unwrap().as_slice(), [s.image.clone().unwrap()]);
+    assert_eq!(fs::read(&cover).unwrap(), [0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3]);
+    assert!(
+        p.files.iter().any(|f| f.rel_path == ".meshkeep/cover.jpg"),
+        "the cover is an image of the project"
+    );
+    assert!(fs::read_to_string(lib.path().join("Rose/project.yaml"))
+        .unwrap()
+        .contains(".meshkeep/cover.jpg"));
+    assert!(p.source_url.is_some(), "the rest of the sidecar is kept");
+
+    // a picture of another type replaces the old file instead of leaving it behind
+    *answer.lock().unwrap() = b"\x89PNG\r\n\x1a\nrest".to_vec();
+    let p = engine.set_page_thumbnail(&rose).unwrap();
+    assert_eq!(p.thumbnail.as_deref(), Some(".meshkeep/cover.png"));
+    assert!(!cover.exists());
+
+    // what is not a picture is refused and leaves the project as it was
+    *answer.lock().unwrap() = b"<html>blocked</html>".to_vec();
+    assert!(matches!(engine.set_page_thumbnail(&rose), Err(EngineError::PageFetch(_))));
+    assert_eq!(engine.get_project(&rose).unwrap().thumbnail.as_deref(), Some(".meshkeep/cover.png"));
+    assert!(
+        matches!(engine.set_page_thumbnail(&lonely), Err(EngineError::PageFetch(_))),
+        "no link, no picture"
+    );
+
+    // back to the automatic choice: the downloaded file goes with it
+    let p = engine.set_thumbnail_image(&rose, None).unwrap();
+    assert!(p.thumbnail.is_none());
+    assert!(!lib.path().join("Rose/.meshkeep").exists());
+}
+
+#[test]
 fn model_pages_are_opt_in_cached_and_feed_the_hints() {
     use meshkeep_engine::hints::HintSource;
     use meshkeep_engine::settings::NetworkSettings;

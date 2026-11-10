@@ -5,10 +5,12 @@ import { toast } from 'sonner';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { useChooseThumbnail } from '@/features/project/useChooseThumbnail';
 import { reportError } from '@/lib/errors';
 import { keys, useFetchModelPage, useSuggestMetadata, useUpdateMetadata } from '@/lib/queries';
 import { navigate } from '@/lib/router';
 import { isAppError, type MetadataSuggestion, type PageSuggestion, type Project, type UpdateMetadata } from '@/lib/types';
+import { isPageCover, VIEW_PREVIEW_REL } from '@/lib/thumbs/queue';
 import { cn } from '@/lib/utils';
 import { useQueryClient } from '@tanstack/react-query';
 
@@ -30,6 +32,11 @@ export function SuggestDialog({ project: p, open, onOpenChange, mode = 'ai' }: {
   const update = useUpdateMetadata();
   const [picked, setPicked] = useState<Record<Field, boolean>>({ title: true, creator: true, license: true, description: true, tags: true });
   const [conflict, setConflict] = useState<UpdateMetadata | null>(null);
+  // the page's cover picture: a download into the project, so it is its own tick box and is
+  // off when the user already chose a preview themselves
+  const choose = useChooseThumbnail(p);
+  const [pickImage, setPickImage] = useState(true);
+  const [savingImage, setSavingImage] = useState(false);
   const s = suggest.data as (MetadataSuggestion | PageSuggestion) | undefined;
   const pageInfo = mode === 'page' ? (s as PageSuggestion | undefined) : undefined;
   const aiInfo = mode === 'ai' ? (s as MetadataSuggestion | undefined) : undefined;
@@ -37,7 +44,7 @@ export function SuggestDialog({ project: p, open, onOpenChange, mode = 'ai' }: {
   const k = (key: string) => (mode === 'page' ? t(`inspector.page.${key}`, { defaultValue: t(`inspector.${key}`) }) : t(`inspector.${key}`));
 
   useEffect(() => {
-    if (open) { suggest.reset(); setConflict(null); suggest.mutate(p.id); }
+    if (open) { suggest.reset(); setConflict(null); setPickImage(!p.thumbnail || isPageCover(p.thumbnail)); suggest.mutate(p.id); }
   }, [open, p.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // a field is offered when the model proposed something that differs from what the project has
@@ -63,15 +70,26 @@ export function SuggestDialog({ project: p, open, onOpenChange, mode = 'ai' }: {
     if (picked.tags && offered.includes('tags')) u.tags = [...new Set([...p.tags, ...s.tags])];
     return u;
   };
+  const image = pageInfo?.image ?? null;
+  const wantImage = !!image && pickImage;
+  // metadata first (it carries the stamp the project was read with), then the picture, which
+  // reads the sidecar afresh
+  const finish = async () => {
+    setConflict(null);
+    if (wantImage) { setSavingImage(true); try { await choose.usePage(); } finally { setSavingImage(false); } }
+    onOpenChange(false);
+  };
   const apply = (force = false) => {
     const u = build(force);
+    if (!offered.some((f) => picked[f])) { void finish(); return; }
     update.mutate({ id: p.id, update: u }, {
-      onSuccess: (np) => { setConflict(null); toast.success(t('inspector.suggestApplied'), { description: np.title }); onOpenChange(false); },
+      onSuccess: (np) => { toast.success(t('inspector.suggestApplied'), { description: np.title }); void finish(); },
       onError: (e) => { if (isAppError(e) && e.code === 'sidecar_conflict') setConflict(u); else reportError(e); },
     });
   };
   const reload = () => { setConflict(null); void qc.invalidateQueries({ queryKey: keys.project(p.id) }); };
-  const anyPicked = offered.some((f) => picked[f]);
+  const anyPicked = offered.some((f) => picked[f]) || wantImage;
+  const busy = update.isPending || savingImage;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -98,7 +116,7 @@ export function SuggestDialog({ project: p, open, onOpenChange, mode = 'ai' }: {
 
         {s && (
           <div className="grid gap-3">
-            {offered.length === 0 && <p className="text-sm text-muted-foreground" data-testid="suggest-nothing">{t('inspector.suggestNothing')}</p>}
+            {offered.length === 0 && !image && <p className="text-sm text-muted-foreground" data-testid="suggest-nothing">{t('inspector.suggestNothing')}</p>}
             <ul className="grid gap-2">
               {offered.map((f) => (
                 <li key={f} className={cn('grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 rounded-[10px] bg-background p-3', !picked[f] && 'opacity-60')} data-testid="suggest-field" data-field={f}>
@@ -118,6 +136,17 @@ export function SuggestDialog({ project: p, open, onOpenChange, mode = 'ai' }: {
                   </div>
                 </li>
               ))}
+              {image && (
+                <li className={cn('grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 rounded-[10px] bg-background p-3', !pickImage && 'opacity-60')} data-testid="suggest-field" data-field="image">
+                  <input type="checkbox" className="mt-1 size-4 accent-primary" checked={pickImage} onChange={(e) => setPickImage(e.target.checked)} aria-label={t('inspector.suggestField.image')} data-testid="suggest-pick-image" />
+                  <div className="min-w-0">
+                    <div className="text-[11px] font-bold uppercase tracking-wider text-muted-foreground">{t('inspector.suggestField.image')}</div>
+                    <div className="text-[13px] font-semibold" data-testid="suggest-value">{t('inspector.page.image', { host: hostOf(image) })}</div>
+                    <div className="text-xs text-muted-foreground">{t('inspector.page.imageNote')}</div>
+                    {p.thumbnail && !isPageCover(p.thumbnail) && <div className="truncate text-xs text-muted-foreground"><span className="font-semibold">{t('inspector.suggestCurrent')}:</span> {p.thumbnail === VIEW_PREVIEW_REL ? t('project.viewCapture') : p.thumbnail}</div>}
+                  </div>
+                </li>
+              )}
             </ul>
             <div className="text-xs text-muted-foreground" data-testid="suggest-meta">
               {pageInfo ? (
@@ -138,11 +167,15 @@ export function SuggestDialog({ project: p, open, onOpenChange, mode = 'ai' }: {
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>{t('common.cancel')}</Button>
-          <Button disabled={!s || !anyPicked || update.isPending || p.offline} onClick={() => apply()} data-testid="suggest-apply">{update.isPending ? <Loader2 className="animate-spin" /> : mode === 'page' ? <Globe /> : <Sparkles />}{t('inspector.suggestApply')}</Button>
+          <Button disabled={!s || !anyPicked || busy || p.offline} onClick={() => apply()} data-testid="suggest-apply">{busy ? <Loader2 className="animate-spin" /> : mode === 'page' ? <Globe /> : <Sparkles />}{t('inspector.suggestApply')}</Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
   );
+}
+
+function hostOf(url: string): string {
+  try { return new URL(url).host; } catch { return url; }
 }
 
 function current(p: Project, f: Exclude<Field, 'tags'>): string {

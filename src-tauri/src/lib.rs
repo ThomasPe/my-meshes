@@ -121,6 +121,7 @@ pub fn run() {
             commands::get_network_settings,
             commands::set_network_settings,
             commands::fetch_model_page,
+            commands::set_page_thumbnail,
             commands::fetch_model_pages,
             commands::project_hints,
             commands::creator_suggestions,

@@ -8,7 +8,7 @@ import { reportError } from '@/lib/errors';
 import { formatBytes } from '@/lib/format';
 import { Badge } from '@/components/ui/badge';
 import { useChooseThumbnail } from '@/features/project/useChooseThumbnail';
-import { VIEW_PREVIEW_REL } from '@/lib/thumbs/queue';
+import { isPageCover, VIEW_PREVIEW_REL } from '@/lib/thumbs/queue';
 import type { EmbeddedPicture, FileEntry, Project } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -53,7 +53,7 @@ function Tile({ projectId, item, current, onOpen, onChoose }: { projectId: strin
         : current
         ? <Badge variant="accent" className="absolute left-2 top-2" data-testid="thumbnail-badge"><ImageUp />{t('project.thumbnailCurrent')}</Badge>
         : <Button size="sm" variant="secondary" className="absolute left-2 top-2 opacity-0 shadow-card transition-opacity focus-visible:opacity-100 group-hover:opacity-100" onClick={onChoose} data-testid="use-as-thumbnail"><ImageUp />{t('project.useAsThumbnail')}</Button>}
-      <span className="truncate text-xs font-semibold">{captured ? t('project.viewCapture') : file.name}</span>
+      <span className="truncate text-xs font-semibold">{captured ? t('project.viewCapture') : isPageCover(item.file?.rel_path) ? t('project.pageCover') : file.name}</span>
       <span className="text-[11px] text-muted-foreground tabular">{formatBytes(file.size, i18n.language)}</span>
     </div>
   );
@@ -90,7 +90,7 @@ export function ImageGallery({ project, files, pictures = [], offline }: { proje
         {project.thumbnail && (
           <div className="flex flex-wrap items-center gap-2 text-xs font-semibold text-muted-foreground">
             <ImageUp className="size-3.5 text-primary" />
-            <span>{t('project.thumbnailIs', { name: project.thumbnail === VIEW_PREVIEW_REL ? t('project.viewCapture') : project.thumbnail })}</span>
+            <span>{t('project.thumbnailIs', { name: project.thumbnail === VIEW_PREVIEW_REL ? t('project.viewCapture') : isPageCover(project.thumbnail) ? t('project.pageCover') : project.thumbnail })}</span>
             <Button size="sm" variant="ghost" className="h-7" onClick={() => void choose.useImage(null)} data-testid="thumbnail-auto">{t('project.chooseAutomatically')}</Button>
           </div>
         )}

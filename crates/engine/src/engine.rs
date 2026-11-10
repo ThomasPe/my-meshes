@@ -250,10 +250,17 @@ pub struct Engine {
     page_cache: HashMap<String, enrich::Parsed>,
     /// Replaces the HTTP fetch (tests): URL -> HTML.
     page_override: Option<PageFetcher>,
+    /// Replaces the picture download (tests): URL -> bytes.
+    image_override: Option<ImageFetcher>,
 }
 
 /// A stand-in for the network, see `Engine::set_page_fetcher`.
 pub type PageFetcher = Box<dyn Fn(&str) -> Result<String> + Send>;
+/// The same for a page's cover picture, see `Engine::set_image_fetcher`.
+pub type ImageFetcher = Box<dyn Fn(&str) -> Result<Vec<u8>> + Send>;
+/// Where the model page's cover picture is saved inside a project, without the extension.
+pub const PAGE_COVER_STEM: &str = ".meshkeep/cover";
+const PAGE_COVER_EXTS: &[&str] = &["jpg", "png", "webp"];
 
 impl Engine {
     pub fn open(data_dir: &Path) -> Result<Engine> {
@@ -277,6 +284,7 @@ impl Engine {
             ai_override: None,
             page_cache: HashMap::new(),
             page_override: None,
+            image_override: None,
         })
     }
 
@@ -334,6 +342,11 @@ impl Engine {
         self.page_override = Some(f);
     }
 
+    /// Tests hand in picture bytes instead of the network.
+    pub fn set_image_fetcher(&mut self, f: ImageFetcher) {
+        self.image_override = Some(f);
+    }
+
     /// The page a project points at: its source link, else the best link hint.
     pub fn model_page_url(&self, project_id: &str) -> Result<Option<String>> {
         let p = self.online_project(project_id)?;
@@ -370,6 +383,7 @@ impl Engine {
             description: parsed.description.clone(),
             new_tags: parsed.tags.iter().filter(|t| !known.contains(*t)).cloned().collect(),
             tags: parsed.tags.clone(),
+            image: parsed.image.clone().filter(|u| enrich::image_allowed(u)),
             url: url.to_string(),
             site: parsed.site.clone(),
             cached,
@@ -386,6 +400,64 @@ impl Engine {
             .ok_or_else(|| EngineError::PageFetch("the project has no link to a supported model site".into()))?;
         let (parsed, cached) = self.load_page(&url)?;
         self.page_suggestion(&url, &parsed, cached)
+    }
+
+    /// Downloads the cover picture of the project's model page (opt-in like the page itself),
+    /// saves it as `.meshkeep/cover.<ext>` inside the project and makes it the preview. The
+    /// file travels with the project: unlike a rendered preview it cannot be reproduced once
+    /// the page is gone. Only called after the user (or an agent with write access) asked.
+    pub fn set_page_thumbnail(&mut self, project_id: &str) -> Result<Project> {
+        if !self.settings.get().network.fetch_model_pages {
+            return Err(EngineError::PageFetchDisabled);
+        }
+        let current = self.online_project(project_id)?;
+        let url = self
+            .model_page_url(project_id)?
+            .ok_or_else(|| EngineError::PageFetch("the project has no link to a supported model site".into()))?;
+        let (parsed, _) = self.load_page(&url)?;
+        let image = parsed
+            .image
+            .filter(|u| enrich::image_allowed(u))
+            .ok_or_else(|| EngineError::PageFetch(format!("{url} names no picture")))?;
+        let bytes = match &self.image_override {
+            Some(f) => f(&image)?,
+            None => enrich::fetch_image(&image)?,
+        };
+        let ext =
+            enrich::image_kind(&bytes).ok_or_else(|| EngineError::PageFetch(format!("{image} is not a JPEG, PNG or WebP picture")))?;
+        let dir = self.project_dir(&current)?;
+        let rel = format!("{PAGE_COVER_STEM}.{ext}");
+        let path = dir.join(&rel);
+        let parent = path.parent().expect("cover path has a parent");
+        std::fs::create_dir_all(parent).map_err(|e| EngineError::Io {
+            path: parent.to_path_buf(),
+            source: e,
+        })?;
+        let tmp = parent.join(format!(".cover.{}.tmp", std::process::id()));
+        std::fs::write(&tmp, &bytes).map_err(|e| EngineError::Io {
+            path: tmp.clone(),
+            source: e,
+        })?;
+        if let Err(e) = std::fs::rename(&tmp, &path) {
+            let _ = std::fs::remove_file(&tmp);
+            return Err(EngineError::Io { path, source: e });
+        }
+        Self::drop_app_previews(&dir, Some(&rel))?;
+        self.write_sidecar_thumbnail(&current, Some(rel))
+    }
+
+    /// Removes the pictures the app keeps under `.meshkeep` for a preview (the viewer capture,
+    /// a page cover) except `keep`, and the folder once it is empty.
+    fn drop_app_previews(dir: &Path, keep: Option<&str>) -> Result<()> {
+        let covers = PAGE_COVER_EXTS.iter().map(|e| format!("{PAGE_COVER_STEM}.{e}"));
+        for rel in std::iter::once(VIEW_PREVIEW_REL.to_string()).chain(covers) {
+            let path = dir.join(&rel);
+            if keep != Some(rel.as_str()) && path.is_file() {
+                std::fs::remove_file(&path).map_err(|e| EngineError::Io { path, source: e })?;
+            }
+        }
+        let _ = std::fs::remove_dir(dir.join(".meshkeep")); // only when empty
+        Ok(())
     }
 
     /// Warms the page cache for many projects, one request per second; the creator
@@ -1415,13 +1487,7 @@ impl Engine {
             }
         }
         let dir = self.project_dir(&current)?;
-        if rel.as_deref() != Some(VIEW_PREVIEW_REL) {
-            let capture = dir.join(VIEW_PREVIEW_REL);
-            if capture.is_file() {
-                std::fs::remove_file(&capture).map_err(|e| EngineError::Io { path: capture, source: e })?;
-                let _ = std::fs::remove_dir(dir.join(".meshkeep")); // only when empty
-            }
-        }
+        Self::drop_app_previews(&dir, rel.as_deref())?;
         self.write_sidecar_thumbnail(&current, rel)
     }
 
@@ -1449,6 +1515,7 @@ impl Engine {
             let _ = std::fs::remove_file(&tmp);
             return Err(EngineError::Io { path, source: e });
         }
+        Self::drop_app_previews(&dir, Some(VIEW_PREVIEW_REL))?;
         self.write_sidecar_thumbnail(&current, Some(VIEW_PREVIEW_REL.to_string()))
     }
 

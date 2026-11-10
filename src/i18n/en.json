@@ -155,7 +155,8 @@
       "creator": "Creator",
       "license": "License",
       "description": "Description",
-      "tags": "Tags"
+      "tags": "Tags",
+      "image": "Preview image"
     },
     "page": {
       "suggest": "Read the model page",
@@ -163,7 +164,9 @@
       "suggestBody": "What the page linked as this project's source says. Tick what should be written to project.yaml.",
       "suggestLoading": "Loading the page…",
       "suggestSetup": "Loading model pages is off. Turn it on in Settings → Network; until then the app never opens a model page.",
-      "from": "Read from {{site}}:"
+      "from": "Read from {{site}}:",
+      "image": "Cover picture from {{host}}",
+      "imageNote": "Downloaded once and saved inside the project folder, so it stays when the page is gone."
     }
   },
   "project": {
@@ -224,6 +227,7 @@
     "thumbnailIs": "Preview image: {{name}}",
     "chooseAutomatically": "Choose automatically",
     "viewCapture": "View from the viewer",
+    "pageCover": "Picture from the model page",
     "embeddedIn": "From {{file}}",
     "setViewThumbnail": "Use this view as preview",
     "thumbnailSet": "Preview chosen; rendering it now…",
@@ -348,8 +352,8 @@
     "fetchPages": "Load model pages",
     "fetchPagesOn": "Model pages will be loaded when you ask for it",
     "fetchPagesOff": "Model pages are not loaded",
-    "fetchPagesHintOff": "Off: the app never opens a model page. Turn this on to fill creator, license and tags from the link stored in a project, on request, one page at a time. The site then sees your IP address and that link.",
-    "fetchPagesHintOn": "On: when you ask, the app loads the model page named in a project's source link (or in a download shortcut next to the models) and offers what it finds as suggestions. The site sees your IP address and that link; nothing else is sent.",
+    "fetchPagesHintOff": "Off: the app never opens a model page. Turn this on to fill creator, license and tags from the link stored in a project, on request, one page at a time, and to save the page's cover picture as the project's preview. The site (and the server holding the picture) then sees your IP address and that link.",
+    "fetchPagesHintOn": "On: when you ask, the app loads the model page named in a project's source link (or in a download shortcut next to the models) and offers what it finds as suggestions, including the page's cover picture as the project's preview. The site (and, for the picture, the server holding it) sees your IP address and that link; nothing else is sent.",
     "privacyPolicy": "Privacy policy",
     "mcp": "AI agents (MCP server)",
     "mcpHint": "Lets an AI agent on this computer (Claude Desktop, Claude Code or any MCP client) search the library, fill in metadata and import downloads. Off by default; listens on this computer only, behind a token.",

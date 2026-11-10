@@ -166,6 +166,13 @@ reference along.
   (`thumbnail:`): any image of the project, or the viewer's current view, which the app
   saves as `.meshkeep/preview.png` inside the project. That one file is the only thing
   inside an app folder the scanner indexes, and only while the sidecar points at it.
+- Cover picture of the model page (implemented): with "Load model pages" on, the page's
+  cover (`og:image`, JSON-LD, the site's page data) can be downloaded on request and saved as
+  `.meshkeep/cover.jpg|png|webp` inside the project, with `thumbnail:` pointing at it. It is
+  project content, not cache: once the page is gone it cannot be fetched again. The picture
+  comes from whatever host the page names (a CDN), so the model-site list does not apply to
+  it; https, a named non-local host and JPEG/PNG/WebP bytes (16 MiB at most) do. Choosing
+  another preview removes the file.
 - Photos inside a 3MF (implemented): a Bambu Studio project from MakerWorld stores the model
   page's pictures under `Auxiliaries/Model Pictures/`. The project's gallery lists them next
   to the image files and reads them straight from the archive; nothing is unpacked, indexed

@@ -72,6 +72,8 @@ export interface Backend {
   setThumbnailImage(projectId: string, relPath: string | null): Promise<Project>;
   /** VIEW-4: a PNG captured in the viewer becomes the preview (saved inside the project). */
   setViewThumbnail(projectId: string, png: ArrayBuffer): Promise<Project>;
+  /** Downloads the cover picture of the project's model page into the project and makes it the preview (opt-in network feature). */
+  setPageThumbnail(projectId: string): Promise<Project>;
   pickImportFiles(): Promise<string[]>;
   analyzeImport(paths: string[]): Promise<ImportItem[]>;
   executeImport(request: ImportRequest): Promise<ImportReport>;

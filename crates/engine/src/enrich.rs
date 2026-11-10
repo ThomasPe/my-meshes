@@ -31,6 +31,8 @@ pub struct PageSuggestion {
     pub description: Option<String>,
     pub tags: Vec<String>,
     pub new_tags: Vec<String>,
+    /// The page's cover picture, when it names one that may be downloaded (`image_allowed`).
+    pub image: Option<String>,
     pub url: String,
     pub site: String,
     pub cached: bool,
@@ -112,6 +114,77 @@ pub fn fetch_html(url: &str) -> Result<String> {
         .read_to_end(&mut body)
         .map_err(|e| EngineError::PageFetch(e.to_string()))?;
     Ok(String::from_utf8_lossy(&body).into_owned())
+}
+
+const MAX_IMAGE: u64 = 16 << 20;
+
+/// A cover picture is fetched from wherever the page says it lives (a CDN, usually), so the
+/// model-site list does not apply. What does: https only, a named host, nothing local.
+pub fn image_allowed(url: &str) -> bool {
+    let Some(rest) = url.strip_prefix("https://") else { return false };
+    let authority = rest.split(['/', '?', '#']).next().unwrap_or("");
+    if authority.contains('@') || authority.starts_with('[') {
+        return false;
+    }
+    let host = authority.split(':').next().unwrap_or("").to_ascii_lowercase();
+    let numeric = host
+        .split('.')
+        .all(|part| !part.is_empty() && part.chars().all(|c| c.is_ascii_digit()));
+    host.contains('.') && !numeric && !host.ends_with(".local") && !host.ends_with(".internal") && !host.ends_with(".localhost")
+}
+
+/// The file extension for picture bytes, told from their first bytes; `None` for anything
+/// that is not a JPEG, PNG or WebP (an HTML error page, an SVG, ...).
+pub fn image_kind(bytes: &[u8]) -> Option<&'static str> {
+    if bytes.starts_with(&[0xFF, 0xD8, 0xFF]) {
+        Some("jpg")
+    } else if bytes.starts_with(b"\x89PNG\r\n\x1a\n") {
+        Some("png")
+    } else if bytes.len() > 12 && bytes.starts_with(b"RIFF") && &bytes[8..12] == b"WEBP" {
+        Some("webp")
+    } else {
+        None
+    }
+}
+
+/// GETs a cover picture (at most 16 MiB, 20 s). Redirects are followed under the same rule
+/// as the first URL.
+pub fn fetch_image(url: &str) -> Result<Vec<u8>> {
+    if !image_allowed(url) {
+        return Err(EngineError::PageFetch(format!("{url}: not a picture link the app loads")));
+    }
+    let client = reqwest::blocking::Client::builder()
+        .timeout(Duration::from_secs(20))
+        .user_agent(USER_AGENT)
+        .redirect(reqwest::redirect::Policy::custom(|a| {
+            if a.previous().len() >= 5 {
+                return a.error("too many redirects");
+            }
+            if image_allowed(a.url().as_str()) {
+                a.follow()
+            } else {
+                a.error("redirect leaves the picture host rule")
+            }
+        }))
+        .build()
+        .map_err(|e| EngineError::PageFetch(e.to_string()))?;
+    let resp = client
+        .get(url)
+        .header("Accept", "image/webp,image/png,image/jpeg")
+        .send()
+        .map_err(|e| EngineError::PageFetch(e.to_string()))?;
+    let status = resp.status();
+    if !status.is_success() {
+        return Err(EngineError::PageFetch(format!("{url}: HTTP {status}")));
+    }
+    let mut body = Vec::new();
+    resp.take(MAX_IMAGE + 1)
+        .read_to_end(&mut body)
+        .map_err(|e| EngineError::PageFetch(e.to_string()))?;
+    if body.len() as u64 > MAX_IMAGE {
+        return Err(EngineError::PageFetch(format!("{url}: the picture is larger than 16 MiB")));
+    }
+    Ok(body)
 }
 
 /// Pure extraction, so it can be tested on saved pages.
@@ -607,5 +680,30 @@ mod tests {
         assert!(!host_allowed("https://printables.com.evil.net/"));
         assert!(matches!(fetch_html("https://example.com/x"), Err(EngineError::PageFetch(_))));
         assert!(matches!(fetch_html("file:///etc/passwd"), Err(EngineError::PageFetch(_))));
+    }
+
+    #[test]
+    fn cover_pictures_come_from_named_https_hosts_and_are_told_by_their_bytes() {
+        assert!(image_allowed("https://media.printables.com/media/prints/1/images/1.jpg"));
+        assert!(image_allowed("https://cdn.thingiverse.com/assets/1.jpg?x=1"));
+        for bad in [
+            "http://media.printables.com/1.jpg",
+            "https://127.0.0.1/1.jpg",
+            "https://192.168.1.10:8443/1.jpg",
+            "https://[::1]/1.jpg",
+            "https://localhost/1.jpg",
+            "https://nas.local/1.jpg",
+            "https://user@media.printables.com/1.jpg",
+            "file:///etc/passwd",
+            "data:image/png;base64,AAAA",
+        ] {
+            assert!(!image_allowed(bad), "{bad}");
+        }
+        assert_eq!(image_kind(&[0xFF, 0xD8, 0xFF, 0xE0, 0, 0]), Some("jpg"));
+        assert_eq!(image_kind(b"\x89PNG\r\n\x1a\n...."), Some("png"));
+        assert_eq!(image_kind(b"RIFF\x10\0\0\0WEBPVP8 "), Some("webp"));
+        assert_eq!(image_kind(b"<!doctype html><html>"), None);
+        assert_eq!(image_kind(b"<svg xmlns='http://www.w3.org/2000/svg'/>"), None);
+        assert_eq!(image_kind(b""), None);
     }
 }

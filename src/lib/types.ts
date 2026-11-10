@@ -139,7 +139,7 @@ export interface BatchUpdate {
 
 export type HintSource = 'three_mf' | 'shortcut' | 'readme' | 'source_url' | 'file_names' | 'folder_name' | 'library' | 'known_creator' | 'model_page';
 /** What a model's web page said, shaped like an AI suggestion (META-7 stage 2). */
-export interface PageSuggestion { title: string | null; creator: string | null; license: string | null; description: string | null; tags: string[]; new_tags: string[]; url: string; site: string; cached: boolean }
+export interface PageSuggestion { title: string | null; creator: string | null; license: string | null; description: string | null; tags: string[]; new_tags: string[]; /** The page's cover picture, when it names one the app may download. */ image: string | null; url: string; site: string; cached: boolean }
 export interface EnrichReport { fetched: number; cached: number; no_link: number; failed: Array<{ project_id: string; message: string }> }
 export interface EnrichProgress { done: number; total: number }
 export interface Hint { value: string; source: HintSource; confidence: number }

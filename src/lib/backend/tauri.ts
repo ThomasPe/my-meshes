@@ -59,6 +59,7 @@ export function createTauriBackend(): Backend {
     clearThumbnails: () => invoke('clear_thumbnails'),
     resetThumbnail: (projectId) => invoke('reset_thumbnail', { projectId }),
     setThumbnailImage: (projectId, relPath) => invoke<Project>('set_thumbnail_image', { projectId, relPath }),
+    setPageThumbnail: (projectId) => invoke<Project>('set_page_thumbnail', { projectId }),
     setViewThumbnail: (projectId, png) => invoke<Project>('set_view_thumbnail', new Uint8Array(png), { headers: { 'x-project-id': encodeURIComponent(projectId) } }),
     pickImportFiles: () => invoke('pick_import_files'),
     analyzeImport: (paths) => invoke('analyze_import', { paths }),

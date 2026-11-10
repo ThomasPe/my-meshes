@@ -726,6 +726,22 @@ pub fn set_view_thumbnail(app: AppHandle, state: State<AppState>, request: Reque
     Ok(p)
 }
 
+/// Downloads the cover picture of the project's model page and makes it the preview (opt-in
+/// network feature; the file is saved inside the project).
+#[tauri::command]
+pub async fn set_page_thumbnail(app: AppHandle, project_id: String) -> CmdResult<Project> {
+    let handle = app.clone();
+    let id = project_id.clone();
+    let p = tauri::async_runtime::spawn_blocking(move || handle.state::<AppState>().engine.lock().unwrap().set_page_thumbnail(&id))
+        .await
+        .map_err(|e| AppError {
+            code: "shell",
+            message: e.to_string(),
+        })??;
+    let _ = app.emit("project://changed", serde_json::json!({ "projectId": project_id }));
+    Ok(p)
+}
+
 #[tauri::command]
 pub fn reset_thumbnail(app: AppHandle, state: State<AppState>, project_id: String) -> CmdResult<()> {
     state.engine.lock().unwrap().reset_thumbnail(&project_id)?;

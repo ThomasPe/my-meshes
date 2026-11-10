@@ -155,7 +155,8 @@
       "creator": "Ersteller",
       "license": "Lizenz",
       "description": "Beschreibung",
-      "tags": "Tags"
+      "tags": "Tags",
+      "image": "Vorschaubild"
     },
     "page": {
       "suggest": "Modellseite lesen",
@@ -163,7 +164,9 @@
       "suggestBody": "Was die als Quelle verlinkte Seite über dieses Projekt sagt. Hake an, was in project.yaml geschrieben werden soll.",
       "suggestLoading": "Seite wird geladen…",
       "suggestSetup": "Modellseiten laden ist aus. Schalte es in Einstellungen → Netzwerk ein; bis dahin öffnet die App nie eine Modellseite.",
-      "from": "Gelesen von {{site}}:"
+      "from": "Gelesen von {{site}}:",
+      "image": "Titelbild von {{host}}",
+      "imageNote": "Wird einmal heruntergeladen und im Projektordner gespeichert, bleibt also erhalten, wenn die Seite verschwindet."
     }
   },
   "project": {
@@ -224,6 +227,7 @@
     "thumbnailIs": "Vorschaubild: {{name}}",
     "chooseAutomatically": "Automatisch wählen",
     "viewCapture": "Ansicht aus dem Viewer",
+    "pageCover": "Bild von der Modellseite",
     "embeddedIn": "Aus {{file}}",
     "setViewThumbnail": "Diese Ansicht als Vorschau verwenden",
     "thumbnailSet": "Vorschau gewählt, wird jetzt gerendert…",
@@ -348,8 +352,8 @@
     "fetchPages": "Modellseiten laden",
     "fetchPagesOn": "Modellseiten werden auf Anfrage geladen",
     "fetchPagesOff": "Modellseiten werden nicht geladen",
-    "fetchPagesHintOff": "Aus: Die App öffnet nie eine Modellseite. Einschalten, um Designer, Lizenz und Tags aus dem in einem Projekt hinterlegten Link zu übernehmen, auf Anfrage, Seite für Seite. Die Seite sieht dann deine IP-Adresse und diesen Link.",
-    "fetchPagesHintOn": "An: Auf Anfrage lädt die App die Modellseite aus dem Quell-Link eines Projekts (oder aus einer Download-Verknüpfung neben den Modellen) und bietet das Gefundene als Vorschlag an. Die Seite sieht deine IP-Adresse und diesen Link; mehr wird nicht gesendet.",
+    "fetchPagesHintOff": "Aus: Die App öffnet nie eine Modellseite. Einschalten, um Designer, Lizenz und Tags aus dem in einem Projekt hinterlegten Link zu übernehmen, auf Anfrage, Seite für Seite, und um das Titelbild der Seite als Vorschau des Projekts zu speichern. Die Seite (und der Server, auf dem das Bild liegt) sieht dann deine IP-Adresse und diesen Link.",
+    "fetchPagesHintOn": "An: Auf Anfrage lädt die App die Modellseite aus dem Quell-Link eines Projekts (oder aus einer Download-Verknüpfung neben den Modellen) und bietet das Gefundene als Vorschlag an, auch das Titelbild der Seite als Vorschau des Projekts. Die Seite (und für das Bild der Server, auf dem es liegt) sieht deine IP-Adresse und diesen Link; mehr wird nicht gesendet.",
     "privacyPolicy": "Datenschutzerklärung",
     "mcp": "KI-Agenten (MCP-Server)",
     "mcpHint": "Erlaubt einem KI-Agenten auf diesem Rechner (Claude Desktop, Claude Code oder ein anderer MCP-Client), die Bibliothek zu durchsuchen, Metadaten zu ergänzen und Downloads zu importieren. Standardmäßig aus; hört nur auf diesem Rechner, hinter einem Token.",
