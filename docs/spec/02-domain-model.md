@@ -176,7 +176,9 @@ reference along.
   mtime; when they change the thumbnail counts as stale and the project re-enters the queue.
   A full content hash was rejected for this: it would mean reading every model twice.
 - Source priority: the image named by `thumbnail:` in the sidecar, else a 3MF with an
-  embedded preview (extracted, no rendering), else the largest previewable model (STL,
+  embedded preview (extracted, no rendering; a Bambu Studio project from MakerWorld
+  carries the model page's cover photo in `Auxiliaries/.thumbnails/`, which wins over the
+  slicer's plate rendering), else the largest previewable model (STL,
   OBJ, 3MF) rendered off-thread, else the first image in the project. Failures are
   recorded per source state and not retried until the file changes.
 - Alternative location (user setting, implemented): `<project>/.cache/thumbs/<key>.png` for
@@ -187,6 +189,17 @@ reference along.
   (`thumbnail:`): any image of the project, or the viewer's current view, which the app
   saves as `.meshkeep/preview.png` inside the project. That one file is the only thing
   inside an app folder the scanner indexes, and only while the sidecar points at it.
+- Cover picture of the model page (implemented): with "Load model pages" on, the page's
+  cover (`og:image`, JSON-LD, the site's page data) can be downloaded on request and saved as
+  `.meshkeep/cover.jpg|png|webp` inside the project, with `thumbnail:` pointing at it. It is
+  project content, not cache: once the page is gone it cannot be fetched again. The picture
+  comes from whatever host the page names (a CDN), so the model-site list does not apply to
+  it; https, a named non-local host and JPEG/PNG/WebP bytes (16 MiB at most) do. Choosing
+  another preview removes the file.
+- Photos inside a 3MF (implemented): a Bambu Studio project from MakerWorld stores the model
+  page's pictures under `Auxiliaries/Model Pictures/`. The project's gallery lists them next
+  to the image files and reads them straight from the archive; nothing is unpacked, indexed
+  or written, and only entries of that folder can be read this way.
 
 ## Index (cache database)
 

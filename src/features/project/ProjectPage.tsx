@@ -12,7 +12,7 @@ import { MetadataForm } from '@/features/project/MetadataForm';
 import { Viewer } from '@/features/project/Viewer';
 import { useChooseThumbnail } from '@/features/project/useChooseThumbnail';
 import { formatBytes, initials } from '@/lib/format';
-import { useProject, useRoots } from '@/lib/queries';
+import { useEmbeddedPictures, useProject, useRoots } from '@/lib/queries';
 import { navigate, routeHref } from '@/lib/router';
 import type { ProjectSummary } from '@/lib/types';
 import { cn } from '@/lib/utils';
@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 export function ProjectPage({ id }: { id: string }) {
   const { t, i18n } = useTranslation();
   const project = useProject(id);
+  const pictures = useEmbeddedPictures(project.data);
   const roots = useRoots();
   const choose = useChooseThumbnail(project.data ?? null);
   const { actions, dialogs } = useProjectActions({ onRenamed: (_old, newId) => navigate({ page: 'project', id: newId }), onDeleted: () => navigate({ page: 'library' }) });
@@ -27,6 +28,7 @@ export function ProjectPage({ id }: { id: string }) {
   if (project.isError || !project.data) return <div className="p-6"><p className="text-sm text-destructive">{t('errors.not_found')}</p><Button asChild variant="outline" className="mt-3"><a href={routeHref({ page: 'library' })}>{t('project.back')}</a></Button></div>;
   const p = project.data;
   const root = roots.data?.find((r) => r.id === p.root_id);
+  const imageCount = p.files.filter((f) => f.kind === 'image').length + (pictures.data?.length ?? 0);
   const summary: ProjectSummary = { id: p.id, root_id: p.root_id, rel_path: p.rel_path, title: p.title, creator: p.creator, tags: p.tags, thumbnail: p.thumbnail, file_count: p.files.length, model_count: p.model_count, total_bytes: p.total_bytes, modified: p.modified, has_sidecar: p.sidecar.state === 'ok', offline: p.offline, favorite: p.favorite, added: p.added, thumb: p.thumb, slicer: p.slicer, packed: p.packed };
   return (
     <div className="h-full overflow-auto" data-testid="project-page">
@@ -77,7 +79,7 @@ export function ProjectPage({ id }: { id: string }) {
           <TabsList>
             <TabsTrigger value="overview">{t('project.overview')}</TabsTrigger>
             <TabsTrigger value="files">{t('project.files')} <span className="text-muted-foreground">{p.files.length}</span></TabsTrigger>
-            {p.files.some((f) => f.kind === 'image') && <TabsTrigger value="images" data-testid="tab-images">{t('project.images')} <span className="text-muted-foreground">{p.files.filter((f) => f.kind === 'image').length}</span></TabsTrigger>}
+            {imageCount > 0 && <TabsTrigger value="images" data-testid="tab-images">{t('project.images')} <span className="text-muted-foreground">{imageCount}</span></TabsTrigger>}
           </TabsList>
           <TabsContent value="overview" className="mt-4">
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,32%)] 2xl:grid-cols-[minmax(0,1fr)_minmax(360px,520px)]">
@@ -86,7 +88,7 @@ export function ProjectPage({ id }: { id: string }) {
             </div>
           </TabsContent>
           <TabsContent value="files" className="mt-4"><FilesTable projectId={p.id} files={p.files} offline={p.offline} packed={p.packed} /></TabsContent>
-          <TabsContent value="images" className="mt-4"><ImageGallery project={p} files={p.files} offline={p.offline} /></TabsContent>
+          <TabsContent value="images" className="mt-4"><ImageGallery project={p} files={p.files} pictures={pictures.data ?? []} offline={p.offline} /></TabsContent>
         </Tabs>
       </div>
     </div>

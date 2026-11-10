@@ -3,7 +3,7 @@ import { listen } from '@tauri-apps/api/event';
 import { getCurrentWebview } from '@tauri-apps/api/webview';
 import { isPermissionGranted, requestPermission, sendNotification } from '@tauri-apps/plugin-notification';
 import type { Backend } from './index';
-import type { EnrichProgress, HashProgress, ImportProgress, LibraryChanged, Project, ScanProgress, PackProgress } from '@/lib/types';
+import type { EmbeddedPicture, EnrichProgress, HashProgress, ImportProgress, LibraryChanged, PackProgress, Project, ScanProgress } from '@/lib/types';
 
 export function createTauriBackend(): Backend {
   return {
@@ -31,6 +31,8 @@ export function createTauriBackend(): Backend {
     folderTree: (rootId) => invoke('folder_tree', { rootId }),
     libraryStats: (rootId) => invoke('library_stats', { rootId: rootId ?? null }),
     readProjectFile: (projectId, relPath) => invoke<ArrayBuffer>('read_project_file', { projectId, relPath }),
+    embeddedPictures: (projectId) => invoke<EmbeddedPicture[]>('embedded_pictures', { projectId }),
+    readEmbeddedPicture: (projectId, relPath, entry) => invoke<ArrayBuffer>('read_embedded_picture', { projectId, relPath, entry }),
     updateMetadata: (projectId, update) => invoke('update_metadata', { projectId, update }),
     revealProject: (projectId) => invoke('reveal_project', { projectId }),
     logTail: (lines) => invoke('log_tail', { lines }),
@@ -57,6 +59,7 @@ export function createTauriBackend(): Backend {
     clearThumbnails: () => invoke('clear_thumbnails'),
     resetThumbnail: (projectId) => invoke('reset_thumbnail', { projectId }),
     setThumbnailImage: (projectId, relPath) => invoke<Project>('set_thumbnail_image', { projectId, relPath }),
+    setPageThumbnail: (projectId) => invoke<Project>('set_page_thumbnail', { projectId }),
     setViewThumbnail: (projectId, png) => invoke<Project>('set_view_thumbnail', new Uint8Array(png), { headers: { 'x-project-id': encodeURIComponent(projectId) } }),
     pickImportFiles: () => invoke('pick_import_files'),
     analyzeImport: (paths) => invoke('analyze_import', { paths }),

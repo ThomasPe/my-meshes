@@ -21,7 +21,7 @@ pub struct Index {
     conn: Connection,
 }
 
-const SCHEMA_VERSION: i64 = 5;
+const SCHEMA_VERSION: i64 = 6;
 
 /// (project id, rel path) -> (size, modified, sha256), see `Index::file_hashes`.
 pub type HashCache = HashMap<(String, String), (u64, String, String)>;
@@ -149,11 +149,14 @@ impl Index {
                 )?;
             }
         } else if !(3..=SCHEMA_VERSION).contains(&version) {
-            // v3 -> v4 only adds file_hashes (created below); anything else starts over
+            // v3 -> v4 only adds file_hashes (created below); anything older or unknown starts over
             conn.execute_batch(DROP)?;
         }
-        if (2..=4).contains(&version) {
-            // v4 -> v5 adds projects.packed (LIB-9); in place, so cached thumbnails survive
+        // Version 5 was given out twice, by two changes that were developed side by side: one
+        // added projects.packed (LIB-9), the other re-extracts embedded 3MF previews. A v5
+        // database carries one of the two, so both steps run for everything before v6. Both
+        // are safe to repeat and work in place, so cached thumbnails survive.
+        if (2..=5).contains(&version) {
             let has: bool = conn
                 .query_row("SELECT 1 FROM pragma_table_info('projects') WHERE name = 'packed'", [], |_| Ok(()))
                 .optional()?
@@ -163,6 +166,11 @@ impl Index {
             }
         }
         conn.execute_batch(SCHEMA)?;
+        if (2..=5).contains(&version) {
+            // A 3MF's embedded preview is now the model page's cover where the file carries
+            // one. Previews extracted before that are forgotten, so they are extracted again.
+            conn.execute_batch("DELETE FROM thumbs WHERE project_id IN (SELECT id FROM projects WHERE thumb_kind = 'embedded');")?;
+        }
         conn.execute_batch(&format!("PRAGMA user_version = {SCHEMA_VERSION};"))?;
         Ok(Index { conn })
     }
@@ -1073,6 +1081,36 @@ mod tests {
     }
 
     #[test]
+    fn v4_keeps_rendered_previews_and_forgets_embedded_ones() {
+        let t = tempfile::tempdir().unwrap();
+        let p = t.path().join("index.sqlite");
+        {
+            let c = Connection::open(&p).unwrap();
+            c.execute_batch(SCHEMA).unwrap();
+            c.execute_batch("PRAGMA user_version = 4;").unwrap();
+            for (id, kind) in [("r1:A", "render"), ("r1:B", "embedded")] {
+                c.execute("INSERT INTO projects (id, root_id, rel_path, title, total_bytes, file_count, model_count, modified, added, sidecar_state, warnings, thumb_source, thumb_kind) VALUES (?1,'r1',?1,'t',10,1,1,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z','missing','[]','a.3mf',?2)", params![id, kind]).unwrap();
+                c.execute("INSERT INTO thumbs (project_id, source_rel, source_size, source_mtime, key, updated) VALUES (?1,'a.3mf',10,'2026-01-01T00:00:00Z',?2,'2026-01-02T00:00:00Z')", params![id, format!("{kind}abcdefabcdefabcdef.png")]).unwrap();
+            }
+        }
+        let ix = Index::open(&p).unwrap();
+        let version: i64 = ix.conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+        assert_eq!(version, SCHEMA_VERSION);
+        assert_eq!(
+            ix.project_of_thumb("renderabcdefabcdefabcdef.png").unwrap().as_deref(),
+            Some("r1:A")
+        );
+        assert_eq!(ix.project_of_thumb("embeddedabcdefabcdefabcdef.png").unwrap(), None);
+        drop(ix);
+        // opening again changes nothing: the step runs once
+        let ix = Index::open(&p).unwrap();
+        assert_eq!(
+            ix.project_of_thumb("renderabcdefabcdefabcdef.png").unwrap().as_deref(),
+            Some("r1:A")
+        );
+    }
+
+    #[test]
     fn v2_migrates_in_place_keeping_thumbs() {
         let t = tempfile::tempdir().unwrap();
         let p = t.path().join("index.sqlite");
@@ -1143,5 +1181,45 @@ mod tests {
         // opening again is a no-op
         drop(ix);
         assert!(Index::open(&p).is_ok());
+    }
+    /// Version 5 existed in two shapes (see `init`); either one must come out as v6 with the
+    /// packed column present and embedded previews forgotten, rendered ones kept.
+    #[test]
+    fn both_shapes_of_v5_end_up_the_same() {
+        for with_packed_column in [false, true] {
+            let t = tempfile::tempdir().unwrap();
+            let p = t.path().join("index.sqlite");
+            {
+                let c = Connection::open(&p).unwrap();
+                let schema = if with_packed_column {
+                    SCHEMA.to_string()
+                } else {
+                    SCHEMA.replace(
+                        "thumb_source TEXT, thumb_kind TEXT, packed TEXT",
+                        "thumb_source TEXT, thumb_kind TEXT",
+                    )
+                };
+                c.execute_batch(&schema).unwrap();
+                c.execute_batch("PRAGMA user_version = 5;").unwrap();
+                for (id, kind) in [("r1:A", "render"), ("r1:B", "embedded")] {
+                    c.execute("INSERT INTO projects (id, root_id, rel_path, title, total_bytes, file_count, model_count, modified, added, sidecar_state, warnings, thumb_source, thumb_kind) VALUES (?1,'r1',?1,'t',10,1,1,'2026-01-01T00:00:00Z','2026-01-01T00:00:00Z','missing','[]','a.3mf',?2)", params![id, kind]).unwrap();
+                    c.execute("INSERT INTO thumbs (project_id, source_rel, source_size, source_mtime, key, updated) VALUES (?1,'a.3mf',10,'2026-01-01T00:00:00Z',?2,'2026-01-02T00:00:00Z')", params![id, format!("{kind}abcdefabcdefabcdef.png")]).unwrap();
+                }
+            }
+            let ix = Index::open(&p).unwrap();
+            let version: i64 = ix.conn.query_row("PRAGMA user_version", [], |r| r.get(0)).unwrap();
+            assert_eq!(version, SCHEMA_VERSION, "packed column before: {with_packed_column}");
+            assert_eq!(
+                ix.list(&ListQuery::default(), None).unwrap().len(),
+                2,
+                "the packed column can be read"
+            );
+            assert_eq!(ix.project("r1:A").unwrap().unwrap().packed, None);
+            assert_eq!(
+                ix.project_of_thumb("renderabcdefabcdefabcdef.png").unwrap().as_deref(),
+                Some("r1:A")
+            );
+            assert_eq!(ix.project_of_thumb("embeddedabcdefabcdefabcdef.png").unwrap(), None);
+        }
     }
 }

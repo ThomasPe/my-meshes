@@ -13,6 +13,8 @@ import type { ThumbWorkerResponse } from '@/workers/thumb-worker';
 
 /** Where "use this view as preview" saves its picture inside a project (engine `VIEW_PREVIEW_REL`). */
 export const VIEW_PREVIEW_REL = '.meshkeep/preview.png';
+/** The cover picture downloaded from the model page (engine `PAGE_COVER_STEM`). */
+export const isPageCover = (rel: string | null | undefined) => !!rel && /^\.meshkeep\/cover\.(jpg|png|webp)$/.test(rel);
 
 export interface ThumbState {
   running: boolean;
