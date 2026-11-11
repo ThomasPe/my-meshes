@@ -1329,6 +1329,54 @@ test('context menu: acts on the selection when the clicked card is part of it, e
   await expect(page.getByText('2 projects moved to 3D Models / Projects / Desk')).toBeVisible();
 });
 
+test('context menu: keys pressed in the open menu stay there, Escape only closes it', async ({ page }) => {
+  // A menu that is still in the page while it closes is what let its keys through to the
+  // library, which then cleared the selection. Without a closing animation that only happens
+  // when Escape comes before the opening animation has started, a matter of milliseconds that
+  // made this fail now and then. A closing animation makes it the rule.
+  await page.addStyleTag({ content: '@keyframes test-menu-out { to { opacity: 0 } } [data-testid=project-menu][data-state=closed] { animation: test-menu-out 250ms }' });
+  const menu = page.getByTestId('project-menu');
+  const dialogs = page.getByRole('dialog');
+
+  for (const view of ['grid', 'list'] as const) {
+    await page.getByTestId(`view-${view}`).click();
+    const item = view === 'grid'
+      ? page.getByTestId('project-card').filter({ hasText: 'Cable Clips' })
+      : page.getByTestId('project-row').filter({ hasText: 'Cable Clips' }).getByText('Cable Clips', { exact: true });
+    const selected = page.locator(`[data-testid="project-${view === 'grid' ? 'card' : 'row'}"][aria-selected="true"]`);
+
+    // Escape closes the menu, the project it was opened on stays selected
+    await item.click({ button: 'right' });
+    await expect(menu.getByTestId('menu-rename')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(menu).toHaveAttribute('data-state', 'closed');
+    await expect(menu, `${view}: menu closes`).toHaveCount(0);
+    await expect(selected, `${view}: selection survives closing the menu`).toHaveCount(1);
+    await expect(selected).toContainText('Cable Clips');
+
+    // the library's own shortcuts do not fire from inside the menu either
+    await item.click({ button: 'right' });
+    await expect(menu.getByTestId('menu-rename')).toBeVisible();
+    await page.keyboard.press('Delete');
+    await page.keyboard.press('F2');
+    await page.keyboard.press('Escape');
+    await expect(menu).toHaveCount(0);
+    await expect(dialogs, `${view}: no delete or rename dialog`).toHaveCount(0);
+    await expect(selected).toHaveCount(1);
+
+    // with no menu open they work as before: F2 renames, Escape clears the selection
+    await item.click();
+    await page.keyboard.press('F2');
+    await expect(page.getByTestId('rename-dialog')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('rename-dialog')).toBeHidden();
+    await expect(selected).toHaveCount(1);
+    await item.click();
+    await page.keyboard.press('Escape');
+    await expect(selected, `${view}: Escape clears the selection`).toHaveCount(0);
+  }
+});
+
 test('tree: a project row offers "Move to…" in its context menu', async ({ page }) => {
   const desk = page.locator('[data-tree-row][data-label="Desk"]');
   await desk.getByRole('button', { name: 'expand' }).click();
