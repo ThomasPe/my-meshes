@@ -117,7 +117,9 @@ export function LibraryPage({ scanning, onScanEnd }: { scanning: ScanState; onSc
       {dialogs}
       <CollectionDialogs onCreated={(id, addIds) => { if (addIds?.length) addTo.mutate({ id, projectIds: addIds }, { onError: reportError }); }} />
       <Panel id="main" minSize={360} className="min-w-0">
-      <main className="grid h-full min-h-0 grid-rows-[auto_minmax(0,1fr)]" onKeyDown={onKey}>
+      {/* the one column never grows past the panel: a wide child (the list's table) scrolls
+          inside itself instead of pushing the toolbar and the whole panel sideways (#64) */}
+      <main className="grid h-full min-h-0 grid-cols-[minmax(0,1fr)] grid-rows-[auto_minmax(0,1fr)]" onKeyDown={onKey}>
         <Toolbar title={filterTitle} count={special ? 0 : list.length} onRescan={activeRoot && !special ? () => void scan(activeRoot) : undefined} scanning={!!activeRoot && activeRoot in scanning} sortLocked={filter.kind === 'recent' || special} onImport={() => void pickImport()} onSaveSmart={filtered && !special && filter.kind !== 'collection' && filter.kind !== 'smart' ? saveSmart : undefined} collectionSort={filter.kind === 'collection'} />
         {filter.kind === 'creators' ? (
           <CreatorSuggestionsView />

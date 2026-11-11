@@ -22,47 +22,53 @@ interface Props {
 }
 
 const ROW = 60;
+/** Height of the column header; the rows start below it inside the same scroll container. */
+const HEAD = 34;
 
 export function ProjectList({ projects, selected, sort, onSort, onSelect, onOpen, onTag, actions }: Props) {
   const selection = useMemo(() => projects.filter((p) => selected.has(p.id)), [projects, selected]);
   const { t, i18n } = useTranslation();
   const parentRef = useRef<HTMLDivElement>(null);
-  const virt = useVirtualizer({ count: projects.length, getScrollElement: () => parentRef.current, estimateSize: () => ROW, overscan: 10 });
-  // narrow panels scroll the table sideways instead of clipping the last columns
-  const cols = 'min-w-[720px] grid-cols-[48px_minmax(180px,2fr)_minmax(100px,1fr)_minmax(110px,1.2fr)_60px_80px_92px_36px]';
+  const virt = useVirtualizer({ count: projects.length, getScrollElement: () => parentRef.current, estimateSize: () => ROW, overscan: 10, scrollMargin: HEAD });
+  // narrow panels scroll the table sideways instead of clipping the last columns; the minimum
+  // width is what the columns need at their smallest (706px) plus gaps (84px) and padding (24px),
+  // so the header and row backgrounds reach as far as their cells
+  const minWidth = 'min-w-[814px]';
+  const cols = cn(minWidth, 'grid-cols-[48px_minmax(180px,2fr)_minmax(100px,1fr)_minmax(110px,1.2fr)_60px_80px_92px_36px]');
   const Head = ({ k, label, className }: { k?: SortKey; label: string; className?: string }) => (
     <button type="button" disabled={!k} onClick={() => k && onSort(k)} className={cn('flex items-center gap-1 text-[11px] font-bold uppercase tracking-wider text-muted-foreground disabled:cursor-default', className)}>
       {label}{k && sort === k && <ArrowDown className="size-3" />}
     </button>
   );
   return (
-    <div className="flex h-full flex-col px-5 pb-6 pt-3" data-testid="project-list">
-      <div className="overflow-x-auto rounded-2xl bg-card shadow-card">
-        <div className={cn('grid items-center gap-3 border-b border-border px-3 py-2', cols)}>
+    <div className="flex h-full min-h-0 min-w-0 flex-col px-5 pb-6 pt-3" data-testid="project-list">
+      {/* One scroll container for both directions (#64): the card takes the height the panel
+          has left and the header sticks to its top. A list with its own height inside a card
+          that scrolls too gave two scrollbars side by side. */}
+      <div ref={parentRef} className="min-h-0 overflow-auto rounded-2xl bg-card shadow-card" style={{ scrollPaddingTop: HEAD }} data-testid="project-list-scroll">
+        <div className={cn('sticky top-0 z-10 grid items-center gap-3 border-b border-border bg-card px-3', cols)} style={{ height: HEAD }} data-testid="project-list-head">
           <span /><Head k="title" label={t('library.columns.title')} /><Head k="creator" label={t('library.columns.creator')} /><Head label={t('library.columns.tags')} /><Head label={t('library.columns.files')} className="justify-end" /><Head k="size" label={t('library.columns.size')} className="justify-end" /><Head k="modified" label={t('library.columns.modified')} className="justify-end" /><span />
         </div>
-        <div ref={parentRef} className="max-h-[calc(100vh-200px)] overflow-auto">
-          <div style={{ height: virt.getTotalSize(), position: 'relative' }}>
-            {virt.getVirtualItems().map((row) => {
-              const p = projects[row.index]!;
-              const sel = selected.has(p.id);
-              return (
-                <ProjectMenu key={p.id} project={p} selection={selection} actions={actions}>
-                <div data-testid="project-row" data-id={p.id} aria-selected={sel} tabIndex={0} onClick={(e) => onSelect(p.id, e)} onContextMenu={(e) => { if (!sel) onSelect(p.id, e); }} onDoubleClick={() => onOpen(p.id)} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(p.id); }}
-                  className={cn('absolute left-0 top-0 grid w-full cursor-default items-center gap-3 border-b border-border px-3 text-sm outline-none hover:bg-secondary/60 focus-visible:bg-secondary', cols, sel && 'bg-accent hover:bg-accent')} style={{ height: ROW, transform: `translateY(${row.start}px)` }}>
-                  <Thumb thumb={p.thumb} projectId={p.id} className="size-10 overflow-hidden rounded-[10px]" />
-                  <div className="min-w-0"><div className="flex min-w-0 items-center gap-1 font-bold"><Truncated text={p.title} />{p.offline && <Badge variant="outline" className="shrink-0">{t('library.offline')}</Badge>}</div><Truncated as="div" text={p.rel_path || '/'} className="font-mono text-[11px] text-muted-foreground" /></div>
-                  {p.creator ? <Truncated as="div" text={p.creator} className="font-semibold text-secondary-foreground" /> : <div className="text-muted-foreground">—</div>}
-                  <div className="flex flex-wrap gap-1 overflow-hidden">{p.tags.slice(0, 4).map((tag) => <button key={tag} type="button" onClick={(e) => { e.stopPropagation(); onTag(tag); }} className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold hover:bg-accent hover:text-accent-foreground">{tag}</button>)}</div>
-                  <div className="text-right text-muted-foreground tabular">{p.file_count}</div>
-                  <div className="text-right text-muted-foreground tabular">{formatBytes(p.total_bytes, i18n.language)}</div>
-                  <div className="text-right text-muted-foreground tabular">{formatDate(p.modified, i18n.language)}</div>
-                  <button type="button" aria-pressed={p.favorite} aria-label={p.favorite ? t('favorites.remove') : t('favorites.add')} onClick={(e) => { e.stopPropagation(); actions.toggleFavorite(p); }} onDoubleClick={(e) => e.stopPropagation()} className={cn('grid size-7 place-items-center justify-self-end rounded-full text-muted-foreground/60 hover:text-warning', p.favorite && 'text-warning')}><Star className={cn('size-4', p.favorite && 'fill-current')} /></button>
-                </div>
-                </ProjectMenu>
-              );
-            })}
-          </div>
+        <div className={cn('relative', minWidth)} style={{ height: virt.getTotalSize() }}>
+          {virt.getVirtualItems().map((row) => {
+            const p = projects[row.index]!;
+            const sel = selected.has(p.id);
+            return (
+              <ProjectMenu key={p.id} project={p} selection={selection} actions={actions}>
+              <div data-testid="project-row" data-id={p.id} aria-selected={sel} tabIndex={0} onClick={(e) => onSelect(p.id, e)} onContextMenu={(e) => { if (!sel) onSelect(p.id, e); }} onDoubleClick={() => onOpen(p.id)} onKeyDown={(e) => { if (e.key === 'Enter') onOpen(p.id); }}
+                className={cn('absolute left-0 top-0 grid w-full cursor-default items-center gap-3 border-b border-border px-3 text-sm outline-none hover:bg-secondary/60 focus-visible:bg-secondary', cols, sel && 'bg-accent hover:bg-accent')} style={{ height: ROW, transform: `translateY(${row.start - HEAD}px)` }}>
+                <Thumb thumb={p.thumb} projectId={p.id} className="size-10 overflow-hidden rounded-[10px]" />
+                <div className="min-w-0"><div className="flex min-w-0 items-center gap-1 font-bold"><Truncated text={p.title} />{p.offline && <Badge variant="outline" className="shrink-0">{t('library.offline')}</Badge>}</div><Truncated as="div" text={p.rel_path || '/'} className="font-mono text-[11px] text-muted-foreground" /></div>
+                {p.creator ? <Truncated as="div" text={p.creator} className="font-semibold text-secondary-foreground" /> : <div className="text-muted-foreground">—</div>}
+                <div className="flex flex-wrap gap-1 overflow-hidden">{p.tags.slice(0, 4).map((tag) => <button key={tag} type="button" onClick={(e) => { e.stopPropagation(); onTag(tag); }} className="rounded-full bg-secondary px-2 py-0.5 text-xs font-semibold hover:bg-accent hover:text-accent-foreground">{tag}</button>)}</div>
+                <div className="text-right text-muted-foreground tabular">{p.file_count}</div>
+                <div className="text-right text-muted-foreground tabular">{formatBytes(p.total_bytes, i18n.language)}</div>
+                <div className="text-right text-muted-foreground tabular">{formatDate(p.modified, i18n.language)}</div>
+                <button type="button" aria-pressed={p.favorite} aria-label={p.favorite ? t('favorites.remove') : t('favorites.add')} onClick={(e) => { e.stopPropagation(); actions.toggleFavorite(p); }} onDoubleClick={(e) => e.stopPropagation()} className={cn('grid size-7 place-items-center justify-self-end rounded-full text-muted-foreground/60 hover:text-warning', p.favorite && 'text-warning')}><Star className={cn('size-4', p.favorite && 'fill-current')} /></button>
+              </div>
+              </ProjectMenu>
+            );
+          })}
         </div>
       </div>
     </div>
