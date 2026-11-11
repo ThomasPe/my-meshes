@@ -16,9 +16,12 @@ settings page shows "Updates arrive through the Microsoft Store" for Store build
 
 ## Dev channel (fast local iteration)
 
-`.github/workflows/dev-channel.yml` turns every push to `main` or a working branch
-(`claude/**`, `feat/**`, `fix/**`) into installable, self-updating Windows and macOS
-builds without a local toolchain. One job per platform, both from the same commit:
+`.github/workflows/dev-channel.yml` turns every push to `main` into installable,
+self-updating Windows and macOS builds without a local toolchain. Working branches
+(`claude/**`, `feat/**`, `fix/**`) run CI only: while they published too, the channel
+flipped between the states of branches worked on side by side, and a build with an older
+index schema discarded the newer index. A branch build can be published on purpose with
+"Run workflow" on that branch. One job per platform, both from the same commit:
 
 1. Builds with `--features updater,devtools` and the dev overlay
    (`src-tauri/tauri.updater.dev.conf.json`: dev endpoint, channel `dev`), versioned

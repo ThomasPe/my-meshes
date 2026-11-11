@@ -1,8 +1,13 @@
 name: Dev channel
 
-# Every push to main or a working branch becomes an installable, self-updating build for
-# Windows and macOS on the rolling pre-release tagged `dev` (the newest push wins; a build
-# in progress is cancelled). Installed dev builds check that feed on startup (APP-9).
+# Every push to main becomes an installable, self-updating build for Windows and macOS on
+# the rolling pre-release tagged `dev` (the newest push wins; a build in progress is
+# cancelled). Installed dev builds check that feed on startup (APP-9).
+#
+# Working branches do not publish (since 2026-11-11). With several branches in flight the
+# channel flipped between their states, and a build with an older index schema throws the
+# newer index and its previews away. Branches run CI only; what reaches testers is what
+# was merged. A branch build can still be published on purpose with "Run workflow".
 # Each platform publishes its own feed (`latest-<target>.json`) and only touches its own
 # assets, so a failed macOS build leaves the Windows feed intact and vice versa. The
 # release is only touched after the build succeeded, and the feed is replaced last, so
@@ -10,7 +15,7 @@ name: Dev channel
 # notarized; the release notes tell testers how to open it (docs/store/README.md).
 on:
   push:
-    branches: ['main', 'claude/**', 'feat/**', 'fix/**']
+    branches: ['main']
     paths-ignore: ['docs/**', 'spike/**', 'site/**', '*.md']
   workflow_dispatch:
 
