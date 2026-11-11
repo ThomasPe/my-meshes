@@ -4,27 +4,74 @@ import { useTranslation } from 'react-i18next';
 import * as THREE from 'three';
 import { OrbitControls } from 'three/examples/jsm/controls/OrbitControls.js';
 import { Button } from '@/components/ui/button';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { getBackend } from '@/lib/backend';
 import { diag } from '@/lib/diag';
+import { FileThumb } from '@/features/project/FileThumb';
 import { useChooseThumbnail } from '@/features/project/useChooseThumbnail';
 import { isAppError, type FileEntry, type Project } from '@/lib/types';
 import { parseModel, PREVIEWABLE } from '@/lib/mesh';
 import { srgbToLinear } from '@/lib/mesh/types';
+import type { FileThumbListing } from '@/lib/thumbs/useFileThumb';
+import { cn } from '@/lib/utils';
 import MeshWorker from '@/workers/mesh-worker?worker';
 import type { MeshWorkerMessage } from '@/workers/mesh-worker';
 
-/** Three.js viewport for one model file. Loads bytes through the backend, parses in a worker, renders on demand. */
-export function Viewer({ project, files, offline }: { project: Project; files: FileEntry[]; offline: boolean }) {
+interface Props {
+  project: Project;
+  files: FileEntry[];
+  offline: boolean;
+  /** The model the page wants on screen; `null` (or a file that is gone) shows the first one. */
+  selected: string | null;
+  onSelect: (rel: string) => void;
+  listing: FileThumbListing;
+}
+
+/** Three.js viewport for one model file, with the project's models as a strip of previews
+ * under it. Loads bytes through the backend, parses in a worker, renders on demand. */
+export function Viewer({ project, files, offline, selected, onSelect, listing }: Props) {
   const { t } = useTranslation();
   const projectId = project.id;
   const choose = useChooseThumbnail(project);
   const models = files.filter((f) => f.kind === 'model');
-  const firstModel = models[0]?.rel_path ?? '';
-  const [current, setCurrent] = useState(firstModel);
-  // #53: the page keeps this component when it switches to a project that is already
-  // cached, so the chosen file must follow the project or the old model stays on screen
-  useEffect(() => { setCurrent(firstModel); }, [projectId, firstModel]);
+  // #53: the choice belongs to the page and is kept per project there, so a project that is
+  // opened from the cache never shows the model of the one before it
+  const current = selected && models.some((m) => m.rel_path === selected) ? selected : models[0]?.rel_path ?? '';
+  const currentFile = models.find((m) => m.rel_path === current);
+  const stripRef = useRef<HTMLDivElement>(null);
+  const focusChosen = useRef(false);
+  // keeps the chosen file in sight; the strip is scrolled by hand so the page never jumps
+  useEffect(() => {
+    const strip = stripRef.current;
+    const el = strip?.querySelector<HTMLElement>('[aria-selected="true"]');
+    if (!strip || !el) return;
+    const left = el.offsetLeft, right = left + el.offsetWidth;
+    if (left < strip.scrollLeft) strip.scrollLeft = left - 8;
+    else if (right > strip.scrollLeft + strip.clientWidth) strip.scrollLeft = right - strip.clientWidth + 8;
+    if (focusChosen.current) { focusChosen.current = false; el.focus({ preventScroll: true }); }
+  }, [current, models.length]);
+  // the mouse wheel moves a strip that does not fit, like in a picture gallery; at either end
+  // (and whenever everything fits) the page scrolls as usual
+  const overflowing = models.length > 1;
+  useEffect(() => {
+    const strip = stripRef.current;
+    if (!strip) return;
+    const onWheel = (e: WheelEvent) => {
+      if (e.deltaX !== 0 || e.deltaY === 0 || e.ctrlKey) return;
+      const before = strip.scrollLeft;
+      strip.scrollLeft += e.deltaY;
+      if (strip.scrollLeft !== before) e.preventDefault();
+    };
+    strip.addEventListener('wheel', onWheel, { passive: false });
+    return () => strip.removeEventListener('wheel', onWheel);
+  }, [overflowing]);
+  const onStripKey = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    const i = models.findIndex((m) => m.rel_path === current);
+    const to = e.key === 'ArrowRight' || e.key === 'ArrowDown' ? i + 1 : e.key === 'ArrowLeft' || e.key === 'ArrowUp' ? i - 1 : e.key === 'Home' ? 0 : e.key === 'End' ? models.length - 1 : null;
+    if (to === null) return;
+    e.preventDefault();
+    const next = models[Math.max(0, Math.min(models.length - 1, to))];
+    if (next && next.rel_path !== current) { focusChosen.current = true; onSelect(next.rel_path); }
+  };
   const [status, setStatus] = useState<{ kind: 'idle' | 'loading' | 'ready' | 'error' | 'unsupported'; text?: string; triangles?: number; percent?: number; detail?: string }>({ kind: 'idle' });
   const [attempt, setAttempt] = useState(0);
   const [slow, setSlow] = useState(false);
@@ -290,7 +337,9 @@ export function Viewer({ project, files, offline }: { project: Project; files: F
   };
 
   return (
-    <div className="relative h-[clamp(440px,calc(100vh-330px),1000px)] overflow-hidden rounded-2xl bg-background shadow-[inset_0_0_0_1px_var(--border)]" data-testid="viewer">
+    <div className="grid min-w-0 content-start gap-3">
+    {/* with several models the strip below stays in the window, so the viewport gives up its height */}
+    <div className={cn('relative overflow-hidden rounded-2xl bg-background shadow-[inset_0_0_0_1px_var(--border)]', models.length > 1 ? 'h-[clamp(320px,calc(100vh-440px),1000px)]' : 'h-[clamp(440px,calc(100vh-330px),1000px)]')} data-testid="viewer">
       <canvas ref={canvasRef} className="block size-full touch-none" data-file={current || undefined} />
       {models.length === 0 && <div className="absolute inset-0 grid place-items-center text-sm font-semibold text-muted-foreground">{t('project.noModels')}</div>}
       {status.kind !== 'ready' && status.kind !== 'idle' && models.length > 0 && (
@@ -302,18 +351,28 @@ export function Viewer({ project, files, offline }: { project: Project; files: F
         </div>
       )}
       <div className="absolute left-3 right-3 bottom-3 flex items-center gap-3 text-xs font-semibold text-muted-foreground">
-        {models.length > 1 && (
-          <Select value={current} onValueChange={setCurrent}>
-            <SelectTrigger size="sm" className="max-w-[min(260px,60%)] min-w-0 [&>span:first-child]:min-w-0 [&>span:first-child]:truncate" title={current} data-testid="viewer-file"><SelectValue /></SelectTrigger>
-            <SelectContent>{models.map((m) => <SelectItem key={m.rel_path} value={m.rel_path}>{m.name}</SelectItem>)}</SelectContent>
-          </Select>
-        )}
-        {models.length === 1 && <span className="max-w-[min(260px,60%)] truncate rounded-full bg-card px-3 py-1 shadow-card" title={models[0]!.name}>{models[0]!.name}</span>}
+        {currentFile && <span className="max-w-[min(260px,60%)] truncate rounded-full bg-card px-3 py-1 shadow-card" title={currentFile.rel_path} data-testid="viewer-file">{currentFile.name}</span>}
         {status.kind === 'ready' && <span data-testid="viewer-triangles">{t('project.triangles', { count: status.triangles ?? 0 })}</span>}
         <span className="ml-auto hidden sm:inline">{t('project.viewerHint')}</span>
         <Button size="icon-sm" variant="outline" onClick={() => void captureAsThumbnail()} disabled={status.kind !== 'ready' || offline || capturing} title={t('project.setViewThumbnail')} aria-label={t('project.setViewThumbnail')} data-testid="viewer-set-thumbnail"><Camera /></Button>
         <Button size="icon-sm" variant="outline" onClick={reset} title="reset"><RotateCcw /></Button>
       </div>
+    </div>
+    {/* VIEW-8: the models of the project as a strip of previews; arrow keys walk through it */}
+    {models.length > 1 && (
+      <div ref={stripRef} role="listbox" aria-orientation="horizontal" aria-label={t('project.modelStrip')} onKeyDown={onStripKey} className="relative flex gap-1.5 overflow-x-auto pb-2 [scrollbar-width:thin]" data-testid="viewer-models">
+        {models.map((m) => {
+          const chosen = m.rel_path === current;
+          return (
+            <button key={m.rel_path} type="button" role="option" aria-selected={chosen} tabIndex={chosen ? 0 : -1} title={m.rel_path} onClick={() => onSelect(m.rel_path)} data-testid="viewer-model" data-file={m.rel_path}
+              className={cn('grid w-[92px] shrink-0 gap-1 rounded-xl p-1 text-left outline-none ring-ring transition-colors hover:bg-secondary focus-visible:ring-2', chosen && 'bg-secondary')}>
+              <FileThumb projectId={projectId} file={m} listing={listing} offline={offline} className={cn('aspect-square w-full overflow-hidden rounded-lg', chosen ? 'shadow-[inset_0_0_0_2px_var(--primary)]' : 'shadow-[inset_0_0_0_1px_var(--border)]')} />
+              <span className={cn('truncate px-0.5 text-[11px] font-semibold', chosen ? 'text-foreground' : 'text-muted-foreground')}>{m.name}</span>
+            </button>
+          );
+        })}
+      </div>
+    )}
     </div>
   );
 }

@@ -206,6 +206,15 @@ submission is outside the code: Partner Center identity values, screenshots
       bounding box so wide or flat parts are no longer cut off. The project page shows the
       preview in its header, so a chosen image or captured view is confirmed in place; its
       menu offers "re-render" and "choose automatically".
+- [x] **Previews for every model file** (VIEW-8). The model picker of the project page is
+      a strip of previews under the viewer instead of a dropdown (click, arrow keys, Home
+      and End; the chosen model is kept while the page is open); the Files tab switches
+      between a list with small previews and a grid (models rendered, images as
+      themselves, other files as glyphs; the choice is remembered) and a click on a model
+      there shows it in the viewer. The engine keeps one preview per model file
+      (`file_thumbs` in the index, same cache and location setting as the project
+      previews), rendered on demand through the existing worker, one at a time. "Re-render
+      preview" covers the files of the project; orphaned PNGs are swept at start.
 - [ ] **Frameless title bar** (APP-10), if confirmed.
 
 ### Epic 9: AI assistance (ADR-0003, first slice)

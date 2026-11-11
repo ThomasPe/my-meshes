@@ -89,7 +89,19 @@ function parseInWorker(buffer: ArrayBuffer, ext: string): Promise<import('@/lib/
   });
 }
 
-async function renderModel(buffer: ArrayBuffer, ext: string): Promise<ArrayBuffer> {
+/** One rendering at a time, whoever asks (the project queue or a file tile): a model is
+ * held in memory several times over while it is parsed and drawn. */
+let lane: Promise<unknown> = Promise.resolve();
+export function exclusive<T>(job: () => Promise<T>): Promise<T> {
+  const run = lane.then(job, job);
+  lane = run.catch(() => undefined);
+  return run;
+}
+
+/** True when the error means "no rendering in this environment", not "this file is broken". */
+export const renderingGone = (e: unknown) => !!(e as { fatal?: boolean } | null)?.fatal || mode === 'none';
+
+export async function renderModel(buffer: ArrayBuffer, ext: string): Promise<ArrayBuffer> {
   const m = await detectMode();
   if (m === 'worker') {
     const id = nextId++;
@@ -162,7 +174,7 @@ export async function kickThumbQueue(): Promise<void> {
       let progressed = false;
       for (const job of jobs) {
         try {
-          await runJob(job);
+          await exclusive(() => runJob(job));
           progressed = true;
         } catch (e) {
           const msg = e instanceof Error ? e.message : String(e);

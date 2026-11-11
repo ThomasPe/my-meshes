@@ -14,6 +14,9 @@ pub struct ThreeMfInfo {
     pub slicer: Option<String>,
     /// Zip entry name of the embedded preview image (PNG), if any.
     pub thumbnail_entry: Option<String>,
+    /// The picture that shows this file rather than the model page: the slicer's rendering
+    /// of the first plate where there is one, else the same entry as `thumbnail_entry`.
+    pub plate_entry: Option<String>,
 }
 
 // Bambu Studio projects from MakerWorld carry the model page's cover photo (680 x 510, and a
@@ -23,6 +26,15 @@ const THUMB_CANDIDATES: &[&str] = &[
     "Auxiliaries/.thumbnails/thumbnail_3mf.png",
     "Metadata/thumbnail.png",
     "Metadata/plate_1.png",
+    "Metadata/Thumbnail.png",
+    "Thumbnails/thumbnail.png",
+];
+
+// For the preview of one file among several (VIEW-8) the order is the other way round: the
+// slicer's rendering shows what is in the file, the cover photo is the same for all of them.
+const PLATE_CANDIDATES: &[&str] = &[
+    "Metadata/plate_1.png",
+    "Metadata/thumbnail.png",
     "Metadata/Thumbnail.png",
     "Thumbnails/thumbnail.png",
 ];
@@ -127,7 +139,16 @@ pub fn classify(names: &[String]) -> ThreeMfInfo {
             .find(|n| n.to_ascii_lowercase().ends_with(".png") && n.to_ascii_lowercase().contains("thumb"))
             .cloned()
     });
-    ThreeMfInfo { slicer, thumbnail_entry }
+    let plate_entry = PLATE_CANDIDATES
+        .iter()
+        .find(|c| has(c))
+        .map(|c| c.to_string())
+        .or_else(|| thumbnail_entry.clone());
+    ThreeMfInfo {
+        slicer,
+        thumbnail_entry,
+        plate_entry,
+    }
 }
 
 /// Reads the first `max` bytes of an entry (the model XML can be huge; its metadata sits at
@@ -253,6 +274,10 @@ pub(crate) mod tests {
             info.thumbnail_entry.as_deref(),
             Some("Auxiliaries/.thumbnails/thumbnail_middle.png")
         );
+        // the preview of the file itself is the slicer's rendering, not the page's photo
+        assert_eq!(info.plate_entry.as_deref(), Some("Metadata/plate_1.png"));
+        let cover_only = classify(&names(&["Auxiliaries/.thumbnails/thumbnail_3mf.png"]));
+        assert_eq!(cover_only.plate_entry.as_deref(), Some("Auxiliaries/.thumbnails/thumbnail_3mf.png"));
 
         let small_only = classify(&names(&["Auxiliaries/.thumbnails/thumbnail_3mf.png", "Metadata/plate_1.png"]));
         assert_eq!(

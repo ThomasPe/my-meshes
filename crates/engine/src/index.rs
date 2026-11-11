@@ -2,13 +2,14 @@
 //! `Index::rebuild_root` replaces a root's rows wholesale from a scan, and a schema bump
 //! drops and recreates everything (the next scan refills it).
 //!
-//! The one table that is *not* rebuilt from a scan is `thumbs`: it remembers which cached
-//! PNG belongs to which project and from which source file state it was made.
+//! The tables that are *not* rebuilt from a scan are `thumbs` and `file_thumbs`: they
+//! remember which cached PNG belongs to which project (or to which model file of it) and
+//! from which source file state it was made.
 
 use crate::error::Result;
 use crate::model::{
-    FacetCount, Facets, FileEntry, FileKind, FolderNode, ListQuery, MissingField, Project, ProjectSummary, SidecarState, SortKey, TagCount,
-    ThumbJob, ThumbSource, ThumbStats,
+    FacetCount, Facets, FileEntry, FileKind, FileThumb, FolderNode, ListQuery, MissingField, Project, ProjectSummary, SidecarState,
+    SortKey, TagCount, ThumbJob, ThumbSource, ThumbStats,
 };
 use crate::thumbs;
 use rusqlite::{params, Connection, OptionalExtension};
@@ -54,6 +55,11 @@ CREATE TABLE IF NOT EXISTS thumbs (
   project_id TEXT PRIMARY KEY, source_rel TEXT NOT NULL, source_size INTEGER NOT NULL, source_mtime TEXT NOT NULL,
   key TEXT, error TEXT, updated TEXT NOT NULL
 );
+CREATE TABLE IF NOT EXISTS file_thumbs (
+  project_id TEXT NOT NULL, rel_path TEXT NOT NULL, source_size INTEGER NOT NULL, source_mtime TEXT NOT NULL,
+  key TEXT, error TEXT, updated TEXT NOT NULL,
+  PRIMARY KEY (project_id, rel_path)
+);
 CREATE TABLE IF NOT EXISTS file_hashes (
   project_id TEXT NOT NULL, rel_path TEXT NOT NULL, size INTEGER NOT NULL, modified TEXT NOT NULL, sha256 TEXT NOT NULL,
   PRIMARY KEY (project_id, rel_path)
@@ -63,6 +69,7 @@ CREATE TABLE IF NOT EXISTS file_hashes (
 const DROP: &str = r#"
 DROP TABLE IF EXISTS projects_fts; DROP TABLE IF EXISTS tags; DROP TABLE IF EXISTS files;
 DROP TABLE IF EXISTS projects; DROP TABLE IF EXISTS thumbs; DROP TABLE IF EXISTS meta; DROP TABLE IF EXISTS file_hashes;
+DROP TABLE IF EXISTS file_thumbs;
 "#;
 
 /// The thumbnail is current when its source file still has the recorded size and mtime.
@@ -113,6 +120,15 @@ fn thumb_kind_parse(s: &str) -> ThumbSource {
         "embedded" => ThumbSource::Embedded,
         _ => ThumbSource::Render,
     }
+}
+
+/// Size and time of an indexed model file, as a per-file preview is recorded against.
+#[derive(Debug, Clone)]
+pub struct FileState {
+    pub size: u64,
+    pub modified: String,
+    /// A 3MF on disk with a picture inside.
+    pub embedded: bool,
 }
 
 /// Source file state a thumbnail was (or would be) made from.
@@ -204,6 +220,7 @@ impl Index {
         self.conn.execute("DELETE FROM projects_fts WHERE id = ?1", params![id])?;
         self.conn.execute("DELETE FROM projects WHERE id = ?1", params![id])?;
         self.conn.execute("DELETE FROM thumbs WHERE project_id = ?1", params![id])?;
+        self.conn.execute("DELETE FROM file_thumbs WHERE project_id = ?1", params![id])?;
         Ok(())
     }
 
@@ -294,6 +311,10 @@ impl Index {
         )?;
         self.conn.execute(
             "DELETE FROM thumbs WHERE project_id IN (SELECT id FROM projects WHERE root_id = ?1)",
+            params![root_id],
+        )?;
+        self.conn.execute(
+            "DELETE FROM file_thumbs WHERE project_id IN (SELECT id FROM projects WHERE root_id = ?1)",
             params![root_id],
         )?;
         self.conn.execute("DELETE FROM projects WHERE root_id = ?1", params![root_id])?;
@@ -726,12 +747,143 @@ impl Index {
         Ok(())
     }
 
-    /// The project a cached thumbnail belongs to (for `ThumbLocation::Project` lookups).
+    /// The project a cached thumbnail belongs to (for `ThumbLocation::Project` lookups),
+    /// whether it is the project's own preview or one of its files'.
     pub fn project_of_thumb(&self, key: &str) -> Result<Option<String>> {
         Ok(self
             .conn
-            .query_row("SELECT project_id FROM thumbs WHERE key = ?1", params![key], |r| r.get(0))
+            .query_row(
+                "SELECT project_id FROM thumbs WHERE key = ?1 UNION ALL SELECT project_id FROM file_thumbs WHERE key = ?1 LIMIT 1",
+                params![key],
+                |r| r.get(0),
+            )
             .optional()?)
+    }
+
+    // ---- previews of single model files (VIEW-8) ----------------------------------------
+
+    /// What the index knows of one model file: size, modified stamp and whether it is a 3MF
+    /// with a picture inside. `None` when the project has no such model file.
+    pub fn model_file_state(&self, project_id: &str, rel: &str) -> Result<Option<FileState>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT size, modified, embedded_thumbnail FROM files WHERE project_id = ?1 AND rel_path = ?2 AND kind = 'model'",
+                params![project_id, rel],
+                |r| {
+                    Ok(FileState {
+                        size: r.get::<_, i64>(0)? as u64,
+                        modified: r.get(1)?,
+                        embedded: r.get::<_, i32>(2)? != 0,
+                    })
+                },
+            )
+            .optional()?)
+    }
+
+    /// The previews of a project's model files that are current (the file still has the size
+    /// and time the preview or the failure was recorded for). The project's own preview
+    /// stands in for the file it was rendered from, so that file is not rendered twice.
+    pub fn file_thumbs(&self, project_id: &str) -> Result<Vec<FileThumb>> {
+        let mut st = self.conn.prepare_cached(
+            "SELECT f.rel_path, ft.key, ft.error FROM files f JOIN file_thumbs ft ON ft.project_id = f.project_id AND ft.rel_path = f.rel_path
+             WHERE f.project_id = ?1 AND f.size = ft.source_size AND f.modified = ft.source_mtime ORDER BY f.rel_path",
+        )?;
+        let mut out = st
+            .query_map(params![project_id], |r| {
+                let key: Option<String> = r.get(1)?;
+                let failed = key.is_none() && r.get::<_, Option<String>>(2)?.is_some();
+                Ok(FileThumb {
+                    rel_path: r.get(0)?,
+                    key,
+                    failed,
+                })
+            })?
+            .collect::<std::result::Result<Vec<_>, _>>()?;
+        let own: Option<(String, String)> = self
+            .conn
+            .query_row(
+                &format!(
+                    "SELECT p.thumb_source, t.key FROM projects p{THUMB_JOIN} WHERE p.id = ?1 AND p.thumb_kind = 'render' AND t.key IS NOT NULL AND {THUMB_VALID}"
+                ),
+                params![project_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .optional()?;
+        if let Some((rel, key)) = own {
+            match out.iter_mut().find(|t| t.rel_path == rel) {
+                Some(t) if t.key.is_none() => {
+                    t.key = Some(key);
+                    t.failed = false;
+                }
+                Some(_) => {}
+                None => out.push(FileThumb {
+                    rel_path: rel,
+                    key: Some(key),
+                    failed: false,
+                }),
+            }
+            out.sort_by(|a, b| a.rel_path.cmp(&b.rel_path));
+        }
+        Ok(out)
+    }
+
+    /// Records a finished (key) or failed (error) preview of one model file.
+    pub fn set_file_thumb(&mut self, project_id: &str, rel: &str, state: &FileState, key: Option<&str>, error: Option<&str>) -> Result<()> {
+        self.conn.execute(
+            "INSERT INTO file_thumbs (project_id, rel_path, source_size, source_mtime, key, error, updated) VALUES (?1,?2,?3,?4,?5,?6,?7)
+             ON CONFLICT(project_id, rel_path) DO UPDATE SET source_size=excluded.source_size, source_mtime=excluded.source_mtime, key=excluded.key, error=excluded.error, updated=excluded.updated",
+            params![project_id, rel, state.size as i64, state.modified, key, error, ts(&OffsetDateTime::now_utc())],
+        )?;
+        Ok(())
+    }
+
+    /// The stored key of one file's preview, current or not.
+    pub fn file_thumb_key(&self, project_id: &str, rel: &str) -> Result<Option<String>> {
+        Ok(self
+            .conn
+            .query_row(
+                "SELECT key FROM file_thumbs WHERE project_id = ?1 AND rel_path = ?2 AND key IS NOT NULL",
+                params![project_id, rel],
+                |r| r.get(0),
+            )
+            .optional()?)
+    }
+
+    /// Forgets the previews of files the project no longer has (deleted, renamed, packed or
+    /// unpacked) and returns the keys of their PNGs, for the engine to remove.
+    pub fn prune_file_thumbs(&mut self, project_id: &str) -> Result<Vec<String>> {
+        const GONE: &str = "project_id = ?1 AND rel_path NOT IN (SELECT rel_path FROM files WHERE project_id = ?1 AND kind = 'model')";
+        let keys = self
+            .conn
+            .prepare_cached(&format!("SELECT key FROM file_thumbs WHERE {GONE} AND key IS NOT NULL"))?
+            .query_map(params![project_id], |r| r.get(0))?
+            .collect::<std::result::Result<Vec<String>, _>>()?;
+        self.conn
+            .execute(&format!("DELETE FROM file_thumbs WHERE {GONE}"), params![project_id])?;
+        Ok(keys)
+    }
+
+    /// Forgets every file preview of one project and returns the keys of their PNGs.
+    pub fn clear_file_thumbs(&mut self, project_id: &str) -> Result<Vec<String>> {
+        let keys = self
+            .conn
+            .prepare_cached("SELECT key FROM file_thumbs WHERE project_id = ?1 AND key IS NOT NULL")?
+            .query_map(params![project_id], |r| r.get(0))?
+            .collect::<std::result::Result<Vec<String>, _>>()?;
+        self.conn
+            .execute("DELETE FROM file_thumbs WHERE project_id = ?1", params![project_id])?;
+        Ok(keys)
+    }
+
+    pub fn rename_file_thumbs(&mut self, old_id: &str, new_id: &str) -> Result<()> {
+        self.conn
+            .execute("DELETE FROM file_thumbs WHERE project_id = ?1", params![new_id])?;
+        self.conn.execute(
+            "UPDATE file_thumbs SET project_id = ?2 WHERE project_id = ?1",
+            params![old_id, new_id],
+        )?;
+        Ok(())
     }
 
     // ---- content hashes (duplicate detection, LIB-8) -----------------------------------
@@ -797,9 +949,12 @@ impl Index {
         Ok(())
     }
 
-    /// Every stored (project, key) pair, for cache maintenance.
+    /// Every stored (project, key) pair, previews of projects and of single files alike, for
+    /// cache maintenance.
     pub fn thumb_keys(&self) -> Result<Vec<(String, String)>> {
-        let mut st = self.conn.prepare("SELECT project_id, key FROM thumbs WHERE key IS NOT NULL")?;
+        let mut st = self.conn.prepare(
+            "SELECT project_id, key FROM thumbs WHERE key IS NOT NULL UNION ALL SELECT project_id, key FROM file_thumbs WHERE key IS NOT NULL",
+        )?;
         let rows = st
             .query_map([], |r| Ok((r.get(0)?, r.get(1)?)))?
             .collect::<std::result::Result<Vec<_>, _>>()?;
@@ -834,6 +989,7 @@ impl Index {
     /// Clears every thumbnail record (the PNG files are removed by the engine).
     pub fn clear_thumbs(&mut self) -> Result<()> {
         self.conn.execute("DELETE FROM thumbs", [])?;
+        self.conn.execute("DELETE FROM file_thumbs", [])?;
         Ok(())
     }
 }

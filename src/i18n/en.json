@@ -235,7 +235,10 @@
     "thumbnailSet": "Preview chosen; rendering it now…",
     "thumbnailAuto": "Preview is chosen automatically again",
     "packedHint": "Files inside {{archive}} are read straight from the archive and can be opened (a copy is made for the other program). To change or remove single files, unpack the project.",
-    "packedNoDelete": "Inside the packed archive: unpack the project first"
+    "packedNoDelete": "Inside the packed archive: unpack the project first",
+    "modelStrip": "Models of this project",
+    "showInViewer": "Show in the viewer",
+    "filesView": "View of the files"
   },
   "settings": {
     "title": "Settings",

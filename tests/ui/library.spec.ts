@@ -707,8 +707,12 @@ test('project page uses the whole window on large screens (#52)', async ({ page 
   expect(viewer.x + viewer.width + 20 + form.width).toBeGreaterThan(pageBox.x + pageBox.width - 80);
   expect(viewer.width).toBeGreaterThan(1300);
   expect(form.width).toBeLessThanOrEqual(560);
-  // and it grows with the window height instead of staying 440 px tall
-  expect(viewer.height).toBeGreaterThan(900);
+  // and it grows with the window height instead of staying 440 px tall; with several models
+  // the strip of previews below takes its share, and the two together reach the bottom
+  expect(viewer.height).toBeGreaterThan(800);
+  const strip = (await page.getByTestId('viewer-models').boundingBox())!;
+  expect(strip.y + strip.height).toBeGreaterThan(1300 - 110);
+  expect(strip.y + strip.height).toBeLessThanOrEqual(1300);
   await page.setViewportSize({ width: 1400, height: 900 });
   expect((await page.getByTestId('viewer').boundingBox())!.height).toBeLessThan(620);
 });
@@ -998,10 +1002,12 @@ test('viewer: dragging orbits, the wheel zooms, long file names do not widen the
   await expect(page.getByTestId('viewer-file')).toBeVisible();
   const trigger = (await page.getByTestId('viewer-file').boundingBox())!;
   expect(trigger.width).toBeLessThanOrEqual(262);
-  await page.getByTestId('viewer-file').click();
-  await page.getByRole('option', { name: /Planetary_Gearbox_Complete/ }).click();
+  // the models are picked from the strip under the viewer; a long name widens neither its tile nor the label
+  const long = page.getByTestId('viewer-models').getByRole('option', { name: /Planetary_Gearbox_Complete/ });
+  await long.click();
   await expect(page.getByTestId('viewer-file')).toContainText('Planetary_Gearbox');
   expect((await page.getByTestId('viewer-file').boundingBox())!.width).toBeLessThanOrEqual(262);
+  expect((await long.boundingBox())!.width).toBeLessThanOrEqual(93);
   // the save hint sits behind an info icon now
   await page.getByTestId('save-hint').hover();
   await expect(page.getByRole('tooltip')).toContainText('automatically');
@@ -1013,11 +1019,113 @@ test('viewer: switching the model after the render loop went idle does not overf
   await page.getByTestId('project-card').filter({ hasText: 'Cable Clips' }).dblclick();
   await expect(page.getByTestId('viewer-triangles')).toBeVisible({ timeout: 30000 });
   await page.waitForTimeout(2500); // the on-demand loop stops after ~30 frames
-  await page.getByTestId('viewer-file').click();
-  await page.getByRole('option', { name: /clip_8mm/ }).click();
+  await page.getByTestId('viewer-models').getByRole('option', { name: /clip_8mm/ }).click();
   await expect(page.getByTestId('viewer-file')).toContainText('clip_8mm');
   await expect(page.getByTestId('viewer-triangles')).toBeVisible({ timeout: 30000 });
   await page.waitForTimeout(500);
+  expect(errors).toEqual([]);
+});
+
+test('project: every model has a preview, the strip under the viewer picks the model, the files tab switches between list and grid (VIEW-8)', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', (e) => errors.push(e.message));
+  // one model: nothing to pick from
+  await page.getByTestId('project-card').filter({ hasText: 'Decorative Vase' }).dblclick();
+  await expect(page.getByTestId('viewer-file')).toHaveText('vase_twist.stl');
+  await expect(page.getByTestId('viewer-models')).toHaveCount(0);
+  await page.getByTestId('back').click();
+
+  await page.getByTestId('search').fill('Robotic');
+  await page.getByTestId('project-card').filter({ hasText: 'Robotic Arm v4' }).dblclick();
+  const canvas = page.getByTestId('viewer').locator('canvas');
+  const strip = page.getByTestId('viewer-models');
+  const options = strip.getByRole('option');
+  await expect(options).toHaveCount(5);
+  await expect(options.first()).toHaveAttribute('aria-selected', 'true');
+  await expect(canvas).toHaveAttribute('data-file', 'base.stl');
+  // every model of the project gets its own picture, rendered once
+  await expect(strip.getByTestId('file-thumb-img')).toHaveCount(5, { timeout: 60_000 });
+  // the strip fits under the viewer without scrolling the page
+  const viewport = page.viewportSize()!;
+  const box = (await strip.boundingBox())!;
+  expect(box.y + box.height).toBeLessThanOrEqual(viewport.height);
+
+  // a click picks the model; the arrow keys walk through the strip
+  await strip.getByRole('option', { name: 'upper_arm.stl' }).click();
+  await expect(canvas).toHaveAttribute('data-file', 'upper_arm.stl');
+  await expect(page.getByTestId('viewer-file')).toHaveText('upper_arm.stl');
+  await expect(strip.getByRole('option', { name: 'upper_arm.stl' })).toHaveAttribute('aria-selected', 'true');
+  await expect(strip.locator('[aria-selected="true"]')).toHaveCount(1);
+  const picked = await strip.locator('[aria-selected="true"]').getAttribute('data-file');
+  await page.keyboard.press('ArrowRight');
+  await expect(strip.locator('[aria-selected="true"]')).not.toHaveAttribute('data-file', picked!);
+  await expect(strip.locator('[aria-selected="true"]')).toBeFocused();
+  await page.keyboard.press('ArrowLeft');
+  await expect(canvas).toHaveAttribute('data-file', 'upper_arm.stl');
+  await page.keyboard.press('End');
+  await expect(options.last()).toHaveAttribute('aria-selected', 'true');
+  await page.keyboard.press('Home');
+  await expect(canvas).toHaveAttribute('data-file', 'base.stl');
+
+  // files: a list with small previews by default
+  await page.getByRole('tab', { name: /Files/ }).click();
+  await expect(page.getByTestId('files')).toHaveAttribute('data-view', 'list');
+  await expect(page.getByTestId('file-row')).toHaveCount(8);
+  await expect(page.getByTestId('file-row').filter({ hasText: 'forearm.stl' }).getByTestId('file-thumb-img')).toBeVisible();
+  // ... or a grid: models as rendered, images as themselves, the rest as glyphs
+  await page.getByTestId('files-view-grid').click();
+  await expect(page.getByTestId('files')).toHaveAttribute('data-view', 'grid');
+  await expect(page.getByTestId('file-row')).toHaveCount(0);
+  const tiles = page.getByTestId('file-tile');
+  await expect(tiles).toHaveCount(8);
+  await expect(page.locator('[data-testid="file-tile"][data-kind="model"]').getByTestId('file-thumb-img')).toHaveCount(5);
+  await expect(tiles.filter({ hasText: 'assembly.jpg' }).locator('img')).toBeVisible();
+  await expect(tiles.filter({ hasText: 'BOM.pdf' }).locator('img')).toHaveCount(0);
+  await expect(tiles.filter({ hasText: 'BOM.pdf' }).getByTestId('file-show')).toHaveCount(0);
+  // nothing was rendered twice for the second view
+  const rendered = await page.evaluate(() => (window as unknown as { __mockFileThumbs?: string[] }).__mockFileThumbs ?? []);
+  expect(new Set(rendered).size).toBe(rendered.length);
+  expect(rendered.length).toBeLessThanOrEqual(5);
+  // deleting still works from a tile
+  await tiles.filter({ hasText: 'firmware.zip' }).hover();
+  await tiles.filter({ hasText: 'firmware.zip' }).getByTestId('file-delete').click();
+  await page.getByTestId('delete-file-confirm').click();
+  await expect(tiles).toHaveCount(7);
+
+  // a click on a model's preview puts it on screen in the viewer
+  await tiles.filter({ hasText: 'forearm.stl' }).getByTestId('file-show').click();
+  await expect(page.getByTestId('viewer')).toBeVisible();
+  await expect(canvas).toHaveAttribute('data-file', 'forearm.stl');
+  await expect(strip.getByRole('option', { name: 'forearm.stl' })).toHaveAttribute('aria-selected', 'true');
+
+  // the chosen view is remembered, the chosen model belongs to its project
+  await page.getByTestId('back').click();
+  await page.getByTestId('search').fill('Cable Clips');
+  await page.getByTestId('project-card').filter({ hasText: 'Cable Clips' }).dblclick();
+  await expect(canvas).toHaveAttribute('data-file', 'clip_6mm.stl');
+  await page.getByRole('tab', { name: /Files/ }).click();
+  await expect(page.getByTestId('files')).toHaveAttribute('data-view', 'grid');
+  await page.getByTestId('files-view-list').click();
+  await expect(page.getByTestId('file-row')).toHaveCount(3);
+
+  // more models than fit: the wheel moves the strip, the chosen model is scrolled into sight
+  await page.setViewportSize({ width: 600, height: 800 });
+  await page.getByTestId('back').click();
+  await page.getByTestId('search').fill('Planetary');
+  await page.getByTestId('project-card').filter({ hasText: 'Planetary Gearbox' }).dblclick();
+  await expect(strip.getByRole('option')).toHaveCount(5);
+  const scroll = () => strip.evaluate((el) => ({ left: el.scrollLeft, width: el.clientWidth, full: el.scrollWidth }));
+  expect((await scroll()).full).toBeGreaterThan((await scroll()).width);
+  await strip.hover();
+  await page.mouse.wheel(0, 200);
+  await expect.poll(async () => (await scroll()).left).toBeGreaterThan(0);
+  await strip.getByRole('option').first().focus();
+  await page.keyboard.press('End');
+  await expect(strip.getByRole('option').last()).toHaveAttribute('aria-selected', 'true');
+  const edge = (await strip.boundingBox())!;
+  await expect.poll(async () => { const b = (await strip.getByRole('option').last().boundingBox())!; return b.x + b.width; }).toBeLessThanOrEqual(edge.x + edge.width + 1);
+  await page.keyboard.press('Home');
+  await expect.poll(async () => (await scroll()).left).toBe(0);
   expect(errors).toEqual([]);
 });
 

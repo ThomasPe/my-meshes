@@ -9,10 +9,10 @@ use crate::error::{EngineError, Result};
 use crate::hash;
 use crate::hints;
 use crate::import::{self, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile};
-use crate::index::{Index, ThumbSourceState};
+use crate::index::{FileState, Index, ThumbSourceState};
 use crate::model::{
-    Facets, FileEntry, FileKind, FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, RootStatus, ScanReport, ScanSummary, Sidecar,
-    SidecarStamp, SyncMode, TagCount, ThumbJob, ThumbLocation, ThumbSource, ThumbStats,
+    Facets, FileEntry, FileKind, FileThumb, FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, RootStatus, ScanReport,
+    ScanSummary, Sidecar, SidecarStamp, SyncMode, TagCount, ThumbJob, ThumbLocation, ThumbSource, ThumbStats,
 };
 use crate::packed::{self, Located};
 use crate::roots::RootsStore;
@@ -298,6 +298,10 @@ impl Engine {
         };
         // copies of packed entries handed to other programs in the last session (LIB-9)
         let _ = std::fs::remove_dir_all(data_dir.join(OPENED_DIR));
+        // previews of projects and files that are gone since (deleted, moved, renamed)
+        if let Ok(keys) = index.thumb_keys() {
+            thumbs::sweep(data_dir, &keys.into_iter().map(|(_, key)| key).collect());
+        }
         Ok(Engine {
             data_dir: data_dir.to_path_buf(),
             roots,
@@ -1611,13 +1615,93 @@ impl Engine {
 
     /// Drops one project's thumbnail (PNG in either location, or the recorded failure) so
     /// the queue renders it again, e.g. after a framing fix or for a source that failed once.
+    /// The previews of its single files go with it.
     pub fn reset_thumbnail(&mut self, project_id: &str) -> Result<()> {
         let p = self
             .index
             .project(project_id)?
             .ok_or_else(|| EngineError::ProjectNotFound(project_id.to_string()))?;
         self.remove_thumb_files(&p)?;
+        let keys = self.index.clear_file_thumbs(project_id)?;
+        self.remove_cached_pngs(&p, &keys);
         self.index.clear_thumb(project_id)
+    }
+
+    // ---- previews of single model files (VIEW-8) -----------------------------------------
+
+    /// The current previews of a project's model files. Records of files the project no
+    /// longer has are dropped on the way, with their PNGs.
+    pub fn file_thumbs(&mut self, project_id: &str) -> Result<Vec<FileThumb>> {
+        let p = self
+            .index
+            .project(project_id)?
+            .ok_or_else(|| EngineError::ProjectNotFound(project_id.to_string()))?;
+        let gone = self.index.prune_file_thumbs(project_id)?;
+        self.remove_cached_pngs(&p, &gone);
+        self.index.file_thumbs(project_id)
+    }
+
+    fn model_file_now(&self, project_id: &str, rel: &str) -> Result<FileState> {
+        self.index
+            .model_file_state(project_id, rel)?
+            .ok_or_else(|| EngineError::NotAllowed(format!("{rel} is not a model file of {project_id}")))
+    }
+
+    /// Writes one file's preview and records it; a PNG stored under an older name (the
+    /// project was renamed since) is removed.
+    fn put_file_thumb(&mut self, project_id: &str, rel: &str, state: &FileState, png: &[u8]) -> Result<String> {
+        let key = thumbs::file_key_for(project_id, rel);
+        let dir = self.thumb_dir_for(project_id)?;
+        thumbs::write_in(&dir, &key, png)?;
+        if let Some(old) = self.index.file_thumb_key(project_id, rel)?.filter(|old| old != &key) {
+            if let Some(p) = self.index.project(project_id)? {
+                self.remove_cached_pngs(&p, &[old]);
+            }
+        }
+        self.index.set_file_thumb(project_id, rel, state, Some(&key), None)?;
+        Ok(key)
+    }
+
+    /// Stores a PNG the frontend rendered for one model file. Returns the key.
+    pub fn store_file_thumbnail(&mut self, project_id: &str, rel: &str, png: &[u8]) -> Result<String> {
+        let state = self.model_file_now(project_id, rel)?;
+        self.put_file_thumb(project_id, rel, &state, png)
+    }
+
+    /// For a 3MF with a picture inside: caches the slicer's rendering of the file. An error
+    /// (no usable entry, a 3MF inside a packed archive) tells the frontend to render instead.
+    pub fn store_embedded_file_thumbnail(&mut self, project_id: &str, rel: &str) -> Result<String> {
+        let state = self.model_file_now(project_id, rel)?;
+        let file = self.resolve_file(project_id, rel)?;
+        let entry = threemf::inspect(&file)?
+            .plate_entry
+            .ok_or_else(|| EngineError::NotAllowed(format!("{rel}: no embedded preview")))?;
+        let png = threemf::read_entry(&file, &entry)?;
+        self.put_file_thumb(project_id, rel, &state, &png)
+    }
+
+    /// Records that this file cannot be rendered as it is; not retried until it changes.
+    pub fn file_thumbnail_failed(&mut self, project_id: &str, rel: &str, reason: &str) -> Result<()> {
+        let state = self.model_file_now(project_id, rel)?;
+        self.index.set_file_thumb(project_id, rel, &state, None, Some(reason))
+    }
+
+    /// Removes cached PNGs by key from the app cache and from the project's own cache folder.
+    fn remove_cached_pngs(&self, p: &Project, keys: &[String]) {
+        if keys.is_empty() {
+            return;
+        }
+        let project_cache = self.project_dir(p).ok().map(|dir| (thumbs::project_cache_dir(&dir), dir));
+        for key in keys {
+            let _ = std::fs::remove_file(thumbs::cache_dir(&self.data_dir).join(key));
+            if let Some((cache, _)) = &project_cache {
+                let _ = std::fs::remove_file(cache.join(key));
+            }
+        }
+        if let Some((cache, dir)) = project_cache {
+            let _ = std::fs::remove_dir(&cache); // only when empty
+            let _ = std::fs::remove_dir(dir.join(".cache"));
+        }
     }
 
     /// Removes the cached PNG of a project from both locations (the index record stays).
@@ -1872,6 +1956,7 @@ impl Engine {
         let new_id = Project::make_id(&current.root_id, &new_rel);
         self.collections.rename(project_id, &new_id)?;
         self.index.rename_thumb(project_id, &new_id)?;
+        self.index.rename_file_thumbs(project_id, &new_id)?;
         self.index.rename_file_hashes(project_id, &new_id)?;
         self.index.remove_project(project_id)?;
         self.reindex_dir(&current.root_id, &new_dir)
@@ -2308,6 +2393,7 @@ impl Engine {
             let new_id = Project::make_id(dest_root, &rel);
             self.collections.rename(old_id, &new_id)?;
             self.index.rename_thumb(old_id, &new_id)?;
+            self.index.rename_file_thumbs(old_id, &new_id)?;
             self.index.rename_file_hashes(old_id, &new_id)?;
             self.index.remove_project(old_id)?;
             if old_id != project_id {
@@ -2334,6 +2420,9 @@ impl Engine {
             path: dir.clone(),
             source: e,
         })?;
+        let _ = self.remove_thumb_files(&current);
+        let keys = self.index.clear_file_thumbs(project_id)?;
+        self.remove_cached_pngs(&current, &keys);
         self.collections.forget(project_id)?;
         self.index.remove_project(project_id)?;
         Ok(())

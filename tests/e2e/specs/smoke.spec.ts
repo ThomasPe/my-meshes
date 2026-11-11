@@ -106,6 +106,28 @@ describe('Meshkeep D2 (thumbnails, favorites, rename, 3MF)', () => {
     await clearSearch();
   });
 
+  it('shows the models of a project as a strip of previews and picks one from it', async () => {
+    const dataDir = (await browser.tauri.execute(({ core }) => core.invoke('app_info')) as { dataDir: string }).dataDir;
+    const cached = () => fs.readdirSync(path.join(dataDir, 'thumbs')).filter((f) => f.endsWith('.png')).length;
+    const before = cached();
+    const card = await findCard('Gridfinity/Bins');
+    await card.click();
+    await $('[data-testid="inspector-open"]').click();
+    await $('[data-testid="project-page"]').waitForDisplayed();
+    await browser.waitUntil(async () => (await $$('[data-testid="viewer-model"]')).length === 2, { timeout: 20000, timeoutMsg: 'the strip did not list both models' });
+    // VIEW-8: each model file has its own preview; the one the project preview was rendered
+    // from reuses that picture, the other is rendered and stored by the engine
+    await browser.waitUntil(async () => (await $$('[data-testid="viewer-models"] [data-testid="file-thumb-img"]')).length === 2, { timeout: 90000, timeoutMsg: 'file previews did not appear' });
+    expect(cached()).toBeGreaterThan(before);
+    const canvas = await $('[data-testid="viewer"] canvas');
+    await $('[data-testid="viewer-model"][data-file="bin_1x2.stl"]').click();
+    await browser.waitUntil(async () => (await canvas.getAttribute('data-file')) === 'bin_1x2.stl', { timeout: 10000, timeoutMsg: 'the strip did not switch the model' });
+    await browser.waitUntil(async () => (await $$('[data-testid="viewer-triangles"]')).length > 0, { timeout: 30000, timeoutMsg: 'the picked model did not render' });
+    await browser.url(await browser.getUrl().then((u) => u.split('#')[0] + '#/library'));
+    await $('[data-testid="library"]').waitForDisplayed({ timeout: 20000 });
+    await clearSearch();
+  });
+
   it('favorites persist in collections.json and survive a rescan', async () => {
     const card = await findCard('Gridfinity/Bins');
     await card.moveTo();

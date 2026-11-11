@@ -1,4 +1,5 @@
 import { Archive, ChevronLeft, CloudOff, FolderOpen, ImageUp, PackageOpen, Pencil, RotateCcw, Star, Trash2 } from 'lucide-react';
+import { useState } from 'react';
 import { useTranslation } from 'react-i18next';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -14,6 +15,7 @@ import { useChooseThumbnail } from '@/features/project/useChooseThumbnail';
 import { formatBytes, initials } from '@/lib/format';
 import { useEmbeddedPictures, useProject, useRoots } from '@/lib/queries';
 import { navigate, routeHref } from '@/lib/router';
+import { useFileThumbListing, useFileThumbScope } from '@/lib/thumbs/useFileThumb';
 import type { ProjectSummary } from '@/lib/types';
 import { cn } from '@/lib/utils';
 
@@ -22,6 +24,12 @@ export function ProjectPage({ id }: { id: string }) {
   const project = useProject(id);
   const pictures = useEmbeddedPictures(project.data);
   useProjectImageCache(project.data?.id ?? null);
+  // VIEW-8: one listing of the file previews for the strip under the viewer and the Files tab
+  const listing = useFileThumbListing(id);
+  useFileThumbScope(id);
+  const [tab, setTab] = useState('overview');
+  // the model on screen belongs to one project; another project starts with its first model (#53)
+  const [shown, setShown] = useState<{ projectId: string; rel: string } | null>(null);
   const roots = useRoots();
   const choose = useChooseThumbnail(project.data ?? null);
   const { actions, dialogs } = useProjectActions({ onRenamed: (_old, newId) => navigate({ page: 'project', id: newId }), onDeleted: () => navigate({ page: 'library' }) });
@@ -76,7 +84,7 @@ export function ProjectPage({ id }: { id: string }) {
             <Button variant="outline" disabled={p.offline || p.rel_path === ''} onClick={() => actions.remove(summary)} data-testid="project-delete" className="text-destructive hover:text-destructive"><Trash2 />{t('actions.delete')}</Button>
           </div>
         </div>
-        <Tabs defaultValue="overview">
+        <Tabs value={tab} onValueChange={setTab}>
           <TabsList>
             <TabsTrigger value="overview">{t('project.overview')}</TabsTrigger>
             <TabsTrigger value="files">{t('project.files')} <span className="text-muted-foreground">{p.files.length}</span></TabsTrigger>
@@ -84,11 +92,11 @@ export function ProjectPage({ id }: { id: string }) {
           </TabsList>
           <TabsContent value="overview" className="mt-4">
             <div className="grid gap-5 lg:grid-cols-[minmax(0,1fr)_minmax(320px,32%)] 2xl:grid-cols-[minmax(0,1fr)_minmax(360px,520px)]">
-              <Viewer project={p} files={p.files} offline={p.offline} />
+              <Viewer project={p} files={p.files} offline={p.offline} selected={shown?.projectId === p.id ? shown.rel : null} onSelect={(rel) => setShown({ projectId: p.id, rel })} listing={listing} />
               <div className="rounded-2xl bg-card p-5 shadow-card"><MetadataForm project={p} onReload={() => void project.refetch()} /></div>
             </div>
           </TabsContent>
-          <TabsContent value="files" className="mt-4"><FilesTable projectId={p.id} files={p.files} offline={p.offline} packed={p.packed} /></TabsContent>
+          <TabsContent value="files" className="mt-4"><FilesTable projectId={p.id} files={p.files} offline={p.offline} packed={p.packed} listing={listing} onShow={(rel) => { setShown({ projectId: p.id, rel }); setTab('overview'); }} /></TabsContent>
           <TabsContent value="images" className="mt-4"><ImageGallery project={p} files={p.files} pictures={pictures.data ?? []} offline={p.offline} /></TabsContent>
         </Tabs>
       </div>

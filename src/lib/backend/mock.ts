@@ -2,7 +2,7 @@
 // the Tauri commands, including error codes, so UI tests exercise real flows.
 import type { Backend, Unlisten } from './index';
 import { generate3mf, generateObj, generateStl } from '@/lib/mesh/generate';
-import type { AppError, Collection, FacetCount, FileEntry, FileKind, ThumbLocation, FolderNode, ImportItem, ImportProgress, InboxFile, LibraryChanged, LibraryRoot, ListQuery, Project, ProjectSummary, ScanProgress, SidecarStamp, SmartCollection, TagCount, ThumbJob, UpdateMetadata, HashProgress, AiSettingsView, MetadataSuggestion, Hints, CreatorSuggestion, EnrichProgress, McpSettings, ConventionDeviation, PackProgress, PackReport, ImportReport } from '@/lib/types';
+import type { AppError, Collection, FacetCount, FileEntry, FileKind, FileThumb, ThumbLocation, FolderNode, ImportItem, ImportProgress, InboxFile, LibraryChanged, LibraryRoot, ListQuery, Project, ProjectSummary, ScanProgress, SidecarStamp, SmartCollection, TagCount, ThumbJob, UpdateMetadata, HashProgress, AiSettingsView, MetadataSuggestion, Hints, CreatorSuggestion, EnrichProgress, McpSettings, ConventionDeviation, PackProgress, PackReport, ImportReport } from '@/lib/types';
 
 const kindOf = (name: string): FileKind => {
   const ext = name.split('.').pop()?.toLowerCase() ?? '';
@@ -140,6 +140,9 @@ export function createMockBackend(): Backend {
   };
   const thumbs = new Map<string, ArrayBuffer>(); // key -> png
   const failed = new Set<string>();
+  const fileThumbs = new Map<string, { key: string | null; failed: boolean }>(); // project id + '\n' + rel path
+  const fileThumbId = (projectId: string, rel: string) => `${projectId}\n${rel}`;
+  const dropFileThumbs = (projectId: string) => { for (const [id, t] of fileThumbs) if (id.startsWith(`${projectId}\n`)) { if (t.key) thumbs.delete(t.key); fileThumbs.delete(id); } };
   const captures = new Map<string, ArrayBuffer>(); // project id -> view capture (.meshkeep/preview.png)
   const dismissedHints = new Map<string, string[]>();
   const pageCache = new Set<string>();
@@ -480,6 +483,9 @@ export function createMockBackend(): Backend {
       const i = p.files.findIndex((x) => x.rel_path === relPath);
       if (i < 0) throw err('not_found', relPath);
       p.files.splice(i, 1);
+      const gone = fileThumbs.get(fileThumbId(projectId, relPath));
+      if (gone?.key) thumbs.delete(gone.key);
+      fileThumbs.delete(fileThumbId(projectId, relPath));
       p.model_count = p.files.filter((x) => x.kind === 'model').length;
       p.total_bytes = p.files.reduce((a, x) => a + x.size, 0);
       if (p.model_count === 0 && !p.has_sidecar) {
@@ -517,6 +523,30 @@ export function createMockBackend(): Backend {
     async storeEmbeddedThumbnail(projectId) { throw err('not_allowed', `${projectId}: no embedded preview in browser mode`); },
     async thumbnailFailed(projectId) { failed.add(projectId); },
     async readThumbnail(key) { const b = thumbs.get(key); if (!b) throw err('not_found', key); return b.slice(0); },
+    // VIEW-8: one preview per model file; the project's own rendering stands in for its source file
+    async fileThumbs(projectId) {
+      const p = find(projectId);
+      const own = p.thumb ? thumbSourceOf(p) : null;
+      const out: FileThumb[] = [];
+      for (const f of p.files) {
+        if (f.kind !== 'model') continue;
+        const t = fileThumbs.get(fileThumbId(projectId, f.rel_path));
+        if (t?.key || t?.failed) out.push({ rel_path: f.rel_path, ...t });
+        else if (own?.source === 'render' && own.rel_path === f.rel_path) out.push({ rel_path: f.rel_path, key: p.thumb, failed: false });
+      }
+      return out;
+    },
+    async storeFileThumbnail(projectId, relPath, png) {
+      const p = find(projectId);
+      if (!p.files.some((x) => x.rel_path === relPath && x.kind === 'model')) throw err('not_allowed', `${relPath} is not a model file of ${projectId}`);
+      const key = `f_${`${projectId}/${relPath}`.replace(/[^a-z0-9]/gi, '_')}.png`;
+      thumbs.set(key, png);
+      fileThumbs.set(fileThumbId(projectId, relPath), { key, failed: false });
+      const w = window as unknown as { __mockFileThumbs?: string[] }; (w.__mockFileThumbs ??= []).push(relPath);
+      return key;
+    },
+    async storeEmbeddedFileThumbnail(_projectId, relPath) { throw err('not_allowed', `${relPath}: no embedded preview in browser mode`); },
+    async fileThumbnailFailed(projectId, relPath) { fileThumbs.set(fileThumbId(projectId, relPath), { key: null, failed: true }); },
     async pickImportFiles() { return ['C:\\Downloads\\Cable Clip.zip', 'C:\\Downloads\\loose_hook.stl', 'C:\\Downloads\\notes.7z']; },
     async analyzeImport(paths) {
       await delay(80);
@@ -781,10 +811,11 @@ export function createMockBackend(): Backend {
       const p = find(projectId);
       if (p.thumb) thumbs.delete(p.thumb);
       p.thumb = null; failed.delete(projectId);
+      dropFileThumbs(projectId);
       const w = window as unknown as { __mockThumbResets?: string[] }; (w.__mockThumbResets ??= []).push(projectId);
       listeners.proj.forEach((cb) => cb({ projectId }));
     },
-    async clearThumbnails() { thumbs.clear(); failed.clear(); for (const p of projects) p.thumb = null; listeners.lib.forEach((cb) => cb({ rootId: null, report: null, reason: 'thumbs_cleared' })); },
+    async clearThumbnails() { thumbs.clear(); failed.clear(); fileThumbs.clear(); for (const p of projects) p.thumb = null; listeners.lib.forEach((cb) => cb({ rootId: null, report: null, reason: 'thumbs_cleared' })); },
     async pickFolder() { return 'E:\\More Models'; },
     async getIgnorePatterns() { return ignore.slice(); },
     async setIgnorePatterns(p) { ignore = p.slice(); return ignore.slice(); },

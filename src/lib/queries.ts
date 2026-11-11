@@ -3,6 +3,7 @@ import { useEffect } from 'react';
 import { toast } from 'sonner';
 import i18n from '@/i18n';
 import { getBackend } from '@/lib/backend';
+import { forgetAllFileThumbs } from '@/lib/thumbs/files';
 import { kickThumbQueue, useThumbs } from '@/lib/thumbs/queue';
 import type { AiSettings, BatchUpdate, ImportRequest, ListQuery, McpSettings, Project, ProjectSummary, ThumbLocation, UpdateMetadata, PromoteItem, NetworkSettings } from '@/lib/types';
 
@@ -14,6 +15,7 @@ export const keys = {
   projects: (q: ListQuery) => ['projects', q] as const,
   project: (id: string) => ['project', id] as const,
   pictures: (id: string) => ['project', id, 'pictures'] as const,
+  fileThumbs: (id: string) => ['project', id, 'fileThumbs'] as const,
   tags: (rootId: string | null) => ['tags', rootId] as const,
   facets: (rootId: string | null) => ['facets', rootId] as const,
   thumbLocation: ['thumbLocation'] as const,
@@ -89,7 +91,7 @@ export function useBackendEvents(onScan?: (rootId: string, found: number) => voi
         if (e.reason === 'rename' && e.oldId) qc.removeQueries({ queryKey: keys.project(e.oldId) });
         if (e.reason === 'delete' && e.oldId) qc.removeQueries({ queryKey: keys.project(e.oldId) });
         if (e.reason === 'move') for (const id of e.oldIds ?? []) qc.removeQueries({ queryKey: keys.project(id) });
-        if (e.reason === 'thumbs_cleared') useThumbs.setState({ fresh: {} });
+        if (e.reason === 'thumbs_cleared') { useThumbs.setState({ fresh: {} }); forgetAllFileThumbs(); }
         void kickThumbQueue();
       });
       const c = await b.onProjectChanged((e) => { qc.invalidateQueries({ queryKey: keys.project(e.projectId) }); qc.invalidateQueries({ queryKey: ['projects'] }); qc.invalidateQueries({ queryKey: ['tags'] }); qc.invalidateQueries({ queryKey: ['facets'] }); qc.invalidateQueries({ queryKey: keys.stats }); void kickThumbQueue(); });

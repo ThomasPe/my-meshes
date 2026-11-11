@@ -24,6 +24,8 @@ interface UiState {
   fileType: string | null;
   sort: SortKey;
   view: ViewMode;
+  /** How the Files tab of a project shows its files (VIEW-8). */
+  filesView: ViewMode;
   tile: number;
   selected: string[];
   setFilter: (f: LibraryFilter) => void;
@@ -36,13 +38,14 @@ interface UiState {
   setFileType: (c: string | null) => void;
   setSort: (s: SortKey) => void;
   setView: (v: ViewMode) => void;
+  setFilesView: (v: ViewMode) => void;
   setTile: (n: number) => void;
   select: (ids: string[]) => void;
   clearFilters: () => void;
 }
 
-const persisted = (() => { try { return JSON.parse(localStorage.getItem('mm.ui') ?? '{}') as Partial<Pick<UiState, 'view' | 'tile' | 'sort'>>; } catch { return {}; } })();
-const persist = (s: Partial<Pick<UiState, 'view' | 'tile' | 'sort'>>) => { try { const cur = JSON.parse(localStorage.getItem('mm.ui') ?? '{}'); localStorage.setItem('mm.ui', JSON.stringify({ ...cur, ...s })); } catch { /* ignore */ } };
+const persisted = (() => { try { return JSON.parse(localStorage.getItem('mm.ui') ?? '{}') as Partial<Pick<UiState, 'view' | 'tile' | 'sort' | 'filesView'>>; } catch { return {}; } })();
+const persist = (s: Partial<Pick<UiState, 'view' | 'tile' | 'sort' | 'filesView'>>) => { try { const cur = JSON.parse(localStorage.getItem('mm.ui') ?? '{}'); localStorage.setItem('mm.ui', JSON.stringify({ ...cur, ...s })); } catch { /* ignore */ } };
 
 export const useUi = create<UiState>((set) => ({
   filter: { kind: 'all' },
@@ -54,6 +57,7 @@ export const useUi = create<UiState>((set) => ({
   fileType: null,
   sort: persisted.sort ?? 'modified',
   view: persisted.view ?? 'grid',
+  filesView: persisted.filesView === 'grid' ? 'grid' : 'list',
   tile: persisted.tile ?? 230,
   selected: [],
   setFilter: (filter) => set({ filter, selected: [] }),
@@ -66,6 +70,7 @@ export const useUi = create<UiState>((set) => ({
   setFileType: (fileType) => set({ fileType, selected: [] }),
   setSort: (sort) => { persist({ sort }); set({ sort }); },
   setView: (view) => { persist({ view }); set({ view }); },
+  setFilesView: (filesView) => { persist({ filesView }); set({ filesView }); },
   setTile: (tile) => { persist({ tile }); set({ tile }); },
   select: (selected) => set({ selected }),
   clearFilters: () => set({ tags: [], text: '', creator: null, license: null, material: null, fileType: null }),

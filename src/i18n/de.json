@@ -235,7 +235,10 @@
     "thumbnailSet": "Vorschau gewählt, wird jetzt gerendert…",
     "thumbnailAuto": "Vorschau wird wieder automatisch gewählt",
     "packedHint": "Dateien in {{archive}} werden direkt aus dem Archiv gelesen und lassen sich öffnen (für das andere Programm wird eine Kopie angelegt). Um einzelne Dateien zu ändern oder zu entfernen, entpacke das Projekt.",
-    "packedNoDelete": "Im gepackten Archiv: zuerst das Projekt entpacken"
+    "packedNoDelete": "Im gepackten Archiv: zuerst das Projekt entpacken",
+    "modelStrip": "Modelle dieses Projekts",
+    "showInViewer": "Im Viewer anzeigen",
+    "filesView": "Ansicht der Dateien"
   },
   "settings": {
     "title": "Einstellungen",

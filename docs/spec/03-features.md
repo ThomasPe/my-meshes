@@ -57,6 +57,7 @@
 | VIEW-5 | Built-in image viewer for project images; documents open in the OS default app. | MVP |
 | VIEW-6 | Graceful degradation when GPU acceleration is unavailable: static placeholders instead of 3D views, with a visible notice. | MVP |
 | VIEW-7 | Basic transforms (scale, rotate) for visual checks and mesh analysis for printability (non-manifold edges, holes, inverted normals). | Later |
+| VIEW-8 | A preview for every model file of a project, not only for the project: the project page picks the model from a strip of previews under the viewer (click or arrow keys), the Files tab shows its files as a list with small previews or as a grid (remembered), and a click on a model there puts it in the viewer. Previews are rendered when first seen and cached per file state. | Done |
 
 ## 3.5 Import & file operations
 

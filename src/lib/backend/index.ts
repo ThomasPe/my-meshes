@@ -1,4 +1,4 @@
-import type { EmbeddedPicture, AppInfo, PackProgress, PackReport, BatchReport, BatchUpdate, ConventionReport, ConventionsView, CreatorSuggestions, DuplicateReport, EnrichProgress, EnrichReport, Hints, McpSettings, McpStatus, NetworkSettings, PageSuggestion, HashProgress, MoveReport, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata, AiSettings, AiSettingsView, AiTestReport, MetadataSuggestion } from '@/lib/types';
+import type { EmbeddedPicture, AppInfo, PackProgress, PackReport, BatchReport, BatchUpdate, ConventionReport, ConventionsView, CreatorSuggestions, DuplicateReport, EnrichProgress, EnrichReport, Hints, McpSettings, McpStatus, NetworkSettings, PageSuggestion, HashProgress, MoveReport, PromoteItem, PromoteReport, Collection, Facets, ThumbLocation, UpdateInfo, FolderNode, ImportItem, ImportProgress, ImportReport, ImportRequest, InboxFile, LibraryChanged, LibraryRoot, LibraryStats, ListQuery, FileThumb, Project, ProjectSummary, ScanProgress, ScanReport, SmartCollection, SyncMode, TagCount, ThumbJob, ThumbStats, UpdateMetadata, AiSettings, AiSettingsView, AiTestReport, MetadataSuggestion } from '@/lib/types';
 
 export type Unlisten = () => void;
 
@@ -65,6 +65,12 @@ export interface Backend {
   storeEmbeddedThumbnail(projectId: string): Promise<string>;
   thumbnailFailed(projectId: string, reason: string): Promise<void>;
   readThumbnail(key: string): Promise<ArrayBuffer>;
+  /** VIEW-8: the cached previews of a project's model files (rendered on demand, see `lib/thumbs/files`). */
+  fileThumbs(projectId: string): Promise<FileThumb[]>;
+  storeFileThumbnail(projectId: string, relPath: string, png: ArrayBuffer): Promise<string>;
+  /** A 3MF's own picture of the file; rejects when there is none, so the caller renders instead. */
+  storeEmbeddedFileThumbnail(projectId: string, relPath: string): Promise<string>;
+  fileThumbnailFailed(projectId: string, relPath: string, reason: string): Promise<void>;
   clearThumbnails(): Promise<void>;
   /** Drops one project's thumbnail (or recorded failure) so the queue renders it again. */
   resetThumbnail(projectId: string): Promise<void>;

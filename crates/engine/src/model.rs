@@ -330,6 +330,17 @@ pub struct ThumbJob {
     pub source: ThumbSource,
 }
 
+/// The cached preview of one model file inside a project (VIEW-8). Files without an entry
+/// have not been rendered yet.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct FileThumb {
+    pub rel_path: String,
+    /// Cache key of the PNG (`Engine::thumbnail_path`), when there is one.
+    pub key: Option<String>,
+    /// Rendering failed for the file as it is now; it is not tried again until it changes.
+    pub failed: bool,
+}
+
 /// Rough shape of the thumbnail backlog for the status bar.
 #[derive(Debug, Clone, Copy, Default, Serialize, Deserialize)]
 pub struct ThumbStats {

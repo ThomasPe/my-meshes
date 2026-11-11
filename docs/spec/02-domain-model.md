@@ -181,6 +181,15 @@ reference along.
   slicer's plate rendering), else the largest previewable model (STL,
   OBJ, 3MF) rendered off-thread, else the first image in the project. Failures are
   recorded per source state and not retried until the file changes.
+- Every model file has a preview of its own as well (VIEW-8), in the same cache under a
+  key of project id + file path, valid for the file's size and mtime. They are not queued
+  for the whole library: a file is rendered the first time its tile is on screen (project
+  page), one rendering at a time, and what is still waiting is dropped when the page is
+  left. A 3MF shows the slicer's rendering of its plate (not the page's cover photo, which
+  would be the same for every file of a download); the file the project's own preview was
+  rendered from reuses that picture; entries of a packed project are files like any other.
+  Records of files that are gone are dropped when the project is next opened, and PNGs no
+  record refers to are removed when the app starts.
 - Alternative location (user setting, implemented): `<project>/.cache/thumbs/<key>.png` for
   people who want previews to travel with the project. `.cache` and `.meshkeep` inside a
   project are never indexed, whatever the ignore patterns say. Lookups try the app cache

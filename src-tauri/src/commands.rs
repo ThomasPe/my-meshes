@@ -6,8 +6,8 @@ use meshkeep_engine::enrich::{self, EnrichReport, PageSuggestion};
 use meshkeep_engine::hints::Hints;
 use meshkeep_engine::import::{ImportItem, ImportReport, ImportRequest, InboxFile};
 use meshkeep_engine::model::{
-    Facets, FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, ScanReport, SyncMode, TagCount, ThumbJob, ThumbLocation,
-    ThumbStats,
+    Facets, FileThumb, FolderNode, LibraryRoot, ListQuery, Project, ProjectSummary, ScanReport, SyncMode, TagCount, ThumbJob,
+    ThumbLocation, ThumbStats,
 };
 use meshkeep_engine::settings::{McpSettings, NetworkSettings};
 use meshkeep_engine::threemf::{self, EmbeddedPicture};
@@ -688,6 +688,52 @@ pub fn store_embedded_thumbnail(state: State<AppState>, project_id: String) -> C
 #[tauri::command]
 pub fn thumbnail_failed(state: State<AppState>, project_id: String, reason: String) -> CmdResult<()> {
     Ok(state.engine.lock().unwrap().thumbnail_failed(&project_id, &reason)?)
+}
+
+/// VIEW-8: the cached previews of a project's model files.
+#[tauri::command]
+pub fn file_thumbs(state: State<AppState>, project_id: String) -> CmdResult<Vec<FileThumb>> {
+    Ok(state.engine.lock().unwrap().file_thumbs(&project_id)?)
+}
+
+/// Raw PNG bytes of one model file's preview; project id and file path travel URL-encoded
+/// in headers (as in `store_thumbnail`).
+#[tauri::command]
+pub fn store_file_thumbnail(state: State<AppState>, request: Request<'_>) -> CmdResult<String> {
+    let header = |name: &'static str| {
+        request
+            .headers()
+            .get(name)
+            .and_then(|v| v.to_str().ok())
+            .map(percent_decode)
+            .ok_or(AppError {
+                code: "shell",
+                message: format!("missing {name} header"),
+            })
+    };
+    let project_id = header("x-project-id")?;
+    let rel_path = header("x-rel-path")?;
+    let InvokeBody::Raw(png) = request.body() else {
+        return Err(AppError {
+            code: "shell",
+            message: "thumbnail body must be raw bytes".into(),
+        });
+    };
+    Ok(state.engine.lock().unwrap().store_file_thumbnail(&project_id, &rel_path, png)?)
+}
+
+#[tauri::command]
+pub fn store_embedded_file_thumbnail(state: State<AppState>, project_id: String, rel_path: String) -> CmdResult<String> {
+    Ok(state.engine.lock().unwrap().store_embedded_file_thumbnail(&project_id, &rel_path)?)
+}
+
+#[tauri::command]
+pub fn file_thumbnail_failed(state: State<AppState>, project_id: String, rel_path: String, reason: String) -> CmdResult<()> {
+    Ok(state
+        .engine
+        .lock()
+        .unwrap()
+        .file_thumbnail_failed(&project_id, &rel_path, &reason)?)
 }
 
 #[tauri::command]

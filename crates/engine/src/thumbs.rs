@@ -50,6 +50,18 @@ pub fn key_for(project_id: &str, source_rel: &str) -> String {
     format!("{:x}", h.finalize())[..24].to_string() + ".png"
 }
 
+/// Cache file name for the preview of one model file (VIEW-8). A different name than the
+/// project's own preview of the same file, so the two can be dropped independently.
+pub fn file_key_for(project_id: &str, rel: &str) -> String {
+    let mut h = Sha256::new();
+    h.update(project_id.as_bytes());
+    h.update([0]);
+    h.update(b"file");
+    h.update([0]);
+    h.update(rel.as_bytes());
+    format!("{:x}", h.finalize())[..24].to_string() + ".png"
+}
+
 pub fn is_valid_key(key: &str) -> bool {
     key.len() == 28 && key.ends_with(".png") && key[..24].chars().all(|c| c.is_ascii_hexdigit())
 }
@@ -93,6 +105,22 @@ pub fn write_in(dir: &Path, key: &str, png: &[u8]) -> Result<PathBuf> {
         return Err(EngineError::Io { path, source: e });
     }
     Ok(path)
+}
+
+/// Removes PNGs in the app cache that no record refers to any more (projects and files that
+/// were deleted, renamed or re-rendered under a new name). Returns how many were removed.
+pub fn sweep(data_dir: &Path, keep: &std::collections::HashSet<String>) -> usize {
+    let Ok(entries) = std::fs::read_dir(cache_dir(data_dir)) else {
+        return 0;
+    };
+    let mut removed = 0;
+    for entry in entries.flatten() {
+        let name = entry.file_name().to_string_lossy().into_owned();
+        if is_valid_key(&name) && !keep.contains(&name) && std::fs::remove_file(entry.path()).is_ok() {
+            removed += 1;
+        }
+    }
+    removed
 }
 
 #[cfg(test)]

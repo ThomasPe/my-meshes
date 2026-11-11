@@ -1382,3 +1382,169 @@ fn packed_projects_are_imported_read_unpacked_and_packed_again() {
     assert!(lib.path().join("Stay/Stay.zip").is_file());
     assert_eq!(engine.get_project(&format!("{}:Stay", root.id)).unwrap().model_count, 1);
 }
+
+/// VIEW-8: every model file of a project has a preview of its own, cached for the file as
+/// it is; previews follow the project and go when the file goes.
+#[test]
+fn every_model_file_gets_its_own_preview() {
+    use meshkeep_engine::model::{FileThumb, ThumbLocation};
+    const TINY_PNG: &[u8] = &[
+        0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A, 0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52, 0x00, 0x00, 0x00, 0x01, 0x00, 0x00,
+        0x00, 0x01, 0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4, 0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41, 0x54, 0x78, 0x9C, 0x63,
+        0x00, 0x01, 0x00, 0x00, 0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00, 0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE, 0x42, 0x60,
+        0x82,
+    ];
+    let thumb = |rel: &str, key: Option<&String>, failed: bool| FileThumb {
+        rel_path: rel.to_string(),
+        key: key.cloned(),
+        failed,
+    };
+    let data = tempfile::tempdir().unwrap();
+    let lib = tempfile::tempdir().unwrap();
+    touch(&lib.path().join("Kit/body.stl"), 4000);
+    touch(&lib.path().join("Kit/lid.stl"), 900);
+    touch(&lib.path().join("Kit/readme.txt"), 10);
+    // a slicer project: the page's cover photo and the slicer's rendering of the plate
+    let cover = [TINY_PNG, b"cover".as_slice()].concat();
+    write_zip(
+        &lib.path().join("Kit/plate.3mf"),
+        &[
+            ("3D/3dmodel.model", b"<model/>"),
+            ("Auxiliaries/.thumbnails/thumbnail_middle.png", &cover),
+            ("Metadata/plate_1.png", TINY_PNG),
+        ],
+    );
+    touch(&lib.path().join("Solo/solo.stl"), 500);
+    write_zip(
+        &lib.path().join("Packed/Packed.zip"),
+        &[("parts/a.stl", b"solid a"), ("parts/b.stl", b"solid b")],
+    );
+    fs::write(lib.path().join("Packed/project.yaml"), "schema: 1\npacked: Packed.zip\n").unwrap();
+
+    let mut engine = Engine::open(data.path()).unwrap();
+    engine.set_deleter(Box::new(
+        |p: &Path| if p.is_dir() { fs::remove_dir_all(p) } else { fs::remove_file(p) },
+    ));
+    let root = engine.add_root(lib.path(), SyncMode::Manual).unwrap();
+    engine.scan_root(&root.id, |_| {}).unwrap();
+    let id = format!("{}:Kit", root.id);
+    assert!(engine.file_thumbs(&id).unwrap().is_empty(), "nothing is rendered yet");
+    assert!(engine.file_thumbs("nope").is_err());
+
+    // only model files of the project have previews, and only PNGs are stored
+    assert!(matches!(
+        engine.store_file_thumbnail(&id, "readme.txt", TINY_PNG),
+        Err(EngineError::NotAllowed(_))
+    ));
+    assert!(matches!(
+        engine.store_file_thumbnail(&id, "missing.stl", TINY_PNG),
+        Err(EngineError::NotAllowed(_))
+    ));
+    assert!(engine.store_file_thumbnail(&id, "lid.stl", b"not a png").is_err());
+
+    let lid = engine.store_file_thumbnail(&id, "lid.stl", TINY_PNG).unwrap();
+    let lid_png = engine.thumbnail_path(&lid).unwrap();
+    assert!(lid_png.starts_with(data.path()) && lid_png.is_file());
+    // a 3MF shows the slicer's rendering of the file, not the cover of the model page
+    let plate = engine.store_embedded_file_thumbnail(&id, "plate.3mf").unwrap();
+    assert_eq!(fs::read(engine.thumbnail_path(&plate).unwrap()).unwrap(), TINY_PNG);
+    assert_ne!(plate, lid);
+    // nothing to take out of an STL: the frontend renders it, and here that fails
+    assert!(engine.store_embedded_file_thumbnail(&id, "body.stl").is_err());
+    engine.file_thumbnail_failed(&id, "body.stl", "not a mesh").unwrap();
+    assert_eq!(
+        engine.file_thumbs(&id).unwrap(),
+        vec![
+            thumb("body.stl", None, true),
+            thumb("lid.stl", Some(&lid), false),
+            thumb("plate.3mf", Some(&plate), false)
+        ]
+    );
+    // the project's own preview is a different picture under a different name
+    let own = engine.store_embedded_thumbnail(&id).unwrap();
+    assert_ne!(own, plate);
+    assert_eq!(fs::read(engine.thumbnail_path(&own).unwrap()).unwrap(), cover);
+
+    // a project preview rendered from a model stands in for that file: no second rendering
+    let solo = format!("{}:Solo", root.id);
+    assert!(engine.file_thumbs(&solo).unwrap().is_empty());
+    let solo_key = engine.store_thumbnail(&solo, TINY_PNG).unwrap();
+    assert_eq!(engine.file_thumbs(&solo).unwrap(), vec![thumb("solo.stl", Some(&solo_key), false)]);
+
+    // entries of a packed project are files like any other
+    let packed = format!("{}:Packed", root.id);
+    let a = engine.store_file_thumbnail(&packed, "Packed.zip/parts/a.stl", TINY_PNG).unwrap();
+    assert!(engine.store_embedded_file_thumbnail(&packed, "Packed.zip/parts/b.stl").is_err());
+    assert_eq!(
+        engine.file_thumbs(&packed).unwrap(),
+        vec![thumb("Packed.zip/parts/a.stl", Some(&a), false)]
+    );
+    let a_png = engine.thumbnail_path(&a).unwrap();
+    engine.unpack_project(&packed, false, &mut |_| {}).unwrap();
+    assert!(
+        engine.file_thumbs(&packed).unwrap().is_empty(),
+        "the entry is a file of its own now"
+    );
+    assert!(!a_png.exists());
+
+    // a changed file is rendered again (under the same name), a failure is forgotten too
+    touch(&lib.path().join("Kit/lid.stl"), 1200);
+    touch(&lib.path().join("Kit/body.stl"), 4100);
+    engine.scan_root(&root.id, |_| {}).unwrap();
+    assert_eq!(engine.file_thumbs(&id).unwrap(), vec![thumb("plate.3mf", Some(&plate), false)]);
+    assert_eq!(engine.store_file_thumbnail(&id, "lid.stl", TINY_PNG).unwrap(), lid);
+
+    // a deleted file takes its preview along
+    engine.delete_file(&id, "lid.stl").unwrap();
+    assert_eq!(engine.file_thumbs(&id).unwrap(), vec![thumb("plate.3mf", Some(&plate), false)]);
+    assert!(!lid_png.exists());
+
+    // previews follow a renamed project; the next rendering replaces the old picture
+    let renamed = engine.rename_project(&id, "Kit 2").unwrap();
+    assert_eq!(
+        engine.file_thumbs(&renamed.id).unwrap(),
+        vec![thumb("plate.3mf", Some(&plate), false)]
+    );
+    let plate_png = engine.thumbnail_path(&plate).unwrap();
+    let plate2 = engine.store_embedded_file_thumbnail(&renamed.id, "plate.3mf").unwrap();
+    assert_ne!(plate2, plate);
+    assert!(!plate_png.exists());
+
+    // "render again" covers the files as well
+    engine.reset_thumbnail(&renamed.id).unwrap();
+    assert!(engine.file_thumbs(&renamed.id).unwrap().is_empty());
+    assert!(engine.thumbnail_path(&plate2).is_err());
+
+    // previews kept inside the project folder
+    engine.set_thumb_location(ThumbLocation::Project).unwrap();
+    let body = engine.store_file_thumbnail(&renamed.id, "body.stl", TINY_PNG).unwrap();
+    let in_project = lib.path().join("Kit 2/.cache/thumbs").join(&body);
+    assert!(in_project.is_file());
+    assert_eq!(engine.thumbnail_path(&body).unwrap(), in_project);
+    assert!(engine
+        .get_project(&renamed.id)
+        .unwrap()
+        .files
+        .iter()
+        .all(|f| !f.rel_path.starts_with(".cache")));
+    engine.clear_thumbnails().unwrap();
+    assert!(engine.file_thumbs(&renamed.id).unwrap().is_empty());
+    assert!(!lib.path().join("Kit 2/.cache").exists());
+    engine.set_thumb_location(ThumbLocation::AppData).unwrap();
+
+    // a deleted project leaves nothing in the cache; what belongs to nothing goes on the next start
+    let body = engine.store_file_thumbnail(&renamed.id, "body.stl", TINY_PNG).unwrap();
+    let body_png = engine.thumbnail_path(&body).unwrap();
+    let solo_key = engine.store_thumbnail(&solo, TINY_PNG).unwrap();
+    engine.delete_project(&renamed.id).unwrap();
+    assert!(!body_png.exists());
+    let orphan = data.path().join("thumbs/0123456789abcdef01234567.png");
+    fs::write(&orphan, TINY_PNG).unwrap();
+    let stranger = data.path().join("thumbs/notes.txt");
+    fs::write(&stranger, "not ours").unwrap();
+    drop(engine);
+    let engine = Engine::open(data.path()).unwrap();
+    assert!(!orphan.exists());
+    assert!(stranger.is_file());
+    assert!(engine.thumbnail_path(&solo_key).unwrap().is_file());
+}

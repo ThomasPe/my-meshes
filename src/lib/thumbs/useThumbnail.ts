@@ -31,8 +31,9 @@ export function loadThumbnail(key: string): Promise<string> {
   return p;
 }
 
-/** `null` while loading or when there is no key; the URL once the PNG is in memory. */
-export function useThumbnail(key: string | null | undefined): string | null {
+/** `null` while loading or when there is no key; the URL once the PNG is in memory. `rev`
+ * changes when a new picture was stored under a key that is already on screen. */
+export function useThumbnail(key: string | null | undefined, rev = 0): string | null {
   const [url, setUrl] = useState<string | null>(() => (key ? cache.get(key) ?? null : null));
   useEffect(() => {
     if (!key) { setUrl(null); return; }
@@ -41,7 +42,7 @@ export function useThumbnail(key: string | null | undefined): string | null {
     let alive = true;
     loadThumbnail(key).then((u) => { if (alive) setUrl(u); }).catch(() => { if (alive) setUrl(null); });
     return () => { alive = false; };
-  }, [key]);
+  }, [key, rev]);
   return url;
 }
 

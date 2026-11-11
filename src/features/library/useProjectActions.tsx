@@ -11,9 +11,10 @@ import { getBackend } from '@/lib/backend';
 import { formatBytes } from '@/lib/format';
 import { reportError } from '@/lib/errors';
 import { useCollectionDialog } from '@/features/library/CollectionDialogs';
-import { invalidateLibrary, useAddToCollection, useCollections, useDeleteProject, useRemoveFromCollection, useRenameProject, useSetFavorite } from '@/lib/queries';
+import { invalidateLibrary, keys, useAddToCollection, useCollections, useDeleteProject, useRemoveFromCollection, useRenameProject, useSetFavorite } from '@/lib/queries';
 import { navigate } from '@/lib/router';
 import { MoveDialog } from '@/features/library/MoveDialog';
+import { forgetFileThumbs } from '@/lib/thumbs/files';
 import { kickThumbQueue, useThumbs } from '@/lib/thumbs/queue';
 import { forgetThumbnail } from '@/lib/thumbs/useThumbnail';
 import { useUi } from '@/lib/store';
@@ -65,6 +66,9 @@ export function useProjectActions(opts: { onRenamed?: (oldId: string, newId: str
         const key = p.thumb ?? useThumbs.getState().fresh[p.id];
         if (key) forgetThumbnail(key);
         useThumbs.setState((s) => { const fresh = { ...s.fresh }; delete fresh[p.id]; return { fresh }; });
+        // the previews of its single files are rendered again as well (VIEW-8)
+        forgetFileThumbs(p.id);
+        void qc.invalidateQueries({ queryKey: keys.fileThumbs(p.id) });
         toast.success(t('actions.rerenderQueued', { name: p.title }));
         void kickThumbQueue();
       }).catch(reportError);
@@ -83,7 +87,7 @@ export function useProjectActions(opts: { onRenamed?: (oldId: string, newId: str
       addTo.mutate({ id: cid, projectIds: ids }, { onSuccess: (c) => toast.success(t('collections.addedMany', { count: ids.length, name: c.name })), onError: reportError });
     },
     setFavoriteMany: (ps, fav) => { for (const p of ps) if (p.favorite !== fav) favorite.mutate({ id: p.id, favorite: fav }, { onError: reportError }); },
-  }), [favorite, collections.data, addTo, removeFrom, collectionId, openCollectionDialog, setCreator, t]);
+  }), [favorite, collections.data, addTo, removeFrom, collectionId, openCollectionDialog, setCreator, t, qc]);
 
   const confirmDeleteMany = useCallback(async () => {
     const targets = deletingMany;
@@ -136,6 +140,7 @@ export function useProjectActions(opts: { onRenamed?: (oldId: string, newId: str
       // previews are rendered again from the new place of the model
       for (const p of job.targets) { const key = p.thumb ?? useThumbs.getState().fresh[p.id]; if (key) forgetThumbnail(key); }
       useThumbs.setState((s) => { const fresh = { ...s.fresh }; for (const pid of ids) delete fresh[pid]; return { fresh }; });
+      for (const pid of ids) forgetFileThumbs(pid);
       invalidateLibrary(qc);
       void kickThumbQueue();
       const sizes = { before: formatBytes(report.bytes_before, i18n.language), after: formatBytes(report.bytes_after, i18n.language) };

@@ -311,6 +311,14 @@ export interface UpdateInfo {
   date: string | null;
 }
 
+/** The cached preview of one model file of a project (VIEW-8); files without an entry are not rendered yet. */
+export interface FileThumb {
+  rel_path: string;
+  key: string | null;
+  /** Rendering failed for the file as it is now; not tried again until it changes. */
+  failed: boolean;
+}
+
 export interface ThumbStats {
   pending: number;
   done: number;
