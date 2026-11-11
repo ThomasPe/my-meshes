@@ -7,7 +7,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Thumb } from '@/features/library/Thumb';
 import { useProjectActions } from '@/features/library/useProjectActions';
 import { FilesTable } from '@/features/project/FilesTable';
-import { ImageGallery } from '@/features/project/ImageGallery';
+import { ImageGallery, useProjectImageCache } from '@/features/project/ImageGallery';
 import { MetadataForm } from '@/features/project/MetadataForm';
 import { Viewer } from '@/features/project/Viewer';
 import { useChooseThumbnail } from '@/features/project/useChooseThumbnail';
@@ -21,6 +21,7 @@ export function ProjectPage({ id }: { id: string }) {
   const { t, i18n } = useTranslation();
   const project = useProject(id);
   const pictures = useEmbeddedPictures(project.data);
+  useProjectImageCache(project.data?.id ?? null);
   const roots = useRoots();
   const choose = useChooseThumbnail(project.data ?? null);
   const { actions, dialogs } = useProjectActions({ onRenamed: (_old, newId) => navigate({ page: 'project', id: newId }), onDeleted: () => navigate({ page: 'library' }) });
