@@ -62,14 +62,14 @@ function thumbSourceOf(p: MockProject): ThumbJob | null {
   return img ? { project_id: p.id, rel_path: img.rel_path, source: 'image' } : null;
 }
 
-async function generateImage(seed: number): Promise<ArrayBuffer> {
+async function generateImage(seed: number, width = 256, height = 192): Promise<ArrayBuffer> {
   const c = document.createElement('canvas');
-  c.width = 256; c.height = 192;
+  c.width = width; c.height = height;
   const ctx = c.getContext('2d')!;
-  const g = ctx.createLinearGradient(0, 0, 256, 192);
+  const g = ctx.createLinearGradient(0, 0, width, height);
   g.addColorStop(0, `hsl(${(seed * 47) % 360} 60% 70%)`);
   g.addColorStop(1, `hsl(${(seed * 47 + 90) % 360} 60% 40%)`);
-  ctx.fillStyle = g; ctx.fillRect(0, 0, 256, 192);
+  ctx.fillStyle = g; ctx.fillRect(0, 0, width, height);
   const blob = await new Promise<Blob>((res) => c.toBlob((b) => res(b!), 'image/png'));
   return blob.arrayBuffer();
 }
@@ -383,7 +383,9 @@ export function createMockBackend(): Backend {
       if (ext === 'obj') return generateObj(tri, seed);
       if (ext === '3mf') return generate3mf();
       if (relPath === '.meshkeep/preview.png' && captures.has(projectId)) return captures.get(projectId)!.slice(0);
-      if (file.kind === 'image') return generateImage(seed);
+      // an image of megabytes plays a phone photo: upright and larger than the lightbox, so
+      // the image viewer has to scale it down (#65); the others stay small 4:3 pictures
+      if (file.kind === 'image') return file.size > MB ? generateImage(seed, 1200, 1600) : generateImage(seed);
       throw err('mock', 'no file contents in browser mode');
     },
     // Browser mode: the Dice Tower's 3MF plays a MakerWorld download with two model pictures.

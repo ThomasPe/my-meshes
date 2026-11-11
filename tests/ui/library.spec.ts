@@ -527,6 +527,41 @@ test('image viewer: images tab shows tiles, lightbox navigates', async ({ page }
   await expect(page.getByText('1 of 1')).toBeVisible();
 });
 
+test('image viewer: a photo larger than the lightbox is shown whole (#65)', async ({ page }) => {
+  // assembly.jpg plays a phone photo, 1200 x 1600: taller than the lightbox at any window size here
+  await page.getByTestId('project-card').filter({ hasText: 'Robotic Arm v4' }).dblclick();
+  await page.getByTestId('tab-images').click();
+  await page.getByTestId('image-tile').first().click();
+  const img = page.getByTestId('lightbox-img');
+  await expect(img).toBeVisible();
+  await expect.poll(() => img.evaluate((el: HTMLImageElement) => el.naturalHeight)).toBe(1600);
+  const measure = () => img.evaluate((el: HTMLImageElement) => {
+    const stage = el.closest('[data-testid=lightbox-stage]')!.getBoundingClientRect();
+    const box = el.getBoundingClientRect();
+    return { stage: { x: stage.x, y: stage.y, w: stage.width, h: stage.height }, box: { x: box.x, y: box.y, w: box.width, h: box.height } };
+  });
+  // the dialog zooms in when it opens: measure once it has settled
+  await page.getByTestId('lightbox').evaluate((el) => Promise.all(el.getAnimations().map((a) => a.finished)));
+  const { stage, box } = await measure();
+  expect(stage.h).toBeLessThan(1600);
+  // nothing lies outside the stage, which would be clipped ...
+  expect(box.y).toBeGreaterThanOrEqual(stage.y - 0.5);
+  expect(box.y + box.h).toBeLessThanOrEqual(stage.y + stage.h + 0.5);
+  expect(box.x).toBeGreaterThanOrEqual(stage.x - 0.5);
+  expect(box.x + box.w).toBeLessThanOrEqual(stage.x + stage.w + 0.5);
+  // ... the picture uses the full height, keeps its proportions and sits in the middle
+  expect(box.h).toBeCloseTo(stage.h, 0);
+  expect(box.w / box.h).toBeCloseTo(1200 / 1600, 2);
+  expect(box.x + box.w / 2).toBeCloseTo(stage.x + stage.w / 2, 0);
+  // a picture smaller than the stage keeps its own size
+  await page.keyboard.press('Escape');
+  await page.getByTestId('back').click();
+  await page.getByTestId('project-card').filter({ hasText: 'Gridfinity Baseplates' }).dblclick();
+  await page.getByTestId('tab-images').click();
+  await page.getByTestId('image-tile').first().click();
+  await expect.poll(() => page.getByTestId('lightbox-img').evaluate((el: HTMLImageElement) => [el.naturalWidth, el.width, el.height].join())).toBe('256,256,192');
+});
+
 test('image viewer: pictures stored inside a 3MF show in the gallery, read-only', async ({ page }) => {
   // the Dice Tower has no image files; its 3MF plays a MakerWorld download with two model pictures
   await page.getByTestId('project-card').filter({ hasText: 'Dice Tower' }).dblclick();

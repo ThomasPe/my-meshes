@@ -125,9 +125,14 @@ export function ImageGallery({ project, files, pictures = [], offline }: { proje
         <DialogContent className="max-w-[min(96vw,1400px)] border-0 bg-black/90 p-0 text-white shadow-none" data-testid="lightbox">
           <DialogTitle className="sr-only">{current?.name}</DialogTitle>
           <DialogDescription className="sr-only">{t('project.images')}</DialogDescription>
-          <div className="relative grid h-[min(88vh,900px)] grid-rows-[1fr_auto]">
-            <div className="relative grid place-items-center overflow-hidden">
-              {url ? <img src={url} alt={current?.name ?? ''} className="max-h-full max-w-full object-contain" data-testid="lightbox-img" /> : <ImageIcon className="size-10 opacity-60" />}
+          <div className="relative grid h-[min(88vh,900px)] grid-rows-[minmax(0,1fr)_auto]">
+            {/* #65: the picture is positioned in the stage instead of being a grid item. A grid
+                cell takes its height from its content, so `max-h-full` limited nothing there
+                and a photo taller than the stage lost its lower part. Against the positioned
+                stage both maxima hold: a large picture is scaled down whole and centred, a
+                small one keeps its own size. */}
+            <div className="relative grid place-items-center overflow-hidden" data-testid="lightbox-stage">
+              {url ? <img src={url} alt={current?.name ?? ''} className="absolute inset-0 m-auto max-h-full max-w-full object-contain" data-testid="lightbox-img" /> : <ImageIcon className="size-10 opacity-60" />}
               {images.length > 1 && (
                 <>
                   <button type="button" aria-label="previous" className={cn('absolute left-3 top-1/2 -translate-y-1/2 rounded-full bg-white/15 p-2 hover:bg-white/30')} onClick={() => setIndex((i) => (i === null ? i : (i - 1 + images.length) % images.length))}><ChevronLeft /></button>
