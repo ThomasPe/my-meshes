@@ -18,6 +18,7 @@ pub mod import;
 pub mod index;
 pub mod mcp;
 pub mod model;
+pub mod natural;
 pub mod packed;
 pub mod roots;
 pub mod scan;

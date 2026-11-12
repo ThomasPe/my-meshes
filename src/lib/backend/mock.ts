@@ -52,6 +52,9 @@ function mk(root_id: string, rel_path: string, title: string, o: Partial<MockPro
   };
 }
 
+/** Mirrors the engine's name order (natural.rs, #74): case and accents ignored, digits by value. */
+const byName = (a: string, b: string) => a.localeCompare(b, undefined, { numeric: true, sensitivity: 'base' }) || a.localeCompare(b);
+
 /** Mirrors the engine's thumbnail source choice (thumbs.rs). */
 function thumbSourceOf(p: MockProject): ThumbJob | null {
   const chosen = p.thumbnail ? p.files.find((x) => x.rel_path === p.thumbnail && x.kind === 'image') : null;
@@ -166,7 +169,7 @@ export function createMockBackend(): Backend {
       list = list.filter((p) => { const hay = [p.title, p.creator ?? '', p.description ?? '', ...p.tags, ...p.files.map((x) => x.name)].join(' ').toLowerCase(); return terms.every((t) => hay.split(/[^a-z0-9äöüß]+/i).some((w) => w.startsWith(t))); });
     }
     const sort = q.sort ?? 'modified';
-    list.sort((a, b) => sort === 'title' ? a.title.localeCompare(b.title) : sort === 'creator' ? (a.creator ?? '~').localeCompare(b.creator ?? '~') : sort === 'size' ? b.total_bytes - a.total_bytes : sort === 'added' ? b.added.localeCompare(a.added) : b.modified.localeCompare(a.modified));
+    list.sort((a, b) => sort === 'title' ? byName(a.title, b.title) : sort === 'creator' ? (a.creator ?? '~').localeCompare(b.creator ?? '~') : sort === 'size' ? b.total_bytes - a.total_bytes : sort === 'added' ? b.added.localeCompare(a.added) : b.modified.localeCompare(a.modified));
     if (q.limit) list = list.slice(q.offset ?? 0, (q.offset ?? 0) + q.limit);
     return list;
   };
@@ -264,7 +267,7 @@ export function createMockBackend(): Backend {
         for (const seg of p.rel_path.split('/').filter(Boolean)) { if (!cur.children.has(seg)) cur.children.set(seg, { count: 0, isProject: false, children: new Map() }); cur = cur.children.get(seg)!; cur.count++; }
         cur.isProject = true;
       }
-      const build = (prefix: string, n: N): FolderNode[] => [...n.children.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([name, c]) => { const rel = prefix ? `${prefix}/${name}` : name; return { name, rel_path: rel, project_count: c.count, is_project: c.isProject, children: build(rel, c) }; });
+      const build = (prefix: string, n: N): FolderNode[] => [...n.children.entries()].sort(([a], [b]) => byName(a, b)).map(([name, c]) => { const rel = prefix ? `${prefix}/${name}` : name; return { name, rel_path: rel, project_count: c.count, is_project: c.isProject, children: build(rel, c) }; });
       return build('', root);
     },
     // hints: a ".url" file stands for a Printables shortcut, file names for their shared prefix

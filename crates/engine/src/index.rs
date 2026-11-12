@@ -150,6 +150,9 @@ impl Index {
     }
     fn init(conn: Connection) -> Result<Index> {
         conn.execute_batch("PRAGMA journal_mode=WAL; PRAGMA synchronous=NORMAL; PRAGMA foreign_keys=ON;")?;
+        // names are ordered the way a file manager shows them (#74); only used in ORDER BY,
+        // nothing in the schema depends on it
+        conn.create_collation("NAMEORDER", crate::natural::cmp)?;
         let version: i64 = conn.query_row("PRAGMA user_version", [], |r| r.get(0))?;
         if version == 2 {
             // v2 -> v3 adds files.ext; migrate in place so cached thumbnails survive.
@@ -522,12 +525,12 @@ impl Index {
             sql.push_str(&where_.join(" AND "));
         }
         sql.push_str(match q.sort {
-            SortKey::Modified => " ORDER BY p.modified DESC, p.title COLLATE NOCASE",
-            SortKey::Title => " ORDER BY p.title COLLATE NOCASE",
-            SortKey::Creator => " ORDER BY p.creator IS NULL, p.creator COLLATE NOCASE, p.title COLLATE NOCASE",
+            SortKey::Modified => " ORDER BY p.modified DESC, p.title COLLATE NAMEORDER",
+            SortKey::Title => " ORDER BY p.title COLLATE NAMEORDER",
+            SortKey::Creator => " ORDER BY p.creator IS NULL, p.creator COLLATE NAMEORDER, p.title COLLATE NAMEORDER",
             SortKey::Size => " ORDER BY p.total_bytes DESC",
-            SortKey::Added => " ORDER BY p.added DESC, p.modified DESC, p.title COLLATE NOCASE",
-            SortKey::Collection => " ORDER BY p.modified DESC, p.title COLLATE NOCASE",
+            SortKey::Added => " ORDER BY p.added DESC, p.modified DESC, p.title COLLATE NAMEORDER",
+            SortKey::Collection => " ORDER BY p.modified DESC, p.title COLLATE NAMEORDER",
         });
         if let Some(limit) = q.limit {
             sql.push_str(&format!(" LIMIT {} OFFSET {}", limit, q.offset.unwrap_or(0)));
@@ -658,9 +661,12 @@ impl Index {
             }
             cur.is_project = true;
         }
+        // siblings in the order a file manager shows them, not in byte order (#74)
         fn build(prefix: &str, n: &Node) -> Vec<FolderNode> {
-            n.children
-                .iter()
+            let mut children: Vec<(&String, &Node)> = n.children.iter().collect();
+            children.sort_by(|a, b| crate::natural::cmp(a.0, b.0));
+            children
+                .into_iter()
                 .map(|(name, child)| {
                     let rel = if prefix.is_empty() {
                         name.clone()
@@ -1189,6 +1195,47 @@ mod tests {
         // rename carries the record over
         ix.rename_thumb(&a.id, "r1:A2").unwrap();
         ix.remove_project(&a.id).unwrap();
+    }
+
+    /// #74: folders and titles are ordered the way a file manager shows them.
+    #[test]
+    fn tree_and_title_order_ignore_case_and_count_numbers() {
+        let mut ix = Index::open_in_memory().unwrap();
+        ix.rebuild_root(
+            "r1",
+            &[
+                proj("a", "Saber3D/Hilt", "part 10", &[], &["a.stl"]),
+                proj("b", "_Thomas/Box", "Part 2", &[], &["b.stl"]),
+                proj("c", "dclem08/Cup", "Ärmel", &[], &["c.stl"]),
+                proj("d", "Diverse/Clip 10", "zebra", &[], &["d.stl"]),
+                proj("e", "Diverse/Clip 2", "Apfel", &[], &["e.stl"]),
+                proj("f", "3DeepDesigns/Owl", "_draft", &[], &["f.stl"]),
+            ],
+        )
+        .unwrap();
+        let tree = ix.folder_tree("r1").unwrap();
+        assert_eq!(
+            tree.iter().map(|n| n.name.as_str()).collect::<Vec<_>>(),
+            vec!["_Thomas", "3DeepDesigns", "dclem08", "Diverse", "Saber3D"]
+        );
+        let diverse = tree.iter().find(|n| n.name == "Diverse").unwrap();
+        assert_eq!(
+            diverse.children.iter().map(|n| n.name.as_str()).collect::<Vec<_>>(),
+            vec!["Clip 2", "Clip 10"]
+        );
+        let titled = ix
+            .list(
+                &ListQuery {
+                    sort: SortKey::Title,
+                    ..Default::default()
+                },
+                None,
+            )
+            .unwrap();
+        assert_eq!(
+            titled.iter().map(|p| p.title.as_str()).collect::<Vec<_>>(),
+            vec!["_draft", "Apfel", "Ärmel", "Part 2", "part 10", "zebra"]
+        );
     }
 
     #[test]
