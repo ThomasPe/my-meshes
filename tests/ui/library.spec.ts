@@ -1187,6 +1187,81 @@ test('grid rows never overlap after the window is resized', async ({ page }) => 
   }
 });
 
+test('list view: one scroll container with a sticky header, at any window size (#64)', async ({ page }) => {
+  await page.getByTestId('view-list').click();
+  const scroller = page.getByTestId('project-list-scroll');
+  const rows = page.getByTestId('project-row');
+  await expect(rows.first()).toBeVisible();
+
+  // One snapshot of the geometry per call: the rows are virtual and get replaced while the
+  // list scrolls, so nothing is measured across two round trips.
+  const layout = () => scroller.evaluate((el) => {
+    const main = el.closest('main')!;
+    const rect = (e: Element) => { const r = e.getBoundingClientRect(); return { left: r.left, right: r.right, top: r.top, bottom: r.bottom, width: r.width }; };
+    const scrollsY = (e: Element) => /auto|scroll/.test(getComputedStyle(e).overflowY) && e.scrollHeight > e.clientHeight + 1;
+    // everything between the list and the document that could show a scrollbar of its own
+    const spilling: string[] = [];
+    for (let a = el.parentElement; a && a !== document.documentElement; a = a.parentElement) {
+      if (a.scrollWidth > a.clientWidth + 1 || a.scrollHeight > a.clientHeight + 1) spilling.push(`${a.tagName.toLowerCase()}[${a.getAttribute('data-testid') ?? a.id}] ${a.scrollWidth}x${a.scrollHeight} in ${a.clientWidth}x${a.clientHeight}`);
+    }
+    const head = rect(el.querySelector('[data-testid=project-list-head]')!);
+    const all = [...el.querySelectorAll('[data-testid=project-row]')];
+    const card = rect(el);
+    return {
+      verticalScrollers: [main, ...main.querySelectorAll('*')].filter(scrollsY).map((e) => e.getAttribute('data-testid')),
+      spilling,
+      main: rect(main),
+      importButton: rect(main.querySelector('[data-testid=import-open]')!),
+      statusbarTop: document.querySelector('[data-testid=statusbar]')!.getBoundingClientRect().top,
+      card: { ...card, viewBottom: card.top + el.clientHeight, scrollWidth: el.scrollWidth, clientWidth: el.clientWidth, scrollTop: el.scrollTop, scrollLeft: el.scrollLeft },
+      head,
+      firstRow: all.length ? rect(all[0]!) : null,
+      lastRow: all.length ? rect(all[all.length - 1]!) : null,
+      rowBelowHead: !!document.elementFromPoint(card.left + 100, head.bottom + 20)?.closest('[data-testid=project-row]'),
+    };
+  });
+
+  for (const size of [{ width: 2560, height: 1300 }, { width: 1400, height: 900 }, { width: 1000, height: 640 }]) {
+    const label = `${size.width}x${size.height}`;
+    await page.setViewportSize(size);
+    await scroller.evaluate((el) => el.scrollTo(0, 0));
+    await expect(rows.first()).toContainText('Cable Clips');
+    const top = await layout();
+    // the bug: the card scrolled by a few pixels and the rows scrolled again inside it
+    expect(top.verticalScrollers, `${label}: vertical scroll containers in the main panel`).toEqual(['project-list-scroll']);
+    // and nothing around the list scrolls or is pushed out of the panel by the table's width
+    expect(top.spilling, `${label}: ancestors with overflowing content`).toEqual([]);
+    expect(top.importButton.right, `${label}: the toolbar stays inside the panel`).toBeLessThanOrEqual(top.main.right);
+    expect(top.card.bottom, `${label}: the card ends above the status bar`).toBeLessThan(top.statusbarTop);
+    expect(Math.abs(top.head.top - top.card.top), `${label}: header at the top of the card`).toBeLessThanOrEqual(1);
+    expect(Math.abs(top.firstRow!.top - top.head.bottom), `${label}: first row right below the header`).toBeLessThanOrEqual(1);
+
+    // the header stays where it is while the rows move under it
+    await scroller.evaluate((el) => el.scrollTo(0, 900));
+    await expect(rows.first()).not.toContainText('Cable Clips');
+    const mid = await layout();
+    expect(mid.card.scrollTop, label).toBe(900);
+    expect(Math.abs(mid.head.top - top.head.top), `${label}: header stays at the top`).toBeLessThanOrEqual(1);
+    expect(mid.rowBelowHead, `${label}: rows are rendered at the scroll position`).toBe(true);
+
+    // the list ends with its last row, flush with the bottom of the card
+    await scroller.evaluate((el) => el.scrollTo(0, el.scrollHeight));
+    await expect.poll(async () => { const l = await layout(); return l.lastRow ? Math.abs(l.lastRow.bottom - l.card.viewBottom) : Infinity; }, `${label}: last row at the bottom of the card`).toBeLessThanOrEqual(1);
+  }
+
+  // a panel narrower than the columns scrolls the table sideways, header and rows together
+  await scroller.evaluate((el) => el.scrollTo(120, 0));
+  await expect(rows.first()).toContainText('Cable Clips');
+  const side = await layout();
+  expect(side.card.scrollWidth).toBeGreaterThan(side.card.clientWidth);
+  expect(side.card.scrollLeft).toBe(120);
+  expect(Math.abs(side.head.left - (side.card.left - 120))).toBeLessThanOrEqual(1);
+  expect(Math.abs(side.firstRow!.left - side.head.left)).toBeLessThanOrEqual(1);
+  // header and rows are as wide as the columns, so their backgrounds do not end before the last cell
+  expect(side.head.width).toBeGreaterThanOrEqual(side.card.scrollWidth - 1);
+  expect(Math.abs(side.firstRow!.width - side.head.width)).toBeLessThanOrEqual(1);
+});
+
 test('folder tree: containers get a folder icon and a count, projects a model icon', async ({ page }) => {
   const desk = page.locator('[data-tree-row][data-label="Desk"]');
   await expect(desk).toHaveAttribute('data-kind', 'folder');
@@ -1287,6 +1362,54 @@ test('context menu: acts on the selection when the clicked card is part of it, e
   await page.getByTestId('move-folder').filter({ hasText: 'Desk' }).click();
   await page.getByTestId('move-confirm').click();
   await expect(page.getByText('2 projects moved to 3D Models / Projects / Desk')).toBeVisible();
+});
+
+test('context menu: keys pressed in the open menu stay there, Escape only closes it', async ({ page }) => {
+  // A menu that is still in the page while it closes is what let its keys through to the
+  // library, which then cleared the selection. Without a closing animation that only happens
+  // when Escape comes before the opening animation has started, a matter of milliseconds that
+  // made this fail now and then. A closing animation makes it the rule.
+  await page.addStyleTag({ content: '@keyframes test-menu-out { to { opacity: 0 } } [data-testid=project-menu][data-state=closed] { animation: test-menu-out 250ms }' });
+  const menu = page.getByTestId('project-menu');
+  const dialogs = page.getByRole('dialog');
+
+  for (const view of ['grid', 'list'] as const) {
+    await page.getByTestId(`view-${view}`).click();
+    const item = view === 'grid'
+      ? page.getByTestId('project-card').filter({ hasText: 'Cable Clips' })
+      : page.getByTestId('project-row').filter({ hasText: 'Cable Clips' }).getByText('Cable Clips', { exact: true });
+    const selected = page.locator(`[data-testid="project-${view === 'grid' ? 'card' : 'row'}"][aria-selected="true"]`);
+
+    // Escape closes the menu, the project it was opened on stays selected
+    await item.click({ button: 'right' });
+    await expect(menu.getByTestId('menu-rename')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(menu).toHaveAttribute('data-state', 'closed');
+    await expect(menu, `${view}: menu closes`).toHaveCount(0);
+    await expect(selected, `${view}: selection survives closing the menu`).toHaveCount(1);
+    await expect(selected).toContainText('Cable Clips');
+
+    // the library's own shortcuts do not fire from inside the menu either
+    await item.click({ button: 'right' });
+    await expect(menu.getByTestId('menu-rename')).toBeVisible();
+    await page.keyboard.press('Delete');
+    await page.keyboard.press('F2');
+    await page.keyboard.press('Escape');
+    await expect(menu).toHaveCount(0);
+    await expect(dialogs, `${view}: no delete or rename dialog`).toHaveCount(0);
+    await expect(selected).toHaveCount(1);
+
+    // with no menu open they work as before: F2 renames, Escape clears the selection
+    await item.click();
+    await page.keyboard.press('F2');
+    await expect(page.getByTestId('rename-dialog')).toBeVisible();
+    await page.keyboard.press('Escape');
+    await expect(page.getByTestId('rename-dialog')).toBeHidden();
+    await expect(selected).toHaveCount(1);
+    await item.click();
+    await page.keyboard.press('Escape');
+    await expect(selected, `${view}: Escape clears the selection`).toHaveCount(0);
+  }
 });
 
 test('tree: a project row offers "Move to…" in its context menu', async ({ page }) => {
